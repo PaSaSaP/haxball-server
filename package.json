@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "page": "npx tsc -p verify_page/tsconfig.json && node dist/verify_page/verify_page/index.js",
-    "www_server": "npx tsc -p www_server/tsconfig.json && mkdir -p dist/www_server/public && cp public/*.js dist/www_server/public/ && node dist/www_server/www_server/index.js",
+    "prev_www_server": "npx tsc -p www_server/tsconfig.json && mkdir -p dist/www_server/public && cp public/*.js dist/www_server/public/ && node dist/www_server/www_server/index.js",
+    "www_server": "npx tsc -p www_server/tsconfig.json && node dist/www_server/www_server/index.js",
     "futsal_1vs1": "npx tsc -p src/tsconfig.json && HX_ROOM_CONFIG_SELECTOR=1vs1 node dist/src/src/index.js",
     "futsal_3vs3": "npx tsc -p src/tsconfig.json && HX_ROOM_CONFIG_SELECTOR=3vs3 node dist/src/src/index.js",
     "discord_1vs1": "npx tsc -p discord_client/tsconfig.json && HX_SELECTOR=1vs1 node dist/discord_client/discord_client/index.js",
