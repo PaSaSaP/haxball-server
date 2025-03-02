@@ -1,0 +1,14 @@
+export const sleep = (ms: number): Promise<void> => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+};
+
+export const toBoolean = (value: any) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+    if (typeof value === "string") {
+        let normalized = value.trim().toLowerCase();
+        if (["1", "true", "t", "on"].includes(normalized)) return true;
+        if (["0", "false", "f", "off"].includes(normalized)) return false;
+    }
+    return false;
+};

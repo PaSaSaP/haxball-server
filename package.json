@@ -1,0 +1,39 @@
+{
+  "name": "puppeteer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "page": "npx tsc -p verify_page/tsconfig.json && node dist/verify_page/verify_page/index.js",
+    "www_server": "npx tsc -p www_server/tsconfig.json && mkdir -p dist/www_server/public && cp public/*.js dist/www_server/public/ && node dist/www_server/www_server/index.js",
+    "futsal_1vs1": "npx tsc -p src/tsconfig.json && HX_ROOM_CONFIG_SELECTOR=1vs1 node dist/src/src/index.js",
+    "futsal_3vs3": "npx tsc -p src/tsconfig.json && HX_ROOM_CONFIG_SELECTOR=3vs3 node dist/src/src/index.js",
+    "discord_1vs1": "npx tsc -p discord_client/tsconfig.json && HX_SELECTOR=1vs1 node dist/discord_client/discord_client/index.js",
+    "discord_3vs3": "npx tsc -p discord_client/tsconfig.json && HX_SELECTOR=3vs3 node dist/discord_client/discord_client/index.js",
+    "start": "npm run futsal_3vs3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/express": "^5.0.0",
+    "async-mutex": "^0.5.0",
+    "canvas": "^3.1.0",
+    "discord.js": "^14.18.0",
+    "express": "^4.21.2",
+    "fs-extra": "^11.3.0",
+    "global-agent": "^3.0.0",
+    "haxball.js": "^2.3.2",
+    "msgpackr": "^1.11.2",
+    "puppeteer": "^24.3.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "sqlite3": "^5.1.7",
+    "ts-node": "^10.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.3"
+  }
+}

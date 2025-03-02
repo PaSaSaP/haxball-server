@@ -1,0 +1,96 @@
+version: '3'
+services:
+  puppeteer:
+    image: hx-puppeteer:1.0
+    container_name: haxball-server
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:50000-50100:50000-50100/udp"
+    environment:
+      - HTTP_PROXY=http://mitmproxy:8080
+      - HTTPS_PROXY=http://mitmproxy:8080
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - HX_ROOM_CONFIG_SELECTOR=3vs3
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    volumes:
+      - .:/src
+    cap_add:
+      - SYS_ADMIN
+      - CAP_NET_ADMIN
+    shm_size: "1gb"
+    sysctls:
+      - net.ipv4.ip_local_port_range=50000 50100
+    networks:
+      - app_network
+  futsal-1vs1:
+    image: hx-puppeteer:1.0
+    container_name: haxball-server-futsal-1vs1
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:51000-51100:51000-51100/udp"
+    environment:
+      - HTTP_PROXY=http://proxy-futsal-1vs1:8080
+      - HTTPS_PROXY=http://proxy-futsal-1vs1:8080
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - HX_ROOM_CONFIG_SELECTOR=1vs1
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    volumes:
+      - .:/src
+    cap_add:
+      - SYS_ADMIN
+      - CAP_NET_ADMIN
+    shm_size: "1gb"
+    sysctls:
+      - net.ipv4.ip_local_port_range=51000 51100
+    networks:
+      - app_network
+    command: ["futsal_1vs1"]
+  www-server:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    ports:
+      - "0.0.0.0:3000:3000/tcp"
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run www_server
+  discord-3vs3:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run discord_3vs3
+  discord-1vs1:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run discord_1vs1
+
+
+networks:
+  app_network:
+    external: true
+

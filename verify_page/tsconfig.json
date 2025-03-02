@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+      "target": "ES6",
+      "module": "commonjs",
+      "outDir": "../dist/verify_page",
+      "rootDir": "../",
+      "strict": true,
+      "esModuleInterop": true
+    },
+    "include": [
+      "./**/*.ts"
+    ]
+  }
+

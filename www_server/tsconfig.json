@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+      "target": "ES6",
+      "module": "commonjs",
+      "outDir": "../dist/www_server",
+      "rootDir": "../",
+      "strict": true,
+      "esModuleInterop": true
+    },
+    "include": [
+      "./**/*.ts",
+      "./**/*.js"
+    ]
+  }
+
