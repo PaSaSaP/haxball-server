@@ -1108,7 +1108,7 @@ class HaxballRoom {
     this.room.stopGame();
     await sleep(125);
 
-    let players: PlayerData[] = this.getPlayersExtList();
+    let players: PlayerData[] = this.getPlayersExtList(true);
     let red: PlayerData[] = [];
     let blue: PlayerData[] = [];
     let spec: PlayerData[] = [];
@@ -1963,6 +1963,7 @@ class HaxballRoom {
   }
 
   getPlayersExt(updateExt = false) {
+    // call it if you only need to iterate over all players
     if (updateExt) {
       this.getPlayers().forEach(e => {
         let p = this.players_ext.get(e.id);
@@ -1973,8 +1974,17 @@ class HaxballRoom {
   }
 
   getPlayersExtList(updateExt = false): PlayerData[] {
-    let playersExt = this.getPlayersExt(updateExt);
-    return Array.from(playersExt);
+    // call it when you need sorted list
+    let result = new Array<PlayerData>;
+    this.getPlayers().forEach(e => {
+      let p = this.players_ext.get(e.id);
+      if (p) {
+        if (updateExt) p.update(e);
+        result.push(p);
+      }
+    });
+
+    return result;
   }
 
   getPlayerObjectByName(playerName: string|string[], byPlayer: PlayerObject|null, byPlayerIfNameNotSpecified = false): PlayerObject|null {
