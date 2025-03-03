@@ -1629,7 +1629,9 @@ class HaxballRoom {
   async commandReport(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
-    this.game_state.addReport(playerExt.name, playerExt.auth_id, cmds.join(" "));
+    let report = cmds.join(" ").trim();
+    if (!report) return;
+    this.game_state.addReport(playerExt.name, playerExt.auth_id, report);
     this.sendMsgToPlayer(player, 'Twoje zazalenie zostanie rozpatrzone oraz zignorowane juz wkrótce!');
   }
 
