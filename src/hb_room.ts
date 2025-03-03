@@ -30,7 +30,8 @@ class HaxballRoom {
   last_discs_update_time: number;
   feature_pressure: boolean;
   feature_pressure_stadium: boolean;
-  players_ext_data: Map<number, PlayerData>;
+  players_ext_all: Map<number, PlayerData>; // all players connected since server started
+  players_ext: Map<number, PlayerData>; // players currently connected
   emoji: Emoji;
   anti_spam: AntiSpam;
   captcha: ScoreCaptcha;
@@ -70,7 +71,8 @@ class HaxballRoom {
     this.last_discs_update_time = 0;
     this.feature_pressure = true;
     this.feature_pressure_stadium = false;
-    this.players_ext_data = new Map(); /// @type {Map<number, PlayerData>}
+    this.players_ext_all = new Map();
+    this.players_ext = new Map();
     this.emoji = new Emoji(this.room);
     this.anti_spam = new AntiSpam(3, 5000, 60000);
     this.captcha = new ScoreCaptcha(this.room);
@@ -275,14 +277,14 @@ class HaxballRoom {
   }
 
   P(player: PlayerObject): PlayerData {
-    let p = this.players_ext_data.get(player.id);
+    let p = this.players_ext.get(player.id);
     if (!p) throw new Error("P() is null, should be prevented");
     p.update(player);
     return p;
   }
 
   Pid(player_id: number): PlayerData {
-    let p = this.players_ext_data.get(player_id);
+    let p = this.players_ext.get(player_id);
     if (!p) throw new Error("Pid() is null, should be prevented");
     return p;
   }
@@ -298,7 +300,7 @@ class HaxballRoom {
   async handleGameTick() {
     // Current time in ms
     let scores = this.room.getScores();
-    let players = this.room.getPlayerList();
+    let players = this.getPlayersExtList(true);
     let current_tick = scores.time;
     let delta_time = current_tick - this.last_tick;
     this.last_tick = current_tick;
@@ -373,11 +375,10 @@ class HaxballRoom {
     const MaxAllowedNoMoveTime = 15.0 * 1000; // [ms]
     let current_time = Date.now();
     let afk_players_num = 0;
-    players.forEach(player => {
-      let player_ext = this.P(player);
+    players.forEach(player_ext => {
       if (player_ext.team && current_time - player_ext.activity.game > MaxAllowedNoMoveTime) {
-        if (!player_ext.afk) this.commandSetAfk(player);
-        else if (player_ext.afk_maybe) this.moveAfkMaybeToSpec(player);
+        if (!player_ext.afk) this.commandSetAfkExt(player_ext);
+        else if (player_ext.afk_maybe) this.moveAfkMaybeToSpec(player_ext);
       }
       if (player_ext.afk) afk_players_num++;
     });
@@ -389,12 +390,12 @@ class HaxballRoom {
     this.ball_possesion_tracker.trackPossession();
   }
 
-  moveAfkMaybeToSpec(player: PlayerObject) {
+  moveAfkMaybeToSpec(player: PlayerData) {
     this.room.setPlayerAvatar(player.id, Emoji.Afk);
     this.room.setPlayerTeam(player.id, 0);
   }
 
-  async allPlayersAfking(players: PlayerObject[]) {
+  async allPlayersAfking(players: PlayerData[]) {
     this.sendMsgToAll(`Wszyscy afczą… Wszyscy na boisko! Ruszać się!`, Colors.GameState, 'bold');
     let current_time = Date.now();
     players.forEach(player => {
@@ -422,7 +423,7 @@ class HaxballRoom {
     this.room.startGame();
   }
 
-  shuffleAllPlayers(players: PlayerObject[]) {
+  shuffleAllPlayers(players: PlayerData[]) {
     // Mieszanie graczy (Fisher-Yates shuffle)
     for (let i = players.length - 1; i > 0; i--) {
       let j = Math.floor(Math.random() * (i + 1));
@@ -444,7 +445,7 @@ class HaxballRoom {
     }
   }
 
-  selectAppropriateMap(players: PlayerObject[]) {
+  selectAppropriateMap(players: PlayerData[]) {
     let red = 0;
     let blue = 0;
     players.forEach(player => {
@@ -466,9 +467,9 @@ class HaxballRoom {
     if (byPlayer) this.Pid(byPlayer.id).admin_stat_start_stop();
     this.acceleration_tasks.reset();
     const now = Date.now();
-    this.getPlayers().forEach(player => {
-      this.Pid(player.id).activity.game = now;
-    })
+    for (let p of this.getPlayersExt()) {
+      p.activity.game = now;
+    }
     this.gameStopTimerReset();
     this.ball_possesion_tracker.resetPossession();
   }
@@ -480,21 +481,20 @@ class HaxballRoom {
     this.last_player_team_changed_by_admin_time = now;
     this.gamePauseTimerReset();
     this.gameStopTimerReset();
-    this.getPlayers().forEach(player => {
-      this.Pid(player.id).activity.game = now;
-    });
+    for (let p of this.getPlayersExt()) {
+      p.activity.game = now;
+    }
 
     this.game_stopped_timer = setInterval(() => {
       let current_time = Date.now();
       let random_new_admin = false;
-      this.getPlayers().forEach(e => {
+      for (let p of this.getPlayersExt()) {
         if (current_time - this.last_player_team_changed_by_admin_time > MaxAllowedGameStopTime) {
-          let p = this.P(e);
           if (!p.afk && p.admin && current_time - p.activity.chat > MaxAllowedGameStopTime) {
             random_new_admin = true;
           }
         }
-      });
+      }
       if (random_new_admin) {
         this.last_player_team_changed_by_admin_time = current_time;
         this.sendMsgToAll(`Zaden admin nie wystartował jeszcze gry, losowanie nowego admina, nie śpimy!`, Colors.GameState);
@@ -511,9 +511,9 @@ class HaxballRoom {
       this.gamePauseTimerReset();
       this.room.pauseGame(false);
       let now = Date.now();
-      this.getPlayers().forEach(player => {
-        this.Pid(player.id).activity.game = now;
-      })
+      for (let p of this.getPlayersExt()) {
+        p.activity.game = now;
+      }
       this.sendMsgToAll('Koniec przerwy, gramy dalej!', Colors.GameState);
     }, MaxAllowedGamePauseTime);
   }
@@ -540,7 +540,7 @@ class HaxballRoom {
   updateAdmins(leaving_player: PlayerObject | null, only_if_all_afk = true) {
     let new_admin: PlayerData | null = null;
     let new_admin_trust_level = -1;
-    let players: PlayerObject[] = this.getPlayers();
+    let players: PlayerData[] = this.getPlayersExtList(true);
     if (players.length == 1) {
       if (!players[0].admin) this.giveAdminTo(players[0]);
       return;
@@ -549,7 +549,7 @@ class HaxballRoom {
     let any_active_trusted_admin = false;
     let non_trusted_admins: PlayerData[] = [];
     for (let i = 0; i < players.length; i++) {
-      let player_ext = this.P(players[i]);
+      let player_ext = players[i];
       if (player_ext.admin && player_ext.trust_level == 0) non_trusted_admins.push(player_ext);
       if (leaving_player != null && leaving_player.id == player_ext.id) continue;
       if (player_ext.afk || player_ext.afk_maybe) continue;
@@ -626,7 +626,8 @@ class HaxballRoom {
     this.game_state.logMessage(player.name, "players", `Player joined the room, auth: ${player.auth} conn: ${player.conn}`, false);
     this.players_num += 1;
     hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}]`);
-    this.players_ext_data.set(player.id, new PlayerData(player));
+    this.players_ext.set(player.id, new PlayerData(player));
+    this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
     if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
     if (this.checkIfDotPlayerIsHost(player)) return;
     if (this.checkForPlayerDuplicate(player)) return;
@@ -686,9 +687,8 @@ class HaxballRoom {
   checkForPlayerDuplicate(player: PlayerObject) {
     let kicked = false;
     let player_auth = player.auth || '';
-    for (let e of this.getPlayers()) {
-      if (e.id != player.id) {
-        let p = this.P(e);
+    for (let p of this.getPlayersExt()) {
+      if (p.id != player.id) {
         if (p.auth_id == player_auth && p.conn_id == player.conn) {
           this.room.kickPlayer(player.id, "One tab, one brain!", false);
           kicked = true;
@@ -701,9 +701,8 @@ class HaxballRoom {
 
   checkForPlayerNameDuplicate(joiningPlayer: PlayerData) {
     let kicked = false;
-    for (let e of this.getPlayers()) {
-      if (e.id != joiningPlayer.id) {
-        let p = this.Pid(e.id);
+    for (let p of this.getPlayersExt()) {
+      if (p.id != joiningPlayer.id) {
         if (p.name_normalized === joiningPlayer.name_normalized) {
           if (joiningPlayer.trust_level > p.trust_level)
             this.room.kickPlayer(p.id, "Nope, not you.", false);
@@ -722,16 +721,17 @@ class HaxballRoom {
     this.players_num -= 1;
     hb_log(`# (n:${this.players_num}) left server: ${player.name} [${player.id}]`);
     this.updateAdmins(player);
-    this.handleEmptyRoom();
+    this.handleEmptyRoom(player);
     this.last_command.delete(player.id);
     this.removePlayerMuted(player);
     let player_ext = this.Pid(player.id);
     player_ext.mark_disconnected();
+    this.players_ext.delete(player.id);
   }
 
-  async handleEmptyRoom() {
-    var players = this.room.getPlayerList();
-    if (players.length == 0) {
+  async handleEmptyRoom(leavingPlayer: PlayerObject) {
+    var players = this.getPlayers();
+    if (players.length == 0 || players.length == 1 && leavingPlayer.id == players[0].id) {
       this.room.stopGame();
       await sleep(125);
       this.setMapByName(this.default_map_name);
@@ -908,13 +908,13 @@ class HaxballRoom {
       }
       return userLogMessage(false);
     }
-    let p = this.P(player);
-    p.activity.updateChat();
+    let playerExt = this.P(player);
+    playerExt.activity.updateChat();
     if (this.captcha.hasPendingCaptcha(player)) {
       this.captcha.checkAnswer(player, message);
       return userLogMessage(false); // wait till captcha passed at first
     }
-    if (this.allow_chatting_only_trusted && !p.trust_level) {
+    if (this.allow_chatting_only_trusted && !playerExt.trust_level) {
       return userLogMessage(false); // only trusted can write
     }
     let anti_spam_muted = !this.anti_spam.canSendMessage(player, message);
@@ -928,7 +928,7 @@ class HaxballRoom {
           return userLogMessage(false);
         }
         userLogMessage(true);
-        if (p.trust_level > 0) return true;
+        if (playerExt.trust_level > 0) return true;
         this.sendMsgToAll(`${player.name}: ${message}`, Colors.TrustZero, undefined, 0);
         return false;
       }
@@ -966,10 +966,8 @@ class HaxballRoom {
   async sendMessageToSameTeam(player: PlayerObject, message: string) {
     let text = `T ${player.name}: ${message}`;
     let color = player.team == 0 ? Colors.TeamChatSpec : player.team == 1 ? Colors.TeamChatRed : Colors.TeamChatBlue;
-    this.getPlayers().forEach(e => {
-      if (e.team == player.team) {
-        this.sendMsgToPlayer(e, text, color, 'italic', 1);
-      }
+    this.getPlayers().filter(e => e.team == player.team).forEach(e => {
+      this.sendMsgToPlayer(e, text, color, 'italic', 1);
     });
   }
 
@@ -1049,10 +1047,10 @@ class HaxballRoom {
     this.room.stopGame();
     await sleep(125);
 
-    let players: PlayerObject[] = this.getPlayers();
-    let red: PlayerObject[] = [];
-    let blue: PlayerObject[] = [];
-    let spec: PlayerObject[] = [];
+    let players: PlayerData[] = this.getPlayersExtList(true);
+    let red: PlayerData[] = [];
+    let blue: PlayerData[] = [];
+    let spec: PlayerData[] = [];
     let red_winner = this.last_winner_team == 1;
     let blue_winner = this.last_winner_team == 2;
 
@@ -1064,7 +1062,7 @@ class HaxballRoom {
       else spec.push(e);
     });
 
-    let selected_players: PlayerObject[] = [];
+    let selected_players: PlayerData[] = [];
     if (red_winner) {
       selected_players = [...red];
     } else if (blue_winner) {
@@ -1110,10 +1108,10 @@ class HaxballRoom {
     this.room.stopGame();
     await sleep(125);
 
-    let players: PlayerObject[] = this.getPlayers();
-    let red: PlayerObject[] = [];
-    let blue: PlayerObject[] = [];
-    let spec: PlayerObject[] = [];
+    let players: PlayerData[] = this.getPlayersExtList();
+    let red: PlayerData[] = [];
+    let blue: PlayerData[] = [];
+    let spec: PlayerData[] = [];
     let red_winner = this.last_winner_team == 1;
     let blue_winner = this.last_winner_team == 2;
 
@@ -1125,7 +1123,7 @@ class HaxballRoom {
       else spec.push(e);
     });
 
-    let selected_players: PlayerObject[] = [];
+    let selected_players: PlayerData[] = [];
 
     // Dodajemy graczy ze spectatorów
     while (selected_players.length < this.limit && spec.length > 0) {
@@ -1212,7 +1210,7 @@ class HaxballRoom {
 
   async commandAddPlayersToTeam(player: PlayerObject) {
     if (this.warnIfPlayerIsNotAdmin(player)) return;
-    let players = this.getPlayers();
+    let players = this.getPlayersExtList(true);
     this.shuffleAllPlayers(players);
     let red = this.limit;
     let blue = this.limit;
@@ -1224,7 +1222,7 @@ class HaxballRoom {
     let any_added = false;
 
     for (let i = 0; i < players.length && (red > 0 || blue > 0); i++) {
-      let player_ext = this.Pid(players[i].id);
+      let player_ext = players[i];
       if (player_ext.afk || player_ext.team != 0) continue;
 
       let team;
@@ -1240,12 +1238,9 @@ class HaxballRoom {
   }
 
   swapTeams() {
-    this.getPlayers().forEach(e => {
-      let p = this.P(e);
-      if (p.team) {
-        this.room.setPlayerTeam(p.id, this.getOpponentTeam(p.team));
-      }
-    })
+    this.getPlayers().filter(e => e.team > 0).forEach(e => {
+      this.room.setPlayerTeam(e.id, this.getOpponentTeam(e.team));
+    });
   }
 
   async commandHelp(player: PlayerObject) {
@@ -1289,17 +1284,17 @@ class HaxballRoom {
 
   async commandMuted(player: PlayerObject) {
     let muted: string[] = [];
-    this.getPlayers().forEach(e => {
-      if (this.isPlayerMuted(e)) muted.push(e.name);
-    });
+    for (let p of this.getPlayersExt()) {
+      if (this.isPlayerMuted(p)) muted.push(p.name);
+    }
     this.sendMsgToPlayer(player, `Muted: ${muted.join(" ")}`);
   }
 
   async commandMuteAll(player: PlayerObject) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    this.getPlayers().forEach(e => {
-      this.addPlayerMuted(e);
-    });
+    for (let p of this.getPlayersExt()) {
+      this.addPlayerMuted(p);
+    }
     this.sendMsgToPlayer(player, "Muted all Players", Colors.GameState);
   }
 
@@ -1323,18 +1318,21 @@ class HaxballRoom {
 
   async commandSwitchAfk(player: PlayerObject) {
     // switch on/off afk
-    let player_ext = this.P(player);
+    let player_ext = this.Pid(player.id);
     if (!player_ext.afk) {
-      this.commandSetAfk(player);
+      this.commandSetAfkExt(player_ext);
     } else {
       // clear AFK status
-      this.commandClearAfk(player);
+      this.commandClearAfkExt(player_ext);
     }
   }
 
   async commandSetAfk(player: PlayerObject) {
+    this.commandSetAfkExt(this.Pid(player.id));
+  }
+
+  commandSetAfkExt(player_ext: PlayerData) {
     // set on afk
-    let player_ext = this.P(player);
     if (player_ext.afk) return;
     player_ext.afk = true;
     this.room.setPlayerAvatar(player_ext.id, '💤');
@@ -1346,7 +1344,10 @@ class HaxballRoom {
   }
 
   async commandClearAfk(player: PlayerObject) {
-    let player_ext = this.P(player);
+    this.commandClearAfkExt(this.Pid(player.id));
+  }
+
+  commandClearAfkExt(player_ext: PlayerData) {
     if (player_ext.afk) {
       player_ext.afk = false;
       this.room.setPlayerAvatar(player_ext.id, null);
@@ -1358,10 +1359,9 @@ class HaxballRoom {
 
   async commandPrintAfkList(player: PlayerObject) {
     var log_str = "AFK list: "
-    this.getPlayers().forEach(player => {
-      let player_ext = this.P(player);
+    for (let player_ext of this.getPlayersExt()) {
       if (player_ext.afk || player_ext.afk_maybe) log_str += `${player.name}[${player.id}] `;
-    })
+    }
     this.sendMsgToPlayer(player, log_str);
   }
 
@@ -1370,14 +1370,15 @@ class HaxballRoom {
     let cmdPlayer = this.getPlayerObjectByName(cmds, player);
     if (!cmdPlayer) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
-    if (!cmdPlayerExt.afk) this.commandSetAfk(player);
+    if (!cmdPlayerExt.afk) this.commandSetAfkExt(cmdPlayerExt);
   }
 
   async commandClearAfkOther(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
     let cmdPlayer = this.getPlayerObjectByName(cmds, player);
     if (!cmdPlayer) return;
-    this.commandClearAfk(cmdPlayer);
+    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    this.commandClearAfkExt(cmdPlayerExt);
   }
 
   async commandByeBye(player: PlayerObject) {
@@ -1394,10 +1395,9 @@ class HaxballRoom {
 
   async commandKickAllExceptVerified(player: PlayerObject) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    this.getPlayers().forEach(e => {
-      let p = this.Pid(e.id);
+    for (let p of this.getPlayersExt()) {
       if (player.id != p.id && !p.trust_level) this.room.kickPlayer(p.id, "", false);
-    })
+    }
   }
 
   async commandKickAllRed(player: PlayerObject) {
@@ -1416,14 +1416,13 @@ class HaxballRoom {
   }
 
   async kickAllTeamExceptTrusted(player: PlayerObject, team_id: number) {
-    this.getPlayers().forEach(e => {
-      let p = this.P(e);
+    for (let p of this.getPlayersExt()) {
       if (player.id != p.id && p.team == team_id && !p.trust_level) this.room.kickPlayer(p.id, "", false);
-    })
+    }
   }
 
   async commandAuto(player: PlayerObject, values: string[]) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(this.Pid(player.id))) return;
     if (values.length == 0) return;
     if (values[0] == "on") {
       this.auto_mode = true;
@@ -1474,10 +1473,9 @@ class HaxballRoom {
       this.giveAdminTo(playerExt); // approved admin
       bestAdmin = playerExt;
     }
-    let players = this.getPlayers();
+    let players = this.getPlayersExtList(true);
     if (!bestAdmin) { // if calling player is not approved admin then find best from others
-      players.forEach(e => {
-        let p = this.P(e);
+      players.forEach(p => {
         if (p.admin) currentAdmins.push(p);
         if (p.trust_level > 0) {
           if (bestAdmin == null) bestAdmin = p;
@@ -1563,17 +1561,15 @@ class HaxballRoom {
     this.sendMsgToPlayer(player, "Sprawdzamy czy jest Sefinek na serwerze");
     const sefik_auth_id = 'nV4o2rl_sZDXAfXY7rYHl1PDr-qz56V03uz20npdtzw';
     const sefik_conn_id = '38372E3230352E3133392E313339';
-    let players = this.getPlayers();
-    players.forEach(e => {
-      let p = this.Pid(e.id);
+    for (let p of this.getPlayersExt()) {
       if (p.auth_id == sefik_auth_id) {
         this.sendMsgToPlayer(player, `${p.name} [${p.id}] zgadza się auth`);
       } else if (p.conn_id == sefik_conn_id) {
         this.sendMsgToPlayer(player, `${p.name} [${p.id}] zgadza się conn`);
       }
-    });
+    }
     let disconnected: string[] = [];
-    this.players_ext_data.forEach((p, player_id) => {
+    this.players_ext_all.forEach((p, player_id) => {
       if (!p.connected && (p.auth_id == sefik_auth_id || p.conn_id == sefik_conn_id)) {
         disconnected.push(p.name);
       }
@@ -1773,10 +1769,9 @@ class HaxballRoom {
       return;
     }
     let to_be_trusted_names = new Set();
-    this.getPlayers().forEach(e => {
+    this.getPlayersExtList(true).forEach(p => {
       let add = false;
-      if (player.id != e.id) {
-        let p = this.P(e);
+      if (player.id != p.id) {
         if (p.trust_level == 0) {
           if (p.team == 0 && spec) add = true;
           else if (p.team == 1 && red) add = true;
@@ -1784,10 +1779,10 @@ class HaxballRoom {
         }
       }
       if (add) {
-        this.to_be_trusted.add(e.id);
-        to_be_trusted_names.add(e.name);
-      } else if (this.to_be_trusted.has(e.id)) {
-        to_be_trusted_names.add(e.name);
+        this.to_be_trusted.add(p.id);
+        to_be_trusted_names.add(p.name);
+      } else if (this.to_be_trusted.has(p.id)) {
+        to_be_trusted_names.add(p.name);
       }
     });
     this.sendMsgToPlayer(player, `W kolejce do dodania czekają: ${[...to_be_trusted_names].join(" ")}`);
@@ -1818,9 +1813,9 @@ class HaxballRoom {
 
   async commandServerRestart(player: PlayerObject) {
     if (this.hostOnlyCommand(player, 'server_restart')) return;
-    this.getPlayers().forEach(e => {
-      this.room.kickPlayer(e.id, "Server is restarted!", false);
-    });
+    for (let p of this.getPlayersExt()) {
+      this.room.kickPlayer(p.id, "Server is restarted!", false);
+    }
   }
 
   formatUptime(ms: number) {
@@ -1853,11 +1848,9 @@ class HaxballRoom {
   async commandDumpPlayers(player: PlayerObject) {
     let playerExt = this.Pid(player.id);
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let players = this.getPlayers();
-    players.forEach(e => {
-      let p = this.Pid(e.id);
+    for (let p of this.getPlayersExt()) {
       this.sendMsgToPlayer(player, `${p.name} [${p.id}] auth: ${p.auth_id.substring(0, 16)} conn: ${p.conn_id}`);
-    });
+    }
   }
 
   async commandAntiSpam(player: PlayerObject, cmds: string[]) {
@@ -1867,10 +1860,8 @@ class HaxballRoom {
     this.anti_spam.setEnabled(new_state);
     this.sendMsgToPlayer(player, `anti_spam = ${new_state}`);
     if (new_state) {
-      this.getPlayers().forEach(player => {
-        if (player.admin) {
-          this.sendMsgToPlayer(player, `Anty Spam został włączony, mozesz wyłączyć dla niego sprawdzanie spamu: !spam_disable/sd <nick>, bez tego przy pisaniu podobnych wiadomości mógłby dostać kicka!`);
-        }
+      this.getPlayers().filter(e => e.admin).forEach(player => {
+        this.sendMsgToPlayer(player, `Anty Spam został włączony, mozesz wyłączyć dla niego sprawdzanie spamu: !spam_disable/sd <nick>, bez tego przy pisaniu podobnych wiadomości mógłby dostać kicka!`);
       });
     }
   }
@@ -1927,15 +1918,15 @@ class HaxballRoom {
     });
   }
 
-  addPlayerMuted(player: PlayerObject) {
+  addPlayerMuted(player: PlayerObject|PlayerData) {
     this.muted_players.add(player.id);
   }
 
-  removePlayerMuted(player: PlayerObject) {
+  removePlayerMuted(player: PlayerObject|PlayerData) {
     this.muted_players.delete(player.id);
   }
 
-  isPlayerMuted(player: PlayerObject) {
+  isPlayerMuted(player: PlayerObject|PlayerData) {
     return this.muted_players.has(player.id);
   }
 
@@ -1971,8 +1962,23 @@ class HaxballRoom {
     return this.room.getPlayerList();
   }
 
+  getPlayersExt(updateExt = false) {
+    if (updateExt) {
+      this.getPlayers().forEach(e => {
+        let p = this.players_ext.get(e.id);
+        if (p) p.update(e);
+      });
+    }
+    return this.players_ext.values();
+  }
+
+  getPlayersExtList(updateExt = false): PlayerData[] {
+    let playersExt = this.getPlayersExt(updateExt);
+    return Array.from(playersExt);
+  }
+
   getPlayerObjectByName(playerName: string|string[], byPlayer: PlayerObject|null, byPlayerIfNameNotSpecified = false): PlayerObject|null {
-    if (!playerName) {
+    if (!playerName.length) {
       if (byPlayerIfNameNotSpecified) return byPlayer; // command refers to caller player
       return null; // no name specified, then cannot find player
     }
