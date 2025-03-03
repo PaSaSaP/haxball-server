@@ -73,18 +73,19 @@ class PlayersDB {
     });
   }
 
-  setTrustLevel(player: PlayerData, trust_level: number, by_player: any) {
+  setTrustLevel(player: PlayerData, trust_level: number, by_player: PlayerData) {
     return new Promise((resolve, reject) => {
-      // Zapisanie trust_level oraz by_player w tabeli players
       const query = `
-            UPDATE players 
-            SET trusted_level = ?, trusted_by = ?
-            WHERE auth_id = ?;
-          `;
+        INSERT INTO players (auth_id, trusted_level, trusted_by) 
+        VALUES (?, ?, ?) 
+        ON CONFLICT(auth_id) 
+        DO UPDATE SET trusted_level = excluded.trusted_level, 
+                      trusted_by = excluded.trusted_by;
+      `;
 
       this.db.run(query, [player.auth_id, trust_level, by_player.auth_id], function (err: any) {
         if (err) {
-          reject('Error setting trust level');
+          reject('Error setting trust level: ' + err.message);
         } else {
           resolve(true);
         }
@@ -345,7 +346,7 @@ export class GameState {
     return this.dbHandler.players.getTrustAndAdminLevel(player);
   }
 
-  setTrustLevel(player: PlayerData, trust_level: number, by_player: any) {
+  setTrustLevel(player: PlayerData, trust_level: number, by_player: PlayerData) {
     return this.dbHandler.players.setTrustLevel(player, trust_level, by_player);
   }
 

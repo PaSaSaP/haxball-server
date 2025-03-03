@@ -1,3 +1,5 @@
+import { normalizeNameString } from "./utils";
+
 export class PlayerActivity {
   chat: number; // if is writing or is moving players from team to team
   game: number; // not real player action, can by triggered by others
@@ -70,6 +72,7 @@ export class AdminStats {
 
 export class PlayerData {
   name: string;
+  name_normalized: string;
   id: number;
   team: number;
   admin: boolean;
@@ -90,6 +93,7 @@ export class PlayerData {
   constructor(player: PlayerObject) {
     // this.player = player;
     this.name = player.name; /// @type string
+    this.name_normalized = normalizeNameString(this.name);
     this.id = player.id; /// @type int
     this.team = player.team;
     this.admin = player.admin;
@@ -129,4 +133,5 @@ export class PlayerData {
   admin_stat_team() { if (this.admin_stats) this.admin_stats.action_team += 1; }
   admin_stat_kick() { if (this.admin_stats) this.admin_stats.action_kick += 1; }
   admin_stat_other() { if (this.admin_stats) this.admin_stats.action_other += 1; }
+
 }

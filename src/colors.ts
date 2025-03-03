@@ -7,5 +7,6 @@ export class Colors {
   static Afk = 0xBBBBBB;
   static Help = 0x22EE22;
   static Warning = 0xFF1111;
+  static PlayerNotFound = 0xB0BF1A;
   static TrustZero = 0x9c9c9c;
 }

@@ -6,7 +6,7 @@ import { generateVerificationLink } from './verification';
 import { tokenDatabase, ServerData } from './token_database';
 import * as config from './config';
 import ChatLogger from './chat_logger';
-import { toBoolean, sleep } from './utils';
+import { toBoolean, sleep, normalizeNameString } from './utils';
 import { Emoji } from './emoji';
 import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
@@ -608,15 +608,15 @@ class HaxballRoom {
     hb_log(`# Admin taken for: ${player.name}`);
   }
 
-  giveAdminToPlayerWithName(player_name: string) {
-    var players = this.room.getPlayerList();
-    var player = players.find(player => player.name == player_name);
-    if (player != null) {
-      hb_log(`# Giving admin by name to ${player_name}`);
-      this.giveAdminTo(player);
-      this.game_state.logMessage(player_name, "players", `Admin granted to ${player_name}`, false);
+  giveAdminToPlayerWithName(playerName: string) {
+    let cmdPlayer = this.getPlayerObjectByName(playerName, null);
+    if (!cmdPlayer) return;
+    if (cmdPlayer != null) {
+      hb_log(`# Giving admin by name to ${playerName}`);
+      this.giveAdminTo(cmdPlayer);
+      this.game_state.logMessage(playerName, "players", `Admin granted to ${playerName}`, false);
     } else {
-      hb_log(`Player ${player_name} not found`);
+      hb_log(`Player ${playerName} not found`);
     }
   }
 
@@ -629,12 +629,12 @@ class HaxballRoom {
     if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
     if (this.checkIfDotPlayerIsHost(player)) return;
     if (this.checkForPlayerDuplicate(player)) return;
-    if (this.checkForPlayerNameDuplicate(player)) return;
     let playerExt = this.P(player);
     this.game_state.getTrustAndAdminLevel(playerExt).then(result => {
       let kicked = false;
       playerExt.trust_level = result.trust_level;
       playerExt.admin_level = result.admin_level;
+    if (this.checkForPlayerNameDuplicate(playerExt)) return; // check here to check also trust level
       if (this.allow_connecting_only_trusted && !playerExt.trust_level) {
         let whitelisted = false;
         this.whitelisted_nontrusted_player_names.forEach(player_name_prefix => {
@@ -667,6 +667,10 @@ class HaxballRoom {
       this.room.kickPlayer(player.id, "Zmień nick! ﷽", false);
       return true;
     }
+    if (player.name.startsWith('@')) {
+      this.room.kickPlayer(player.id, "Change nick! @ na początku?", false);
+      return true;
+    }
     return false;
   }
 
@@ -681,26 +685,34 @@ class HaxballRoom {
   checkForPlayerDuplicate(player: PlayerObject) {
     let kicked = false;
     let player_auth = player.auth || '';
-    this.getPlayers().forEach(e => {
+    for (let e of this.getPlayers()) {
       if (e.id != player.id) {
         let p = this.P(e);
         if (p.auth_id == player_auth && p.conn_id == player.conn) {
           this.room.kickPlayer(player.id, "One tab, one brain!", false);
           kicked = true;
+          break;
         }
       }
-    });
+    }
     return kicked;
   }
 
-  checkForPlayerNameDuplicate(player: PlayerObject) {
+  checkForPlayerNameDuplicate(joiningPlayer: PlayerData) {
     let kicked = false;
-    this.getPlayers().forEach(e => {
-      if (e.id != player.id && e.name == player.name) {
-        this.room.kickPlayer(player.id, "Change nick!", false);
-        kicked = true;
+    for (let e of this.getPlayers()) {
+      if (e.id != joiningPlayer.id) {
+        let p = this.Pid(e.id);
+        if (p.name_normalized === joiningPlayer.name_normalized) {
+          if (joiningPlayer.trust_level > p.trust_level)
+            this.room.kickPlayer(p.id, "Nope, not you.", false);
+          else
+            this.room.kickPlayer(joiningPlayer.id, "Change nick! Duplicated...", false);
+          kicked = true;
+          break;
+        }
       }
-    });
+    }
     return kicked;
   }
 
@@ -973,16 +985,12 @@ class HaxballRoom {
       this.sendMsgToPlayer(player, 'Uzycie:!pm/!pw/!w <@player_name> <message...>')
       return;
     }
-    let player_name = this.parsePlayerName(cmds[0]);
-    let dest_player = this.getPlayerWithName(player_name);
-    if (!dest_player) {
-      this.sendMsgToPlayer(player, `Nie moge znaleźć gracza o nicku ${player_name}`)
-      return;
-    }
-    if (dest_player.id == player.id) return;
+    let cmdPlayer = this.getPlayerObjectByName(cmds[0], player);
+    if (!cmdPlayer) return;
+    if (cmdPlayer.id == player.id) return;
     let msg = cmds.slice(1).join(" ");
-    this.sendMsgToPlayer(player, `PM>> ${dest_player.name}: ${msg}`, 0xFFBF00, 'italic');
-    this.sendMsgToPlayer(dest_player, `PM<< ${player.name}: ${msg}`, 0xFFBF00, 'italic', 1);
+    this.sendMsgToPlayer(player, `PM>> ${cmdPlayer.name}: ${msg}`, 0xFFBF00, 'italic');
+    this.sendMsgToPlayer(cmdPlayer, `PM<< ${player.name}: ${msg}`, 0xFFBF00, 'italic', 1);
   }
 
   parsePlayerName(player_name: string) {
@@ -1260,25 +1268,23 @@ class HaxballRoom {
     }
     let map_name = cmds[0].toLowerCase();
     if (all_maps.has(map_name)) {
-      this.setMapByName(map_name);
-      this.sendMsgToAll(`${player.name} zmienił mapę na ${map_name}`, Colors.GameState);
+      if (!this.isGameInProgress()) {
+        this.setMapByName(map_name);
+        this.sendMsgToAll(`${player.name} zmienił mapę na ${map_name}`, Colors.GameState);
+      }
     } else {
       this.sendMsgToPlayer(player, 'Nie ma takiej mapy', Colors.Warning);
     }
   }
 
-  async commandMute(player: PlayerObject, player_names: string[]) {
+  async commandMute(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    let muted: string[] = [];
-    player_names.forEach(player_name => {
-      let e = this.getPlayerWithName(player_name);
-      if (e) {
-        this.addPlayerMuted(e);
-        muted.push('@' + e.name);
-        this.sendMsgToPlayer(e, "Zostałeś wyciszony!", Colors.Warning, undefined, 2);
-      }
-    });
-    this.sendMsgToPlayer(player, `Muted: ${muted.join(" ")}`);
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
+    if (cmdPlayer.id == player.id) return;
+    this.addPlayerMuted(cmdPlayer);
+    this.sendMsgToPlayer(cmdPlayer, "Zostałeś wyciszony!", Colors.Warning, undefined, 2);
+    this.sendMsgToPlayer(player, `Muted: ${cmdPlayer.name}`);
   }
 
   async commandMuted(player: PlayerObject) {
@@ -1388,16 +1394,10 @@ class HaxballRoom {
 
   async commandKick(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, 'Podaj nazwę gracza/graczy');
-      return;
-    }
-    cmds.forEach(player_name => {
-      let e = this.getPlayerWithName(player_name);
-      if (e && e.id != player.id) {
-        this.room.kickPlayer(e.id, "", false);
-      }
-    })
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
+    if (cmdPlayer.id == player.id) return;
+    this.room.kickPlayer(cmdPlayer.id, "", false);
   }
 
   async commandKickAllExceptVerified(player: PlayerObject) {
@@ -1506,21 +1506,13 @@ class HaxballRoom {
     this.sendMsgToAll(`${chosenAdmin.name} jako gracz z najwyzszym zaufaniem i najdłuzej afczący zostaje wybrany na jedynego admina by zarządzać sytuacją kryzysową!`, 0xEE3333, 'bold', 2);
   }
 
-  async commandAdminStats(player: PlayerObject, player_names: string[]) {
+  async commandAdminStats(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    if (!player_names.length) {
-      this.sendMsgToPlayer(player, "Napisz nazwę gracza");
-      return;
-    }
-    let player_name = player_names[0];
-    let e = this.getPlayerWithName(player_name);
-    if (!e) {
-      this.sendMsgToPlayer(player, `Nie mogę znaleźć gracza o nazwie ${player_name}`);
-      return;
-    }
-    let p = this.Pid(e.id);
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player, true);
+    if (!cmdPlayer) return;
+    let p = this.Pid(cmdPlayer.id);
     let s = p.admin_stats;
-    let txt = `${player_name}: admin(${s != null})`;
+    let txt = `${p.name}: admin(${s != null})`;
     if (s) {
       txt += ` od(${s.since})`;
       if (s.given_by) txt += ` przez(${s.given_by})`;
@@ -1602,9 +1594,9 @@ class HaxballRoom {
   async commandSpamCheckDisable(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdmin(player)) return;
     cmds.forEach(player_name => {
-      let player = this.getPlayerWithName(player_name);
-      if (player) {
-        this.anti_spam.setSpamDisabled(player);
+      let cmdPlayer = this.getPlayerObjectByName(player_name, null);
+      if (cmdPlayer) {
+        this.anti_spam.setSpamDisabled(cmdPlayer);
       }
     });
   }
@@ -1616,11 +1608,8 @@ class HaxballRoom {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza");
       return;
     }
-    let cmdPlayer = this.getPlayerWithName(cmds[0]);
-    if (!cmdPlayer) {
-      this.sendMsgToPlayer(player, `Nie mozna znaleźć gracza ${cmds[0]}`);
-      return;
-    }
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
     let cmdPlayerExt = this.P(cmdPlayer);
     let lastPlayerNames = this.game_state.getPlayerNames(cmdPlayerExt.auth_id);
     this.sendMsgToPlayer(player, `Ostatnie 5 nazw: ${(await lastPlayerNames).join(', ')}`);
@@ -1636,14 +1625,10 @@ class HaxballRoom {
   }
 
   async commandMe(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
-    let playerNameToCheck = cmds.length ? cmds[0] : player.name;
-    let cmdPlayer = this.getPlayerWithName(playerNameToCheck);
-    if (!cmdPlayer) {
-      this.sendMsgToPlayer(player, `Nie mozna znaleźć gracza ${playerNameToCheck}`);
-      return;
-    }
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player, true);
+    if (!cmdPlayer) return;
     let cmdPlayerExt = this.P(cmdPlayer);
+    let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
     let dateStr = new Date(cmdPlayerExt.join_time).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
     this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr} od:${dateStr}`);
@@ -1670,16 +1655,12 @@ class HaxballRoom {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz dać kciuka w górę!");
       return;
     }
-    let playerName = cmds[0];
-    let cmdPlayer = this.getPlayerWithName(playerName);
-    if (!cmdPlayer) {
-      this.sendMsgToPlayer(player, `Nie mozna znaleźć gracza ${playerName}`);
-      return;
-    }
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
     if (player.id == cmdPlayer.id) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     this.game_state.voteUp(playerExt.auth_id, cmdPlayerExt.auth_id);
-    this.sendMsgToPlayer(player, `Dałeś ${playerName} kciuka w górę!`);
+    this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w górę!`);
   }
 
   async commandVoteDown(player: PlayerObject, cmds: string[]) {
@@ -1689,16 +1670,12 @@ class HaxballRoom {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz dać kciuka w dół!");
       return;
     }
-    let playerName = cmds[0];
-    let cmdPlayer = this.getPlayerWithName(playerName);
-    if (!cmdPlayer) {
-      this.sendMsgToPlayer(player, `Nie mozna znaleźć gracza ${playerName}`);
-      return;
-    }
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
     if (player.id == cmdPlayer.id) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     this.game_state.voteDown(playerExt.auth_id, cmdPlayerExt.auth_id);
-    this.sendMsgToPlayer(player, `Dałeś ${playerName} kciuka w dół!`);
+    this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w dół!`);
   }
 
   async commandVoteRemove(player: PlayerObject, cmds: string[]) {
@@ -1708,16 +1685,12 @@ class HaxballRoom {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz zabrać swojego kciuka!");
       return;
     }
-    let playerName = cmds[0];
-    let cmdPlayer = this.getPlayerWithName(playerName);
-    if (!cmdPlayer) {
-      this.sendMsgToPlayer(player, `Nie mozna znaleźć gracza ${playerName}`);
-      return;
-    }
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
     if (player.id == cmdPlayer.id) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     this.game_state.removeVote(playerExt.auth_id, cmdPlayerExt.auth_id);
-    this.sendMsgToPlayer(player, `Zabrałeś ${playerName} kciuka!`);
+    this.sendMsgToPlayer(player, `Zabrałeś ${cmdPlayerExt.name} kciuka!`);
   }
 
   async commandVerify(player: PlayerObject) {
@@ -1731,17 +1704,13 @@ class HaxballRoom {
   async commandTrust(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "Wpisz nick gracza!");
+      this.sendMsgToPlayer(player, "Uzycie: !t <@nick> <trust_level>");
       return;
     }
-    let player_name = cmds[0];
-    let cmd_player = this.getPlayerWithName(player_name);
-    if (!cmd_player) {
-      this.sendMsgToPlayer(player, `Nie mozna znaleźć gracza ${player_name}`);
-      return;
-    }
-    let cmd_player_ext = this.Pid(cmd_player.id);
-    if (cmd_player.id == player.id) {
+    let cmdPlayer = this.getPlayerObjectByName(cmds[0], player);
+    if (!cmdPlayer) return;
+    let cmd_player_ext = this.Pid(cmdPlayer.id);
+    if (cmdPlayer.id == player.id) {
       this.sendMsgToPlayer(player, `Nie mozesz sobie samemu zmieniać poziomu!`);
       return;
     }
@@ -1764,7 +1733,7 @@ class HaxballRoom {
     }
     cmd_player_ext.trust_level = trust_level;
     this.game_state.setTrustLevel(cmd_player_ext, trust_level, caller_ext);
-    this.sendMsgToPlayer(player, `Ustawiłeś trust level ${player_name} na ${trust_level}`);
+    this.sendMsgToPlayer(player, `Ustawiłeś trust level ${cmd_player_ext.name} na ${trust_level}`);
   }
 
   async commandAutoTrust(player: PlayerObject, cmds: string[]) {
@@ -1835,15 +1804,11 @@ class HaxballRoom {
       this.captcha.clearCaptcha(player);
       this.giveAdminTo(player);
     } else {
-      let player_name = cmds[0];
-      let p = this.getPlayerWithName(player_name);
-      if (!p) {
-        this.sendMsgToPlayer(player, `Nie mozna znaleźć gracza ${player_name}`);
-        return;
-      }
-      this.anti_spam.clearMute(p);
-      this.captcha.clearCaptcha(p);
-      this.sendMsgToPlayer(player, `Usunąłem blokady dla gracza: ${player_name}`);
+      let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+      if (!cmdPlayer) return;
+      this.anti_spam.clearMute(cmdPlayer);
+      this.captcha.clearCaptcha(cmdPlayer);
+      this.sendMsgToPlayer(player, `Usunąłem blokady dla gracza: ${cmdPlayer.name}`);
     }
   }
 
@@ -2010,10 +1975,22 @@ class HaxballRoom {
     return this.room.getPlayerList();
   }
 
-  getPlayerWithName(player_name: string): PlayerObject | null {
-    // TODO polskie znaki na ascii
-    if (player_name.startsWith('@')) player_name = player_name.slice(1);
-    return this.getPlayers().find(player => player.name.replace(' ', '_') === player_name) || null;
+  getPlayerObjectByName(playerName: string|string[], byPlayer: PlayerObject|null, byPlayerIfNameNotSpecified = false): PlayerObject|null {
+    if (!playerName) {
+      if (byPlayerIfNameNotSpecified) return byPlayer; // command refers to caller player
+      return null; // no name specified, then cannot find player
+    }
+
+    let name = Array.isArray(playerName) ? playerName.join(" ") : playerName;
+    if (name.startsWith('@')) name = name.slice(1);
+    let nameNormalized = normalizeNameString(name);
+    let cmdPlayer = this.getPlayers().find(e => this.Pid(e.id).name_normalized === nameNormalized) || null;
+    if (!cmdPlayer) {
+      if (byPlayer)
+        this.sendMsgToPlayer(byPlayer, `Nie mogę znaleźć gracza o nicku ${name}`, Colors.PlayerNotFound, 'bold');
+      return null;
+    }
+    return cmdPlayer;
   }
 
   isGameInProgress() {
