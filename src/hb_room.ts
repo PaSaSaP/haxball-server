@@ -6,7 +6,7 @@ import { generateVerificationLink } from './verification';
 import { tokenDatabase, ServerData } from './token_database';
 import * as config from './config';
 import ChatLogger from './chat_logger';
-import { toBoolean, sleep, normalizeNameString } from './utils';
+import { toBoolean, sleep, normalizeNameString, getTimestampHMS, getTimestampHM } from './utils';
 import { Emoji } from './emoji';
 import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
@@ -190,6 +190,7 @@ class HaxballRoom {
       me: this.commandMe,
       stat: this.commandStat,
       stats: this.commandStat,
+      auth: this.commandPrintAuth,
       vote: this.commandVote,
       voteup: this.commandVoteUp,
       vote_up: this.commandVoteUp,
@@ -475,10 +476,10 @@ class HaxballRoom {
   async handleGameStop(byPlayer: PlayerObject | null) {
     if (byPlayer) this.Pid(byPlayer.id).admin_stat_start_stop();
     const MaxAllowedGameStopTime = 20.0 * 1000; // [ms]
-    this.last_player_team_changed_by_admin_time = Date.now();
+    const now = Date.now();
+    this.last_player_team_changed_by_admin_time = now;
     this.gamePauseTimerReset();
     this.gameStopTimerReset();
-    const now = Date.now();
     this.getPlayers().forEach(player => {
       this.Pid(player.id).activity.game = now;
     });
@@ -822,7 +823,7 @@ class HaxballRoom {
   async handlePlayerKicked(kickedPlayer: PlayerObject, reason: string, ban: boolean, byPlayer: PlayerObject | null) {
     let fastKicks = false;
     if (byPlayer) {
-      hb_log(`# Kicked${ban ? "1" : "0"}: ${kickedPlayer.name} by: ${byPlayer.name} for: ${reason}`);
+      hb_log(`# Kicked(ban:${ban ? "1" : "0"}): ${kickedPlayer.name} by: ${byPlayer.name} for: ${reason}`);
       let byPlayerExt = this.P(byPlayer);
       if (byPlayerExt.admin_stats) {
         if (ban) byPlayerExt.admin_stats.banned_users.add(kickedPlayer.name);
@@ -1009,7 +1010,6 @@ class HaxballRoom {
     this.updateWinnerTeamBeforeGameStop();
     this.room.stopGame();
     await sleep(125);
-    // TODO maybe some sleep?
     this.room.startGame();
     this.sendMsgToAll(`(!r) ${player.name} zrobił restart meczu, limit: ${this.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
@@ -1288,9 +1288,8 @@ class HaxballRoom {
   }
 
   async commandMuted(player: PlayerObject) {
-    let players = this.room.getPlayerList();
     let muted: string[] = [];
-    players.forEach(e => {
+    this.getPlayers().forEach(e => {
       if (this.isPlayerMuted(e)) muted.push(e.name);
     });
     this.sendMsgToPlayer(player, `Muted: ${muted.join(" ")}`);
@@ -1298,25 +1297,22 @@ class HaxballRoom {
 
   async commandMuteAll(player: PlayerObject) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    let players = this.room.getPlayerList();
-    players.forEach(player => {
-      this.addPlayerMuted(player);
+    this.getPlayers().forEach(e => {
+      this.addPlayerMuted(e);
     });
     this.sendMsgToPlayer(player, "Muted all Players", Colors.GameState);
   }
 
-  async commandUnmute(player: PlayerObject, player_names: string[]) {
+  async commandUnmute(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    var players = this.room.getPlayerList();
-    // if player name starts with any of player names, unmute
-    players.forEach(player => {
-      if (player_names.some(name => player.name.startsWith(name))) {
-        this.removePlayerMuted(player);
-        this.anti_spam.removePlayer(player);
-        this.sendMsgToPlayer(player, "Ju mozesz pisać!", Colors.Warning, undefined, 2);
-      }
-    });
-    this.sendMsgToPlayer(player, `Unmuted: ${player_names}`);
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
+    if (player.id == cmdPlayer.id) return;
+    if (!this.isPlayerMuted(cmdPlayer)) return;
+    this.removePlayerMuted(cmdPlayer);
+    this.anti_spam.removePlayer(cmdPlayer);
+    this.sendMsgToPlayer(cmdPlayer, "Ju mozesz pisać!", Colors.Warning, undefined, 2);
+    this.sendMsgToPlayer(player, `Unmuted: ${cmdPlayer.name}`);
   }
 
   async commandUnmuteAll(player: PlayerObject) {
@@ -1369,23 +1365,19 @@ class HaxballRoom {
     this.sendMsgToPlayer(player, log_str);
   }
 
-  async commandSetAfkOther(player: PlayerObject, player_names: string[]) {
+  async commandSetAfkOther(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    this.getPlayers().forEach(player => {
-      let player_ext = this.P(player);
-      if (player_names.some(name => player_ext.name.startsWith(name))) {
-        if (!player_ext.afk) this.commandSetAfk(player);
-      }
-    });
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
+    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    if (!cmdPlayerExt.afk) this.commandSetAfk(player);
   }
 
-  async commandClearAfkOther(player: PlayerObject, player_names: string[]) {
+  async commandClearAfkOther(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    this.getPlayers().forEach(player => {
-      if (player_names.some(name => player.name.startsWith(name))) {
-        this.commandClearAfk(player);
-      }
-    });
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer) return;
+    this.commandClearAfk(cmdPlayer);
   }
 
   async commandByeBye(player: PlayerObject) {
@@ -1482,8 +1474,8 @@ class HaxballRoom {
       this.giveAdminTo(playerExt); // approved admin
       bestAdmin = playerExt;
     }
+    let players = this.getPlayers();
     if (!bestAdmin) { // if calling player is not approved admin then find best from others
-      let players = this.getPlayers();
       players.forEach(e => {
         let p = this.P(e);
         if (p.admin) currentAdmins.push(p);
@@ -1499,7 +1491,7 @@ class HaxballRoom {
     const chosenAdmin: PlayerData = bestAdmin;
     if (currentAdmins.length == 1 && currentAdmins[0].id == chosenAdmin.id) return;
     currentAdmins.push(chosenAdmin);
-    currentAdmins.forEach(e => {
+    players.forEach(e => {
       if (e.id == chosenAdmin.id && !chosenAdmin.admin) this.giveAdminTo(chosenAdmin);
       if (e.id != chosenAdmin.id) this.takeAdminFrom(e);
     });
@@ -1630,12 +1622,16 @@ class HaxballRoom {
     let cmdPlayerExt = this.P(cmdPlayer);
     let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
-    let dateStr = new Date(cmdPlayerExt.join_time).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+    let dateStr = getTimestampHM();
     this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr} od:${dateStr}`);
   }
 
   async commandStat(player: PlayerObject, cmds: string[]) {
     this.sendMsgToPlayer(player, 'Niedługo statsy się pojawią!');
+  }
+
+  async commandPrintAuth(player: PlayerObject) {
+    this.sendMsgToPlayer(player, `Twój auth ID to: ${this.Pid(player.id).auth_id}`);
   }
 
   async commandVote(player: PlayerObject) {
@@ -2086,19 +2082,15 @@ function clearPlayerAvatar(player_name: string) {
   });
 }
 
-function getTimestamp() {
-  return new Date().toLocaleTimeString('pl-PL', { hour12: false });
-}
-
 function hb_log_to_console(player: PlayerObject | PlayerData, msg: string) {
   if (!hb_log_chat_to_console_enabled) return;
-  console.debug(`[${getTimestamp()} ${player.name}][${player.id}] ${msg}`);
+  console.debug(`[${getTimestampHMS()} ${player.name}][${player.id}] ${msg}`);
 }
 
 function hb_log(msg: string, timestamp: boolean = false) {
   if (!hb_debug_enabled) return;
   let txt = msg;
-  if (timestamp) txt = `[${getTimestamp()}] ${txt}`;
+  if (timestamp) txt = `[${getTimestampHMS()}] ${txt}`;
   console.debug(txt);
 }
 

@@ -15,4 +15,14 @@ export const toBoolean = (value: any) => {
 
 export const normalizeNameString = (name: string) => {
   return name.replace(/\s+/g, "_").toLowerCase();
-}
+};
+
+export const getTimestampHM = (t: number|null=null) => {
+  const d = t ? new Date(t) : new Date();
+  return d.toLocaleTimeString('pl-PL', { hour12: false, hour: '2-digit', minute: '2-digit' });
+};
+
+export const getTimestampHMS = (t: number|null=null) => {
+  const d = t ? new Date(t) : new Date();
+  return d.toLocaleTimeString('pl-PL', { hour12: false });
+};

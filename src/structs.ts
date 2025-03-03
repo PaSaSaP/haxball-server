@@ -1,4 +1,4 @@
-import { normalizeNameString } from "./utils";
+import { getTimestampHM, normalizeNameString } from "./utils";
 
 export class PlayerActivity {
   chat: number; // if is writing or is moving players from team to team
@@ -36,7 +36,7 @@ export class AdminStats {
 
   constructor() {
     this.active = true;
-    this.first_since = this.now_txt();
+    this.first_since = getTimestampHM();
     this.since = this.first_since;
     this.given_by = null;
     this.taken_by = null;
@@ -52,12 +52,8 @@ export class AdminStats {
   }
 
   since_now() {
-    this.since = this.now_txt();
+    this.since = getTimestampHM();
     this.active = true;
-  }
-
-  now_txt() {
-    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
   add_kick_timestamp() {
