@@ -1,3 +1,10 @@
+import { AntiSpam } from "./anti_spam";
+import { ScoreCaptcha } from "./captcha";
+import * as config from "./config";
+import { Emoji } from "./emoji";
+import { GameState } from "./game_state";
+import { PlayerAccelerator } from "./player_accelerator";
+import { BallPossessionTracker } from "./possesion_tracker";
 import { getTimestampHM, normalizeNameString } from "./utils";
 
 export class PlayerActivity {
@@ -129,5 +136,5 @@ export class PlayerData {
   admin_stat_team() { if (this.admin_stats) this.admin_stats.action_team += 1; }
   admin_stat_kick() { if (this.admin_stats) this.admin_stats.action_kick += 1; }
   admin_stat_other() { if (this.admin_stats) this.admin_stats.action_other += 1; }
-
 }
+
