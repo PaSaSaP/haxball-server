@@ -73,6 +73,16 @@ export class AdminStats {
   }
 }
 
+export interface PPP {
+  id: number;
+  name: string;
+  team: TeamID;
+  admin: boolean;
+  position: { "x": number; "y": number };
+  auth: string;
+  conn: string;
+}
+
 export class PlayerData {
   name: string;
   name_normalized: string;
@@ -92,8 +102,11 @@ export class PlayerData {
   join_time: number;
   timer_give_back_admin: any;
   verify_link_requested: boolean;
+  afk_avatar: string|null;
+  afk_switch_time: number;
+  chosen_player_names: string[];
 
-  constructor(player: PlayerObject) {
+  constructor(player: PlayerObject|PPP) {
     // this.player = player;
     this.name = player.name; /// @type string
     this.name_normalized = normalizeNameString(this.name);
@@ -113,6 +126,9 @@ export class PlayerData {
     this.join_time = Date.now();
     this.timer_give_back_admin = null;
     this.verify_link_requested = false;
+    this.afk_avatar = null;
+    this.afk_switch_time = Date.now();
+    this.chosen_player_names = [];
   }
 
   update(player: PlayerObject) {

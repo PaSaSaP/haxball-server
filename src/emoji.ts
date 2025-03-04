@@ -77,5 +77,7 @@ export class Emoji {
   static Afk = '💤';
   // static AfkMaybe = '❓';
   static AfkMaybe = '💤';
+
+  static CountdownEmojis = ["😀", "🙂", "😐", "😕", "☹️", "😡", "🤬", "💀", "☠️"];
 }
 

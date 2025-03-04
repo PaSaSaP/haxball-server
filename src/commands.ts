@@ -21,6 +21,10 @@ class Commander {
       pw: this.commandSendMessage,
       pressure: this.commandPressure,
       presja: this.commandPressure,
+      p: this.commandPauseRequested,
+      wyb: this.commandChoosingPlayers,
+      ch: this.commandChoosingPlayers,
+      choose: this.commandChoosingPlayers,
       restart: this.commandRestartMatch,
       r: this.commandRestartMatch,
       rand_and_restart: this.commandRandomAndRestartMatch,
@@ -66,7 +70,7 @@ class Commander {
       kkr: this.commandKickAllRed,
       kkb: this.commandKickAllBlue,
       kks: this.commandKickAllSpec,
-      auto: this.commandAuto,
+      auto_mode: this.commandAutoMode,
       limit: this.commandLimit,
       emoji: this.commandEmoji,
 
@@ -137,6 +141,8 @@ class Commander {
       home: this.commandShowDiscordAndWebpage,
       url: this.commandShowDiscordAndWebpage,
 
+      god: this.commandGodTest,
+
       h: this.commandHelp,
       "?": this.commandHelp,
       help: this.commandHelp,
@@ -197,6 +203,36 @@ class Commander {
 
   async commandPressure(player: PlayerObject) {
     this.sendMsgToPlayer(player, `Pressure: Red ${this.hb_room.pressure_right.toFixed(2)}s, Blue ${this.hb_room.pressure_left.toFixed(2)}s`);
+  }
+
+  async commandChoosingPlayers(player: PlayerObject, cmds: string[]) {
+    let playerExt = this.Pid(player.id);
+    if (!cmds.length) {
+      this.sendMsgToPlayer(player, "W trakcie meczu wybierz sobie graczy! Napisz listę priorytetową zawodników których chesz mieć, a gra wybierze dostępnych, np: !wyb @player1 @player2, @player3...", Colors.Help, 'italic');
+      this.sendMsgToPlayer(player, "Nie będzie przerwy na wybieranie. Lista przetrwa do restartu, by ją wyczyścić, daj jako argument myślnik (-)", Colors.Help, 'italic');
+      if (playerExt.chosen_player_names.length) this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
+      return;
+    }
+    if (cmds[0] == '-') {
+      this.Pid(player.id).chosen_player_names = [];
+      this.sendMsgToPlayer(player, "Wyczyściłeś listę!", Colors.GameState, 'italic');
+      return;
+    }
+    let names: string[] = [];
+    cmds.forEach(playerName => {
+      let e = this.getPlayerObjectByName(playerName, player);
+      if (e) {
+        let p = this.Pid(e.id);
+        names.push(p.name_normalized);
+      }
+    });
+    this.Pid(player.id).chosen_player_names = names;
+    this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
+  }
+
+  async commandPauseRequested(player: PlayerObject) {
+    if (!player.team) return;
+    if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePauseRequest(this.Pid(player.id));
   }
 
   async commandRestartMatch(player: PlayerObject) {
@@ -295,7 +331,7 @@ class Commander {
   }
 
   async commandHelp(player: PlayerObject) {
-    this.sendMsgToPlayer(player, "Komendy: !pm/w !bb !ping !afk !back/jj !afks !stat !discord !pasek !kebab", Colors.Help);
+    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !discord !pasek !kebab", Colors.Help);
     if (player.admin) {
       this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !restart/r !start/stop/s !swap !swap_and_restart/sr !rand_and_restart/rr !win_stay/ws !add/a !map/m", Colors.Help);
     }
@@ -385,6 +421,7 @@ class Commander {
   commandSetAfkExt(player_ext: PlayerData) {
     // set on afk
     if (player_ext.afk) return;
+    player_ext.afk_switch_time = Date.now();
     player_ext.afk = true;
     this.r().setPlayerAvatar(player_ext.id, '💤');
     this.sendMsgToAll(`${player_ext.name} poszedł AFK (!afk !back !jj)`, Colors.Afk);
@@ -400,18 +437,24 @@ class Commander {
 
   commandClearAfkExt(player_ext: PlayerData) {
     if (player_ext.afk) {
+      const now = Date.now();
+      if (now - player_ext.afk_switch_time < 15_000) {
+        this.sendMsgToPlayer(player_ext, "Nie da się tak szybko wstać z krzesła i usiąść!", Colors.Afk);
+        return;
+      }
       player_ext.afk = false;
       this.r().setPlayerAvatar(player_ext.id, null);
       this.sendMsgToAll(`${player_ext.name} wrócił z AFK (!afk !back !jj)`, Colors.Afk);
       player_ext.activity.updateGame();
+      if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePlayerBackFromAfk(player_ext);
     }
     this.hb_room.updateAdmins(null);
   }
 
   async commandPrintAfkList(player: PlayerObject) {
     var log_str = "AFK list: "
-    for (let player_ext of this.getPlayersExt()) {
-      if (player_ext.afk || player_ext.afk_maybe) log_str += `${player.name}[${player.id}] `;
+    for (let p of this.getPlayersExt()) {
+      if (p.afk || p.afk_maybe) log_str += `${p.name}[${p.id}] `;
     }
     this.sendMsgToPlayer(player, log_str);
   }
@@ -466,14 +509,20 @@ class Commander {
     this.hb_room.kickAllTeamExceptTrusted(player, 0);
   }
 
-  async commandAuto(player: PlayerObject, values: string[]) {
+  async commandAutoMode(player: PlayerObject, values: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(this.Pid(player.id))) return;
     if (values.length == 0) return;
-    if (values[0] == "on") {
+    const arg = values[0].toLowerCase();
+    if (arg == "on") {
+      for (let p of this.getPlayersExt()) {
+        if (p.admin && !p.admin_level) this.hb_room.takeAdminFrom(p);
+      }
       this.hb_room.auto_mode = true;
+      this.hb_room.auto_bot.resetAndStart();
       this.sendMsgToAll("Włączono tryb automatyczny!")
-    } else if (values[0] == "off") {
+    } else if (arg == "off") {
       this.hb_room.auto_mode = false;
+      this.hb_room.auto_bot.reset();
       this.sendMsgToAll("Wyłączono tryb automatyczny!")
     } else {
       this.sendMsgToPlayer(player, "Poprawne wartosci: [on, off]");
@@ -933,6 +982,13 @@ class Commander {
     for (let p of this.getPlayersExt()) {
       this.r().kickPlayer(p.id, "Server is restarted!", false);
     }
+  }
+
+  async commandGodTest(player: PlayerObject, cmds: string[]) {
+    if (this.hostOnlyCommand(player, 'server_restart')) return;
+    let cmd = cmds.join(" ");
+    this.sendMsgToPlayer(player, `trying to exec: ${cmd}`);
+    this.r().onPlayerChat(this.hb_room.god_player, cmd);
   }
 
   async keyboardLShiftDown(player: PlayerObject) {
