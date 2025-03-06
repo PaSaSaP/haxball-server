@@ -6,6 +6,7 @@ import { GameState } from "./game_state";
 import { PlayerAccelerator } from "./player_accelerator";
 import { BallPossessionTracker } from "./possesion_tracker";
 import { getTimestampHM, normalizeNameString } from "./utils";
+import Glicko2 from 'glicko2';
 
 export class PlayerActivity {
   chat: number; // if is writing or is moving players from team to team
@@ -91,6 +92,7 @@ export class PlayerData {
   admin: boolean;
   admin_stats: AdminStats | null;
   position: { "x": number, "y": number };
+  stat: PlayerStat;
   afk: boolean;
   afk_maybe: boolean;
   activity: PlayerActivity;
@@ -115,6 +117,7 @@ export class PlayerData {
     this.admin = player.admin;
     this.admin_stats = null;
     this.position = player.position;
+    this.stat = new PlayerStat(this.id);
     this.afk = false;
     this.afk_maybe = false;
     this.activity = new PlayerActivity(); /// @type {PlayerActivity | null}
@@ -154,3 +157,112 @@ export class PlayerData {
   admin_stat_other() { if (this.admin_stats) this.admin_stats.action_other += 1; }
 }
 
+export interface PlayerRatingData {
+  rating: {
+    mu: number;      // Glicko2 rating (mu)
+    rd: number;      // Glicko2 rating deviation (sigma)
+    vol: number;     // Glicko2 volatility
+  };
+  total_games: number;
+  total_full_games: number;
+  won_games: number;
+}
+
+export class PlayerStat {
+  id: number; // player id
+  glickoPlayer: Glicko2.Player|null;
+  totalGames: number; // all played ranked games
+  totalFullGames: number; // games when player played from the beginning (joinedAt 0) to end (leavedAt -1)
+  wonGames: number; // losses is (total - won) I think
+
+  constructor(id: number) {
+    this.id = id;
+    this.glickoPlayer = null;
+    // this.glickoPlayer = new Glicko2.Player(
+    //   PlayerStat.DefaultRating, // rating (mu)
+    //   PlayerStat.DefaultRd,  // rd (sigma)
+    //   PlayerStat.DefaultVol, // vol (zmienność, standardowa wartość)
+    //   PlayerStat.DefaultTau,  // tau (domyślna wartość w wielu implementacjach)
+    //   PlayerStat.DefaultRating, // default_rating
+    //   PlayerStat.VolFunction, // Prosta funkcja volatility (stała wartość, można dostosować)
+    //   id    // id gracza
+    // );
+    this.totalGames = 0;
+    this.totalFullGames = 0;
+    this.wonGames = 0;
+  }
+
+  updatePlayer(glickoPlayer: Glicko2.Player) {
+    this.glickoPlayer = glickoPlayer;
+  }
+
+  static DefaultRating: number = 1500;
+  static DefaultRd: number = 350;
+  static DefaultVol: number = 0.06;
+  static DefaultTau: number = 0.5;
+  // static VolFunction: any = (v: number, d: number) => 0.06;
+}
+
+export class PlayerStatInMatch {
+  id: number; // player id
+  joinedAt: number; // the same timelime like matchEndTime, 0 for players playing from the beginning
+  leavedAt: number; // any value greater than -1 means that player leaved match; 0 means that player leaved even before first ball touch
+
+  constructor(id: number) {
+    this.id = id;
+    this.joinedAt = 0;
+    this.leavedAt = -1;
+  }
+}
+
+export class Match {
+  redScore: number; // goals scored by red
+  blueScore: number; // goals scored by blue
+  matchEndTime: number; // total [seconds]
+  startedAt: number; // Date time, not for statistics
+  endedAt: number;  // Date time, not for statistics
+  redTeam: number[]; // player ids
+  blueTeam: number[]; // player ids
+  playerStats: Map<number, PlayerStatInMatch>; // player id -> stat
+  goals: [number, 1|2][]; // list of tuples (time, team) where time is in seconds, team 1 is red, 2 is blue
+
+  winnerTeam: 0 | 1 | 2; // red = 1, blue = 2
+  winStreak: number; // streak is for team so if player is in team then he "has" streak
+  pressureRed: number; // pressure by red, 0-100 [%]
+  pressureBlue: number; // pressure by blue, 0-100 [%], (it is of course: 100 - pressureRed)
+
+  constructor() {
+    this.redScore = 0;
+    this.blueScore = 0;
+    this.matchEndTime = 0;
+    this.startedAt = Date.now();
+    this.endedAt = 0;
+    this.redTeam = [];
+    this.blueTeam = [];
+    this.playerStats = new Map<number, PlayerStatInMatch>();
+    this.goals = [];
+    this.winnerTeam = 0;
+    this.winStreak = 0;
+    this.pressureRed = 0;
+    this.pressureBlue = 0;
+  }
+  setEnd() {
+    this.endedAt = Date.now();
+  }
+  stat(id: number): PlayerStatInMatch {
+    if (!this.playerStats.has(id)) this.playerStats.set(id, new PlayerStatInMatch(id));
+    return this.playerStats.get(id)!;
+  }
+
+  getWinnerTeamIds() {
+    if (this.winnerTeam == 1) return this.redTeam;
+    if (this.winnerTeam == 2) return this.blueTeam;
+    return [];
+  }
+
+  getLoserTeamIds() {
+    if (this.winnerTeam == 2) return this.redTeam;
+    if (this.winnerTeam == 1) return this.blueTeam;
+    return [];
+  }
+}

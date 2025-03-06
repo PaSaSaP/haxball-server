@@ -6,6 +6,7 @@ import { sleep, getTimestampHM, toBoolean } from "./utils";
 import { generateVerificationLink } from "./verification";
 import { Colors } from "./colors";
 import * as config from './config';
+import { threadId } from "worker_threads";
 
 class Commander {
   hb_room: HaxballRoom;
@@ -25,6 +26,9 @@ class Commander {
       wyb: this.commandChoosingPlayers,
       ch: this.commandChoosingPlayers,
       choose: this.commandChoosingPlayers,
+      "wyb-": this.commandUnchoosingPlayers,
+      "ch-": this.commandUnchoosingPlayers,
+      "choose-": this.commandUnchoosingPlayers,
       restart: this.commandRestartMatch,
       r: this.commandRestartMatch,
       rand_and_restart: this.commandRandomAndRestartMatch,
@@ -96,6 +100,8 @@ class Commander {
       me: this.commandMe,
       stat: this.commandStat,
       stats: this.commandStat,
+      top: this.commandTop10,
+      top10: this.commandTop10,
       auth: this.commandPrintAuth,
       vote: this.commandVote,
       voteup: this.commandVoteUp,
@@ -119,6 +125,7 @@ class Commander {
       only_trusted_join: this.commandOnlyTrustedJoin,
       only_trusted_chat: this.commandOnlyTrustedChat,
       trust_nick: this.commandWhitelistNonTrustedNick,
+      auto_debug: this.commandAutoDebug,
 
       pasek: this.commandPasek,
       kebab: this.commandBuyCoffeeLink,
@@ -208,26 +215,44 @@ class Commander {
   async commandChoosingPlayers(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (!cmds.length) {
-      this.sendMsgToPlayer(player, "W trakcie meczu wybierz sobie graczy! Napisz listę priorytetową zawodników których chesz mieć, a gra wybierze dostępnych, np: !wyb @player1 @player2, @player3...", Colors.Help, 'italic');
-      this.sendMsgToPlayer(player, "Nie będzie przerwy na wybieranie. Lista przetrwa do restartu, by ją wyczyścić, daj jako argument myślnik (-)", Colors.Help, 'italic');
+      this.sendMsgToPlayer(player, "W trakcie meczu wybierz sobie graczy! Napisz listę priorytetową zawodników których chesz mieć, a gra wybierze dostępnych, np: !wyb @player1 @player2 @player3...", Colors.Help, 'italic');
+      this.sendMsgToPlayer(player, "Nie będzie przerwy na wybieranie. Lista przetrwa do restartu, by ją wyczyścić, uzyj !wyb-", Colors.Help, 'italic');
       if (playerExt.chosen_player_names.length) this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
       return;
     }
-    if (cmds[0] == '-') {
-      this.Pid(player.id).chosen_player_names = [];
-      this.sendMsgToPlayer(player, "Wyczyściłeś listę!", Colors.GameState, 'italic');
-      return;
-    }
-    let names: string[] = [];
-    cmds.forEach(playerName => {
+    cmds.reverse().forEach(playerName => {
       let e = this.getPlayerObjectByName(playerName, player);
       if (e) {
         let p = this.Pid(e.id);
-        names.push(p.name_normalized);
+        let newName = p.name_normalized;
+        const prevIdx = playerExt.chosen_player_names.indexOf(newName);
+        if (prevIdx !== -1) {
+          playerExt.chosen_player_names.splice(prevIdx, 1);
+        }
+        playerExt.chosen_player_names.unshift(newName); // add always at the beginning, given player list is in reverse order so it it as expected
       }
     });
-    this.Pid(player.id).chosen_player_names = names;
     this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
+  }
+
+  async commandUnchoosingPlayers(player: PlayerObject, cmds: string[]) {
+    let playerExt = this.Pid(player.id);
+    if (!cmds.length) {
+      this.sendMsgToPlayer(player, "Wyczyściłeś listę!", Colors.GameState, 'italic');
+      playerExt.chosen_player_names = [];
+    } else {
+      const cmdsSet = new Set(); // O(1), list.includes has O(n)
+      // TODO below to function?
+      cmds.forEach(playerName => {
+        let e = this.getPlayerObjectByName(playerName, player);
+        if (e) {
+          let p = this.Pid(e.id);
+          cmdsSet.add(p.name_normalized);
+        }
+      })
+      playerExt.chosen_player_names = playerExt.chosen_player_names.filter(e => !cmdsSet.has(e));
+      this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
+    }
   }
 
   async commandPauseRequested(player: PlayerObject) {
@@ -331,7 +356,7 @@ class Commander {
   }
 
   async commandHelp(player: PlayerObject) {
-    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !discord !pasek !kebab", Colors.Help);
+    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !top !discord !pasek !kebab", Colors.Help);
     if (player.admin) {
       this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !restart/r !start/stop/s !swap !swap_and_restart/sr !rand_and_restart/rr !win_stay/ws !add/a !map/m", Colors.Help);
     }
@@ -697,7 +722,32 @@ class Commander {
   }
 
   async commandStat(player: PlayerObject, cmds: string[]) {
-    this.sendMsgToPlayer(player, 'Niedługo statsy się pojawią!');
+    let playerExt = this.Pid(player.id);
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player, true);
+    if (!cmdPlayer) return;
+    let cmdPlayerExt = this.P(cmdPlayer);
+    let playerStats = cmdPlayerExt.stat;
+    let rating = Math.round(playerStats.glickoPlayer!.getRating());
+    let rd = Math.round(playerStats.glickoPlayer!.getRd());
+    let games = playerStats.totalGames;
+    let fullGames = playerStats.totalFullGames;
+    let wins = playerStats.wonGames;
+    let winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : 0;
+    let msg = `${cmdPlayerExt.name} ⭐${rating} ±${rd} 🎮Rozegrane: ${games} 🔲Pełne mecze: ${fullGames} 🏆Wygrane: ${wins} (WR: ${winRate}%)`;
+    this.sendMsgToPlayer(playerExt, msg, Colors.Stats);
+  }
+
+  async commandTop10(player: PlayerObject, cmds: string[]) {
+    let top10 = this.hb_room.top10;
+    if (top10.length === 0) {
+      this.sendMsgToPlayer(player, "🏆 Brak danych o najlepszych graczach.", Colors.Stats);
+      return;
+    }
+    const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+    let msg = "🏆 *TOP 10* ";
+    msg += top10.map(([name, rating, fullGames], index) =>
+      `${rankEmojis[index]} ${name.length > 12 ? name.slice(0, 12) + "…" : name}⭐${rating} ⦿${fullGames}`).join(", ");
+    this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
 
   async commandPrintAuth(player: PlayerObject) {
@@ -977,10 +1027,20 @@ class Commander {
     });
   }
 
+  async commandAutoDebug(player: PlayerObject, cmds: string[]) {
+    if (this.hostOnlyCommand(player, 'auto_debug')) return;
+    this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
+    this.sendMsgToPlayer(player, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
+  }
+
   async commandServerRestart(player: PlayerObject) {
     if (this.hostOnlyCommand(player, 'server_restart')) return;
+    for (let i = 0; i < 3; ++i) {
+      this.hb_room.sendMsgToAll(`Reset za ${3 - i} sekund`, Colors.Warning, 'bold', 2);
+      await sleep(1000);
+    }
     for (let p of this.getPlayersExt()) {
-      this.r().kickPlayer(p.id, "Server is restarted!", false);
+      this.r().kickPlayer(p.id, "Reset, wróć za minutę!", false);
     }
   }
 

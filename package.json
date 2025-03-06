@@ -24,6 +24,7 @@
     "discord.js": "^14.18.0",
     "express": "^4.21.2",
     "fs-extra": "^11.3.0",
+    "glicko2": "^1.2.1",
     "global-agent": "^3.0.0",
     "haxball.js": "^2.3.2",
     "msgpackr": "^1.11.2",
@@ -31,7 +32,8 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "sqlite3": "^5.1.7",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "uninstall": "^0.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.5",

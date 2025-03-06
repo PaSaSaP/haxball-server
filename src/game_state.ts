@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { PlayerData } from './structs';
+import { PlayerData, PlayerStat, PlayerRatingData } from './structs';
 import ChatLogger from './chat_logger';
 
 class PlayersDB {
@@ -153,6 +153,32 @@ class PlayerNamesDB {
       });
     });
   }
+
+  async getAllPlayerNames(): Promise<Map<string, string>> {
+    return new Promise((resolve, reject) => {
+      const query = `
+          SELECT auth_id, name
+          FROM player_names
+          WHERE ROWID IN (
+            SELECT MAX(ROWID) 
+            FROM player_names 
+            GROUP BY auth_id
+          );
+        `;
+
+      this.db.all(query, [], (err, rows: any[]) => {
+        if (err) {
+          reject('Error fetching all player names: ' + err.message);
+        } else {
+          const result = new Map<string, string>();
+          for (const row of rows) {
+            result.set(row.auth_id, row.name);
+          }
+          resolve(result);
+        }
+      });
+    });
+  }
 }
 
 class VotesDB {
@@ -253,6 +279,8 @@ class VotesDB {
   }
 }
 
+
+
 class ReportsDB {
   db: sqlite3.Database;
 
@@ -293,6 +321,114 @@ class ReportsDB {
   }
 }
 
+export class PlayerRatingsDB {
+  db: sqlite3.Database;
+
+  constructor(db: sqlite3.Database) {
+    this.db = db;
+  }
+
+  setupDatabase(): void {
+    // Tworzenie tabeli player_ratings, jeśli jeszcze nie istnieje
+    const createPlayerRatingsTableQuery = `
+      CREATE TABLE IF NOT EXISTS player_ratings (
+        auth_id TEXT PRIMARY KEY,
+        rating REAL NOT NULL,
+        rd REAL NOT NULL,
+        volatility REAL NOT NULL,
+        total_games INTEGER NOT NULL,
+        total_full_games INTEGER NOT NULL,
+        won_games INTEGER NOT NULL
+      );
+    `;
+    this.db.run(createPlayerRatingsTableQuery, (err) => {
+      if (err) console.error('Error creating player_ratings table:', err.message);
+      else console.log('Table "player_ratings" created or already exists.');
+    });
+  }
+
+  async loadPlayerRating(auth_id: string): Promise<PlayerRatingData> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT auth_id, rating, rd, volatility, total_games, total_full_games, won_games
+        FROM player_ratings
+        WHERE auth_id = ?;
+      `;
+      this.db.get(query, [auth_id], (err, row: any) => {
+        if (err) {
+          reject('Error loading player rating: ' + err.message);
+        } else if (!row) {
+          // Zwracamy domyślne wartości dla nowego gracza
+          resolve({
+            rating: {
+              mu: PlayerStat.DefaultRating,  // Domyślne Glicko2 rating
+              rd: PlayerStat.DefaultRd,   // Domyślne Glicko2 rd
+              vol: PlayerStat.DefaultVol, // Domyślne Glicko2 volatility
+            },
+            total_games: 0,
+            total_full_games: 0,
+            won_games: 0,
+          });
+        } else {
+          resolve({
+            rating: {
+              mu: row.rating,
+              rd: row.rd,
+              vol: row.volatility,
+            },
+            total_games: row.total_games,
+            total_full_games: row.total_full_games,
+            won_games: row.won_games,
+          });
+        }
+      });
+    });
+  }
+
+  async savePlayerRating(auth_id: string, player: PlayerStat): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT OR REPLACE INTO player_ratings (auth_id, rating, rd, volatility, total_games, total_full_games, won_games)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+      `;
+      this.db.run(query, [
+        auth_id,
+        player.glickoPlayer!.getRating(),
+        player.glickoPlayer!.getRd(),
+        player.glickoPlayer!.getVol(), // Zakładam, że Player ma właściwość vol
+        player.totalGames,
+        player.totalFullGames,
+        player.wonGames
+      ], (err) => {
+        if (err) {
+          reject('Error saving player rating: ' + err.message);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  async getTop10Players(): Promise<[string, number, number][]> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT auth_id, rating, total_full_games 
+        FROM player_ratings
+        WHERE total_full_games >= 3
+        ORDER BY rating DESC
+        LIMIT 10;
+      `;
+      this.db.all(query, [], (err, rows: any[]) => {
+        if (err) {
+          reject('Error fetching top 10 players: ' + err.message);
+        } else {
+          resolve(rows.map(row => [row.auth_id, row.rating, row.total_full_games]));
+        }
+      });
+    });
+  }
+}
+
 export class DBHandler {
   playersDb: sqlite3.Database;
   otherDb: sqlite3.Database;
@@ -300,6 +436,7 @@ export class DBHandler {
   playerNames: PlayerNamesDB;
   votes: VotesDB;
   reports: ReportsDB;
+  ratings: PlayerRatingsDB;
 
   constructor(playersDbFile: string, otherDbFile: string) {
     this.playersDb = new sqlite3.Database(playersDbFile, (err) => {
@@ -315,6 +452,7 @@ export class DBHandler {
     this.votes = new VotesDB(this.playersDb);
     // and second table
     this.reports = new ReportsDB(this.otherDb);
+    this.ratings = new PlayerRatingsDB(this.otherDb);
 
     this.setupDatabases();
   }
@@ -323,6 +461,7 @@ export class DBHandler {
     this.players.setupDatabase();
     this.playerNames.setupDatabase();
     this.votes.setupDatabase();
+    this.ratings.setupDatabase();
   }
 
   closeDatabases() {
@@ -358,6 +497,10 @@ export class GameState {
     return this.dbHandler.playerNames.getLastPlayerNames(auth_id, n);
   }
 
+  getAllPlayerNames() {
+    return this.dbHandler.playerNames.getAllPlayerNames();
+  }
+
   addReport(player_name: string, auth_id: string, report: string) {
     return this.dbHandler.reports.addReport(player_name, auth_id, report);
   }
@@ -376,6 +519,18 @@ export class GameState {
 
   getPlayerVotes(auth_id: string) {
     return this.dbHandler.votes.getPlayerReputation(auth_id);
+  }
+
+  loadPlayerRating(auth_id: string) {
+    return this.dbHandler.ratings.loadPlayerRating(auth_id);
+  }
+
+  savePlayerRating(auth_id: string, player: PlayerStat) {
+    return this.dbHandler.ratings.savePlayerRating(auth_id, player);
+  }
+
+  getTop10Players() {
+    return this.dbHandler.ratings.getTop10Players();
   }
 
   logMessage(user_name: string, action: string, text: string, for_discord: boolean) {

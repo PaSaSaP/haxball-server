@@ -23,28 +23,28 @@ const futsal_3vs3: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFile: `${dbDir}/other_futsal_3vs3.db`,
   chatLogDbFile: "./haxball_player_chat.mpk",
-  roomName: "🍌3vs3 2vs2 FUTSAL XxX",
+  roomName: "🍌 FUTSAL 3vs3 XxX",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   playersInTeamLimit: 3,
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
-  token: 'thr1.AAAAAGfHAX82RG-Wc9gaTQ.jsAEq4nuyGg',
+  token: 'thr1.AAAAAGfJs51XeyIuv_MIyA.zFO8f0GMmws',
 };
 
 const futsal_1vs1: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFile: `${dbDir}/other_futsal_1vs1.db`,
   chatLogDbFile: "./haxball_player_chat_1vs1.mpk",
-  roomName: "🍌___1vs1__ FUTSAL XxX",
+  roomName: "🍌 FUTSAL FreeStYLe XxX",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   playersInTeamLimit: 1,
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
-  token: 'thr1.AAAAAGfG8lBbzuuSJ1ROcQ.JxutzeVuEmE',
+  token: 'thr1.AAAAAGfJoP-MB6InlqwqKg.PdKSfSq6LQ4',
 };
 
 export const getRoomConfig = (name: string): RoomServerConfig => {

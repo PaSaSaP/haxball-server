@@ -11,13 +11,16 @@ import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData } from './structs';
+import { PPP, AdminStats, PlayerData, PlayerStat } from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
 import { DBHandler, GameState } from './game_state';
 import Commander from './commands';
 import { AutoBot } from './auto_mode';
+import { Ratings } from './rating';
+import Glicko2 from 'glicko2';
+import { resourceLimits } from 'worker_threads';
 
 
 export class HaxballRoom {
@@ -47,6 +50,13 @@ export class HaxballRoom {
   acceleration_tasks: PlayerAccelerator;
   ball_possesion_tracker: BallPossessionTracker;
   auto_bot: AutoBot;
+  player_stats: Map<number, PlayerStat>;
+  player_stats_auth: Map<string, number>; // auth -> id in player_stats
+  // glicko_settings: Glicko2.Glicko2Settings;
+  glicko: Glicko2.Glicko2;
+  glicko_players: Map<string, Glicko2.Player>;
+  ratings: Ratings;
+  ratings_for_all_games: boolean;
   game_stopped_timer: any | null;
   game_paused_timer: any | null;
   last_player_team_changed_by_admin_time: number;
@@ -62,6 +72,8 @@ export class HaxballRoom {
   room_link: string;
   room_data_sync_timer: any | null;
   god_player: PlayerObject;
+  top10: [string, number, number][]; // [name, rating, full games]
+  player_names_by_auth: Map<string, string>;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -96,10 +108,19 @@ export class HaxballRoom {
     this.last_winner_team = 0;
     this.limit = roomConfig.playersInTeamLimit;
     this.auto_bot = new AutoBot(this);
+    this.player_stats = new Map<number, PlayerStat>();
+    this.player_stats_auth = new Map<string, number>();
+    // this.glicko_settings = null;
+    this.glicko = new Glicko2.Glicko2();
+    this.glicko_players = new Map<string, Glicko2.Player>();
+    this.ratings = new Ratings(this.glicko);
+    this.ratings_for_all_games = false;
     this.auto_mode = this.limit === 3; // TODO for now only for 3vs3
     this.room_link = '';
     this.room_data_sync_timer = null;
     this.god_player = this.createGodPlayer();
+    this.top10 = [];
+    this.player_names_by_auth = new Map<string, string>();
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -132,8 +153,16 @@ export class HaxballRoom {
     this.room.setTeamsLock(true);
     this.setDefaultKickRateLimit();
     this.setDefaultScoreTimeLimit();
+    this.initPlayerNames();
 
     if (this.auto_mode) this.auto_bot.resetAndStart();
+  }
+
+  initPlayerNames() {
+    this.game_state.getAllPlayerNames().then((result) => {
+      this.player_names_by_auth = result;
+      hb_log(`#I# initPlayerNames(${this.player_names_by_auth.size})`);
+    });
   }
 
   createGodPlayer() {
@@ -570,8 +599,10 @@ export class HaxballRoom {
         this.captcha.askCaptcha(player);
       }
       if (!kicked) {
+        this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
         this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name);
         this.updateAdmins(null);
+        this.loadPlayerStat(playerExt);
         if (this.auto_mode) this.auto_bot.handlePlayerJoin(playerExt);
       }
     });
@@ -581,6 +612,40 @@ export class HaxballRoom {
     }
     // this.sendOnlyTo(player, `Mozesz aktywować sterowanie przyciskami (Link: https://tinyurl.com/HaxballKeyBinding): Lewy Shift = Sprint, A = Wślizg`, 0x22FF22);
     this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb`, Colors.Help);
+  }
+
+  loadPlayerStat(playerExt: PlayerData) {
+    this.player_stats.set(playerExt.id, playerExt.stat);
+    let glickoPlayer: Glicko2.Player|undefined = this.glicko_players.get(playerExt.auth_id);
+    if (glickoPlayer) { // get cached data
+      hb_log(`#ST# get cached for ${playerExt.name}  ${playerExt.auth_id}`);
+      const idx = this.player_stats_auth.get(playerExt.auth_id);
+      if (idx !== undefined && idx !== null) {
+        let stat = this.player_stats.get(idx);
+        if (stat) {
+          hb_log(`#ST# get prev stat`);
+          playerExt.stat = stat;
+          this.player_stats.set(playerExt.id, playerExt.stat);
+        }
+      }
+      playerExt.stat.updatePlayer(glickoPlayer);
+      return;
+    }
+    glickoPlayer = this.glicko.makePlayer(PlayerStat.DefaultRating, PlayerStat.DefaultRd, PlayerStat.DefaultVol);
+    hb_log(`#ST# create for ${playerExt.name}  ${playerExt.auth_id} ${glickoPlayer}`);
+    this.glicko_players.set(playerExt.auth_id, glickoPlayer);
+    this.player_stats_auth.set(playerExt.auth_id, playerExt.id);
+    playerExt.stat.updatePlayer(glickoPlayer);
+    if (playerExt.trust_level) {
+      this.game_state.loadPlayerRating(playerExt.auth_id).then(result => { // load stats
+        playerExt.stat.totalGames = result.total_games;
+        playerExt.stat.totalFullGames = result.total_full_games;
+        playerExt.stat.wonGames = result.won_games;
+        playerExt.stat.glickoPlayer!.setRating(result.rating.mu);
+        playerExt.stat.glickoPlayer!.setRd(result.rating.rd);
+        playerExt.stat.glickoPlayer!.setVol(result.rating.vol);
+      });
+    }
   }
 
   checkIfPlayerNameContainsNotAllowedChars(player: PlayerObject) {
@@ -818,7 +883,29 @@ export class HaxballRoom {
     if (scores.red > scores.blue) this.last_winner_team = 1;
     else if (scores.blue > scores.red) this.last_winner_team = 2;
     else this.last_winner_team = 0;
-    if (this.auto_mode) this.auto_bot.handleTeamVictory(scores);
+    if (this.auto_mode) {
+      this.auto_bot.handleTeamVictory(scores);
+      if (this.auto_bot.ranked || this.ratings_for_all_games) {
+        hb_log("Aktualizujemy teraz dane w bazie");
+        const playerIdsInMatch = this.ratings.updatePlayerStats(this.auto_bot.currentMatch, this.player_stats);
+        let saved = 0;
+        for (const playerId of playerIdsInMatch) {
+          let playerExt = this.players_ext_all.get(playerId)!;
+          if (!playerExt.trust_level) return;
+          this.game_state.savePlayerRating(playerExt.auth_id, this.player_stats.get(playerExt.id)!);
+          saved++;
+        }
+        this.game_state.getTop10Players().then((results) => {
+          this.top10 = [];
+          for (let result of results) {
+            let name = this.player_names_by_auth.get(result[0]) ?? 'GOD';
+            this.top10.push([name, Math.round(result[1]), result[2]]);
+          }
+          hb_log('Top 10 zaktualizowane');
+        });
+        hb_log(`Aktualizujemy - zrobione (${saved}/${playerIdsInMatch.length}})!`);
+      }
+    }
   }
 
   async handlePositionsReset() {
@@ -829,7 +916,6 @@ export class HaxballRoom {
     message = message.trim();
     if (!message) return false; // not interested in empty messages
     const userLogMessage = (for_discord: boolean) => { this.game_state.logMessage(player.name, "chat", message, for_discord); return for_discord; }
-    let for_discord = false;
     if (!message.startsWith('!kb_')) { // to not spam
       hb_log_to_console(player, message)
     }
