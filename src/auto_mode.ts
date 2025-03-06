@@ -419,9 +419,13 @@ export class AutoBot {
       this.winStreak = 0;
     } else if (this.lastWinner == 1) this.moveLoserBlueToSpec();
     else this.moveLoserRedToSpec();
-    if (this.ranked && !this.redTeam.length && this.blueTeam.length) {
+    this.moveWinnerBlueToRedIfRanked();
+  }
+
+  moveWinnerBlueToRedIfRanked() {
+    if (this.ranked && !this.redTeam.length && this.blueTeam.length && this.lastWinner === 2) {
       this.moveWinnerBlueToRed(); // move blue to red on ranked
-      this.lastWinner = this.hb_room.getOpponentTeam(this.lastWinner);
+      this.lastWinner = 1;
     }
   }
 
@@ -433,6 +437,7 @@ export class AutoBot {
         this.hb_room.sendMsgToAll(`Druzyna Red nie rozpoczęła meczu w przeciągu ${this.MatchStartedTimeout / 1000} sekund...`, Colors.GameState, 'italic');
         this.setLastWinner(2);
         this.moveLoserRedToSpec();
+        this.moveWinnerBlueToRedIfRanked();
         this.stopAndGoToLobby();
       }
     }, this.MatchStartedTimeout);
@@ -489,6 +494,7 @@ export class AutoBot {
           this.hb_room.sendMsgToAll(`Druzyna Red nie kontynuuje meczu po zdobyciu bramki w ciągu ${this.AfterPositionsResetTimeout / 1000} sekund...`, Colors.GameState, 'italic');
           this.setLastWinner(2);
           this.moveLoserRedToSpec();
+          this.moveWinnerBlueToRedIfRanked();
         }
         this.stopAndGoToLobby();
       }
@@ -584,6 +590,8 @@ export class AutoBot {
       }
     }, this.LobbyMonitoringTimeout);
   }
+
+
   
   checkForPreparedSelection(spec: PlayerData) {
     let rl = this.redTeam.length;
@@ -591,7 +599,10 @@ export class AutoBot {
     if (redTeam) this.movePlayerToRed(spec, this.specTeam);
     else this.movePlayerToBlue(spec, this.specTeam);
     AMLog(`${spec.name} CZY WYBRAŁ SOBIE DO SKŁADU KOGOŚ: ${spec.chosen_player_names.join(" ")}`);
-    if (!spec.chosen_player_names.length) return;
+    if (!spec.chosen_player_names.length) {
+      this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} nikogo nie wybrał, dostał pierwszych dostępnych z oczekujących!`, Colors.GameState, 'italic');
+      return;
+    }
     let limit = this.limit() - 1;
     let foundPlayers = this.specTeam.filter(e => !e.afk && !e.afk_maybe && spec.chosen_player_names.includes(e.name_normalized));
     let txt = '';
@@ -603,7 +614,7 @@ export class AutoBot {
       txt += p.name + ' ';
     }
     if (txt.length) this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} wybrał sobie do składu:: ${txt}!`, Colors.GameState, 'italic');
-    else this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} nikogo nie wybrał, dostał pierwszych dostępnych z oczekujących!`, Colors.GameState, 'italic');
+    else this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} kogoś wybrał, lecz ich nie dostał!`, Colors.GameState, 'italic');
   }
 
   fillByPreparedSelection() {
@@ -747,11 +758,13 @@ export class AutoBot {
     return [-1, []];
   }
   moveLoserRedToSpec() {
+    AMLog("Red przegrało, idą do spec");
     this.shiftChoserToBottom(this.currentMatch.getLoserTeamIds(), this.redTeam);
     // red has at least one win, no in favor
     this.moveAllRedToSpec([]);
   }
   moveWinnerRedToSpec() {
+    AMLog("Red wygrało, ale! idą do spec");
     this.shiftChoserToBottom(this.currentMatch.getWinnerTeamIds(), this.redTeam);
     this.moveAllRedToSpec([]);
   }
@@ -760,6 +773,7 @@ export class AutoBot {
     this.redTeam = [];
   }
   moveLoserBlueToSpec() {
+    AMLog("Blue przegrało, idą do spec");
     let [choserIdx, inFavor] = this.shiftChoserToBottom(this.currentMatch.getLoserTeamIds(), this.blueTeam);
     // blue plays always first match so keep them in favor
     if (!this.ranked) inFavor = [];
@@ -767,6 +781,7 @@ export class AutoBot {
     this.moveAllBlueToSpec(inFavor);
   }
   moveWinnerBlueToSpec() {
+    AMLog("Blue wygrało, ale! idą do spec");
     this.shiftChoserToBottom(this.currentMatch.getWinnerTeamIds(), this.blueTeam);
     this.moveAllBlueToSpec([]);
   }
@@ -776,7 +791,13 @@ export class AutoBot {
   }
 
   moveAllTeamToSpec(inTeam: PlayerData[], inFavor: number[]) {
-    let insertIdx = this.specTeam.length === 0 ? 0 : 1;
+    let insertIdx = 0;
+    for (let i = 0; i < this.specTeam.length; i++) {
+      if (!this.specTeam[i].afk && !this.specTeam[i].afk_maybe) {
+        insertIdx = i + 1;
+        break;
+      }
+    }
     for (let p of inTeam) {
       if (inFavor.includes(p.id)) {
         this.specTeam.splice(insertIdx, 0, p); // insert after first or other in favor

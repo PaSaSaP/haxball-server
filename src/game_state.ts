@@ -94,7 +94,7 @@ class PlayersDB {
   }
 }
 
-class PlayerNamesDB {
+export class PlayerNamesDB {
   db: sqlite3.Database;
 
   constructor(db: sqlite3.Database) {
@@ -414,7 +414,7 @@ export class PlayerRatingsDB {
       const query = `
         SELECT auth_id, rating, total_full_games 
         FROM player_ratings
-        WHERE total_full_games >= 3
+        WHERE total_full_games >= 10
         ORDER BY rating DESC
         LIMIT 10;
       `;

@@ -746,7 +746,7 @@ class Commander {
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     let msg = "🏆 *TOP 10* ";
     msg += top10.map(([name, rating, fullGames], index) =>
-      `${rankEmojis[index]} ${name.length > 12 ? name.slice(0, 12) + "…" : name}⭐${rating} ⦿${fullGames}`).join(", ");
+      `${rankEmojis[index]} ${name.length > 10 ? name.slice(0, 10) + "…" : name}⭐${rating} ⦿${fullGames}`).join(", ");
     this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
 

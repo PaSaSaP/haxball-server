@@ -201,7 +201,9 @@ export class HaxballRoom {
 
   makeRoomDataSync() {
     // TODO connectable should be updated by another thread?job? async independent from that
-    let serverData = new ServerData(this.room_config.token, this.room_link, this.room_config.roomName, this.players_num, this.room_config.maxPlayersOverride, true, true);
+    let playersMax = this.room_config.maxPlayersOverride;
+    let playersCur = this.players_num > playersMax ? playersMax : this.players_num;
+    let serverData = new ServerData(this.room_config.token, this.room_link, this.room_config.roomName, playersCur, playersMax, true, true);
     tokenDatabase.saveServer(serverData);
   }
 
