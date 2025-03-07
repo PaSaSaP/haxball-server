@@ -215,7 +215,7 @@ class Commander {
   async commandChoosingPlayers(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (!cmds.length) {
-      this.sendMsgToPlayer(player, "W trakcie meczu wybierz sobie graczy! Napisz listę priorytetową zawodników których chesz mieć, a gra wybierze dostępnych, np: !wyb @player1 @player2 @player3...", Colors.Help, 'italic');
+      this.sendMsgToPlayer(player, "W trakcie meczu wybierz sobie graczy! Dostaniesz dostępnych! np: !wyb @player1 @player2... !wyb #5 #8 #13 #21...", Colors.Help, 'italic');
       this.sendMsgToPlayer(player, "Nie będzie przerwy na wybieranie. Lista przetrwa do restartu, by ją wyczyścić, uzyj !wyb-", Colors.Help, 'italic');
       if (playerExt.chosen_player_names.length) this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
       return;
@@ -261,6 +261,10 @@ class Commander {
   }
 
   async commandRestartMatch(player: PlayerObject) {
+    if (this.hb_room.auto_mode) {
+      this.hb_room.auto_bot.handleRestartRequested(this.Pid(player.id));
+      return;
+    }
     if (this.warnIfPlayerIsNotAdmin(player)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     this.r().stopGame();
@@ -744,10 +748,16 @@ class Commander {
       return;
     }
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
-    let msg = "🏆 *TOP 10* ";
-    msg += top10.map(([name, rating, fullGames], index) =>
-      `${rankEmojis[index]} ${name.length > 10 ? name.slice(0, 10) + "…" : name}⭐${rating} ⦿${fullGames}`).join(", ");
-    this.sendMsgToPlayer(player, msg, Colors.Stats);
+    let firstHalf = top10.slice(0, 5).map(([name, rating, fullGames], index) =>
+      `${rankEmojis[index]} ${name.length > 10 ? name.slice(0, 10) + "…" : name}⭐${rating}`
+    ).join("");
+    this.sendMsgToPlayer(player, `🏆 ${firstHalf}`, Colors.Stats);
+    if (top10.length > 5) {
+      let secondHalf = top10.slice(5, 10).map(([name, rating, fullGames], index) =>
+        `${rankEmojis[index + 5]} ${name.length > 10 ? name.slice(0, 10) + "…" : name}⭐${rating}`
+      ).join("");
+      this.sendMsgToPlayer(player, `🏆 ${secondHalf}`, Colors.Stats);
+    }
   }
 
   async commandPrintAuth(player: PlayerObject) {

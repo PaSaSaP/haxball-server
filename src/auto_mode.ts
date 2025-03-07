@@ -67,6 +67,8 @@ export class AutoBot {
   currentMatch: Match;
   pauseUsedByRed: boolean;
   pauseUsedByBlue: boolean;
+  restartRequestedByRed: boolean;
+  restartRequestedByBlue: boolean;
   minuteLeftReminder: boolean;
   chosingPlayerNextReminder: number
 
@@ -95,6 +97,8 @@ export class AutoBot {
     this.currentMatch = new Match();
     this.pauseUsedByRed = false;
     this.pauseUsedByBlue = false;
+    this.restartRequestedByRed = false;
+    this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
   }
@@ -275,6 +279,8 @@ export class AutoBot {
     this.shuffled = false;
     this.pauseUsedByRed = false;
     this.pauseUsedByBlue = false;
+    this.restartRequestedByBlue = false;
+    this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
     this.currentMatch = new Match();
@@ -390,24 +396,47 @@ export class AutoBot {
 
   async handlePauseRequest(byPlayer: PlayerData) {
     if (!this.pauseUsedByRed) {
-      for (let p of this.redTeam) {
-        if (p.id == byPlayer.id) {
-          this.room.pauseGame(true);
-          this.pauseUsedByRed = true;
-          this.hb_room.sendMsgToAll(`(!p) ${byPlayer.name} jako gracz Red wykorzystał jedyną pauzę w meczu.`, Colors.GameState, 'italic');
-          return;
-        }
+      let p = this.redTeam.filter(e => e.id === byPlayer.id);
+      if (p) {
+        this.room.pauseGame(true);
+        this.pauseUsedByRed = true;
+        this.hb_room.sendMsgToAll(`(!p) ${byPlayer.name} jako gracz Red wykorzystał jedyną pauzę w meczu.`, Colors.GameState, 'italic');
+        return;
       }
     }
     if (!this.pauseUsedByBlue) {
-      for (let p of this.blueTeam) {
-        if (p.id == byPlayer.id) {
-          this.room.pauseGame(true);
-          this.pauseUsedByBlue = true;
-          this.hb_room.sendMsgToAll(`(!p) ${byPlayer.name} jako gracz Blue wykorzystał jedyną pauzę w meczu.`, Colors.GameState, 'italic');
-          return;
-        }
+      let p = this.blueTeam.filter(e => e.id === byPlayer.id);
+      if (p) {
+        this.room.pauseGame(true);
+        this.pauseUsedByBlue = true;
+        this.hb_room.sendMsgToAll(`(!p) ${byPlayer.name} jako gracz Blue wykorzystał jedyną pauzę w meczu.`, Colors.GameState, 'italic');
+        return;
       }
+    }
+  }
+
+  async handleRestartRequested(byPlayer: PlayerData) {
+    if ([MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) return; // add players only while game
+    if (!this.ranked || !this.currentScores || this.currentScores.time > 10) return;
+    if (!this.restartRequestedByRed) {
+      let p = this.redTeam.filter(e => e.id === byPlayer.id);
+      if (p) {
+        if (!this.restartRequestedByBlue) this.hb_room.sendMsgToAll(`(!r) ${byPlayer.name} jako gracz Red poprosił o restart meczu, ktoś z Blue musi się zgodzić`, Colors.BrightGreen, 'bold');
+        else this.hb_room.sendMsgToAll(`(!r) ${byPlayer.name} jako gracz Red zgodził się na restart meczu`, Colors.BrightGreen, 'bold');
+        this.restartRequestedByRed = true;
+      }
+    } else if (!this.restartRequestedByBlue) {
+      let p = this.blueTeam.filter(e => e.id === byPlayer.id);
+      if (p) {
+        if (!this.restartRequestedByRed) this.hb_room.sendMsgToAll(`(!r) ${byPlayer.name} jako gracz Blue poprosił o restart meczu, ktoś z Red musi się zgodzić`, Colors.BrightGreen, 'bold');
+        else this.hb_room.sendMsgToAll(`(!r) ${byPlayer.name} jako gracz Blue zgodził się na restart meczu`, Colors.BrightGreen, 'bold');
+        this.restartRequestedByBlue = true;
+      }
+    }
+    if (this.restartRequestedByBlue && this.restartRequestedByRed) {
+      this.restartRequestedByBlue = false;
+      this.restartRequestedByRed = false;
+      this.room.stopGame();
     }
   }
 
@@ -704,16 +733,6 @@ export class AutoBot {
     this.lobbyMonitoringTimer = null;
   }
 
-  // addPlayerToRed(playerExt: PlayerData) {
-  //   playerExt.team = 1;
-  //   this.redTeam.push(playerExt);
-  //   this.room.setPlayerTeam(playerExt.id, playerExt.team);
-  // }
-  // addPlayerToBlue(playerExt: PlayerData) {
-  //   playerExt.team = 2;
-  //   this.blueTeam.push(playerExt);
-  //   this.room.setPlayerTeam(playerExt.id, playerExt.team);
-  // }
   addPlayerToSpec(playerExt: PlayerData) {
     playerExt.team = 0;
     this.specTeam.push(playerExt);
@@ -791,6 +810,12 @@ export class AutoBot {
   }
 
   moveAllTeamToSpec(inTeam: PlayerData[], inFavor: number[]) {
+    // move AFK to the end of spec list!
+    let specAfk = this.specTeam.filter(e => e.afk || e.afk_maybe);
+    let specNonAfk = this.specTeam.filter(e => !e.afk && !e.afk_maybe);
+    this.specTeam = [...specNonAfk, ...specAfk];
+
+    // anyway make that check to get insert idx
     let insertIdx = 0;
     for (let i = 0; i < this.specTeam.length; i++) {
       if (!this.specTeam[i].afk && !this.specTeam[i].afk_maybe) {

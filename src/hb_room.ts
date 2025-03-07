@@ -162,6 +162,7 @@ export class HaxballRoom {
     this.game_state.getAllPlayerNames().then((result) => {
       this.player_names_by_auth = result;
       hb_log(`#I# initPlayerNames(${this.player_names_by_auth.size})`);
+      this.updateTop10();
     });
   }
 
@@ -893,21 +894,25 @@ export class HaxballRoom {
         let saved = 0;
         for (const playerId of playerIdsInMatch) {
           let playerExt = this.players_ext_all.get(playerId)!;
-          if (!playerExt.trust_level) return;
+          if (!playerExt.trust_level) continue;
           this.game_state.savePlayerRating(playerExt.auth_id, this.player_stats.get(playerExt.id)!);
           saved++;
         }
-        this.game_state.getTop10Players().then((results) => {
-          this.top10 = [];
-          for (let result of results) {
-            let name = this.player_names_by_auth.get(result[0]) ?? 'GOD';
-            this.top10.push([name, Math.round(result[1]), result[2]]);
-          }
-          hb_log('Top 10 zaktualizowane');
-        });
+        this.updateTop10();
         hb_log(`Aktualizujemy - zrobione (${saved}/${playerIdsInMatch.length}})!`);
       }
     }
+  }
+
+  updateTop10() {
+    this.game_state.getTop10Players().then((results) => {
+      this.top10 = [];
+      for (let result of results) {
+        let name = this.player_names_by_auth.get(result[0]) ?? 'GOD';
+        this.top10.push([name, Math.round(result[1]), result[2]]);
+      }
+      hb_log('Top 10 zaktualizowane');
+    });
   }
 
   async handlePositionsReset() {
@@ -1222,6 +1227,13 @@ export class HaxballRoom {
     }
 
     let name = Array.isArray(playerName) ? playerName.join(" ") : playerName;
+    if (name.startsWith('#')) {
+      let cmdPlayerId = Number.parseInt(name.slice(1));
+      if (!isNaN(cmdPlayerId)) {
+        let cmdPlayer = this.getPlayers().find(e => e.id === cmdPlayerId);
+        if (cmdPlayer) return cmdPlayer;
+      }
+    }
     if (name.startsWith('@')) name = name.slice(1);
     let nameNormalized = normalizeNameString(name);
     let cmdPlayer = this.getPlayers().find(e => this.Pid(e.id).name_normalized === nameNormalized) || null;

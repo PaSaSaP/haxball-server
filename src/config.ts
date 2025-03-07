@@ -30,7 +30,7 @@ const futsal_3vs3: RoomServerConfig = {
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
-  token: 'thr1.AAAAAGfJs51XeyIuv_MIyA.zFO8f0GMmws',
+  token: 'thr1.AAAAAGfKrewFzBnTqoT46g.q_XILCPxZLY',
 };
 
 const futsal_1vs1: RoomServerConfig = {
@@ -44,7 +44,7 @@ const futsal_1vs1: RoomServerConfig = {
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
-  token: 'thr1.AAAAAGfKCeIp79zXzdoFxQ.hDPkedvGYXM',
+  token: 'thr1.AAAAAGfKMt10PfrKkN2ECQ.1IqWCv95-zY',
 };
 
 export const getRoomConfig = (name: string): RoomServerConfig => {
