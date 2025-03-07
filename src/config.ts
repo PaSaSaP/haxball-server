@@ -30,7 +30,7 @@ const futsal_3vs3: RoomServerConfig = {
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
-  token: 'thr1.AAAAAGfKrewFzBnTqoT46g.q_XILCPxZLY',
+  token: 'thr1.AAAAAGfK40F-Z8Fvz9cSzg.iPfIvBbqaXY',
 };
 
 const futsal_1vs1: RoomServerConfig = {

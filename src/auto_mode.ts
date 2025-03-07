@@ -2,6 +2,7 @@ import { HaxballRoom } from "./hb_room";
 import { PlayerData, PlayerStat, PlayerStatInMatch, Match } from "./structs";
 import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
+import { VoteKicker } from "./vote_kick";
 
 enum MatchState {
   lobby,
@@ -52,6 +53,7 @@ export class AutoBot {
   currentMatchLastGoalScorer: 0 | 1 | 2;
   currentMatchGameTime: number;
   lastOneMatchLoserTeamIds: number[];
+  lastAutoSelectedPlayerIds: number[];
 
   lobbyMonitoringTimer: any;
   matchStartedTimer: any;
@@ -70,7 +72,8 @@ export class AutoBot {
   restartRequestedByRed: boolean;
   restartRequestedByBlue: boolean;
   minuteLeftReminder: boolean;
-  chosingPlayerNextReminder: number
+  chosingPlayerNextReminder: number;
+  voteKicker: VoteKicker;
 
   constructor(hb_room: HaxballRoom) {
     this.hb_room = hb_room;
@@ -88,6 +91,7 @@ export class AutoBot {
     this.currentMatchLastGoalScorer = 0;
     this.currentMatchGameTime = 0;
     this.lastOneMatchLoserTeamIds = [];
+    this.lastAutoSelectedPlayerIds = [];
 
     this.lobbyMonitoringTimer = null;
     this.matchStartedTimer = null;
@@ -101,6 +105,7 @@ export class AutoBot {
     this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
+    this.voteKicker = new VoteKicker(this);
   }
 
   async reset() {
@@ -113,6 +118,7 @@ export class AutoBot {
     this.lastWinner = 0;
     this.winStreak = 0;
     this.matchState = MatchState.lobby;
+    this.voteKicker.reset();
   }
 
   async resetAndStart() {
@@ -131,6 +137,10 @@ export class AutoBot {
 
   limit() {
     return this.hb_room.limit;
+  }
+
+  isLobbyTime() {
+    return [MatchState.lobby, MatchState.afterVictory].includes(this.matchState); // add players only while game
   }
 
   async handlePlayerJoin(playerExt: PlayerData) {
@@ -169,6 +179,7 @@ export class AutoBot {
   async handlePlayerLeave(playerExt: PlayerData) {
     AMLog(`${this.matchState} ${playerExt.name} ${playerExt.id} leaved`);
     // AMLog(`r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
+    this.voteKicker.handleChangeAssignment(playerExt);
     if (this.removePlayerInSpec(playerExt)) return; // don't care about him
     let redLeft = this.removePlayerInRed(playerExt);
     let blueLeft = false;
@@ -185,6 +196,7 @@ export class AutoBot {
     AMLog(`${this.matchState} handle player team change ${changedPlayer.name} to team ${changedPlayer.team}`);
     let redLeft = false;
     let blueLeft = false;
+    this.voteKicker.handleChangeAssignment(changedPlayer);
     if (this.isPlayerInSpec(changedPlayer) && changedPlayer.team) {
       this.changeAssignment(changedPlayer.id, this.specTeam, changedPlayer.team == 1 ? this.redTeam : this.blueTeam);
     } else if (this.isPlayerInRed(changedPlayer) && changedPlayer.team != 1) {
@@ -276,6 +288,7 @@ export class AutoBot {
     this.currentMatchGameTime = 0;
     this.currentMatchLastGoalScorer = 0;
     this.lastOneMatchLoserTeamIds = [];
+    this.lastAutoSelectedPlayerIds = [];
     this.shuffled = false;
     this.pauseUsedByRed = false;
     this.pauseUsedByBlue = false;
@@ -283,6 +296,7 @@ export class AutoBot {
     this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
+    this.voteKicker.reset();
     this.currentMatch = new Match();
     this.currentMatch.redTeam = [...this.redTeam.map(e=>e.id)];
     this.currentMatch.blueTeam = [...this.blueTeam.map(e=>e.id)];
@@ -552,6 +566,7 @@ export class AutoBot {
   async stopAndGoToLobby() {
     if (this.lobbyMonitoringTimer) return; // only one monitoring timer!
     this.clearAllTimers();
+    this.lastAutoSelectedPlayerIds = [];
     this.room.stopGame();
     AMLog(`stopAndGoToLobby: r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
     this.lobbyMonitoringTimer = setInterval(async () => {
@@ -563,7 +578,7 @@ export class AutoBot {
       let added = false;
       if (rl < limit || bl < limit) {
         added = true;
-        let spec = this.topNonAfkSpec();
+        let spec = this.topNonAfkSpecAutoSelect();
         // AMLog(`rl=${rl} bl=${bl}`);
         if (this.ranked && spec && (bl == 0 || rl == 0)) {
           this.checkForPreparedSelection(spec);
@@ -620,7 +635,7 @@ export class AutoBot {
     }, this.LobbyMonitoringTimeout);
   }
 
-
+  static ShortMatchHelp = 'Restart: !r, Pauza: !p, !votekick';
   
   checkForPreparedSelection(spec: PlayerData) {
     let rl = this.redTeam.length;
@@ -629,7 +644,7 @@ export class AutoBot {
     else this.movePlayerToBlue(spec, this.specTeam);
     AMLog(`${spec.name} CZY WYBRAŁ SOBIE DO SKŁADU KOGOŚ: ${spec.chosen_player_names.join(" ")}`);
     if (!spec.chosen_player_names.length) {
-      this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} nikogo nie wybrał, dostał pierwszych dostępnych z oczekujących!`, Colors.GameState, 'italic');
+      this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} nikogo nie wybrał, dostał pierwszych dostępnych z oczekujących! ${AutoBot.ShortMatchHelp}`, Colors.GameState, 'italic');
       return;
     }
     let limit = this.limit() - 1;
@@ -642,8 +657,8 @@ export class AutoBot {
       else this.movePlayerToBlue(p, this.specTeam);
       txt += p.name + ' ';
     }
-    if (txt.length) this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} wybrał sobie do składu:: ${txt}!`, Colors.GameState, 'italic');
-    else this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} kogoś wybrał, lecz ich nie dostał!`, Colors.GameState, 'italic');
+    if (txt.length) this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} wybrał sobie do składu:: ${txt}! ${AutoBot.ShortMatchHelp}`, Colors.GameState, 'italic');
+    else this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} kogoś wybrał, lecz ich nie dostał! ${AutoBot.ShortMatchHelp}`, Colors.GameState, 'italic');
   }
 
   fillByPreparedSelection() {
@@ -657,7 +672,7 @@ export class AutoBot {
     }
     if (this.redTeam.length == limit && this.blueTeam.length == limit) return;
     AMLog("fillByPreparedSelection było z listy, teraz z góry");
-    let spec = this.topNonAfkSpec();
+    let spec = this.topNonAfkSpecAutoSelect();
     while (spec && (this.redTeam.length < limit || this.blueTeam.length < limit)) {
       if (this.lastWinner == 1 && this.blueTeam.length < limit) this.movePlayerToBlue(spec, this.specTeam);
       else if (this.lastWinner == 2 && this.redTeam.length < limit) this.movePlayerToRed(spec, this.specTeam);
@@ -665,7 +680,7 @@ export class AutoBot {
       else if (this.redTeam.length < limit) this.movePlayerToRed(spec, this.specTeam);
       else break;
 
-      spec = this.topNonAfkSpec();
+      spec = this.topNonAfkSpecAutoSelect();
     }
     AMLog("fillByPreparedSelection done");
   }
@@ -747,6 +762,11 @@ export class AutoBot {
   isPlayerInSpec(playerExt: PlayerData) {
     return this.specTeam.find(e => e.id == playerExt.id);
   }
+  getPlayerTeamId(playerExt: PlayerData) {
+    if (this.isPlayerInRed(playerExt)) return 1;
+    if (this.isPlayerInBlue(playerExt)) return 2;
+    return 0;
+  }
   removePlayerInRed(playerExt: PlayerData) {
     return this.removePlayerInTeam(playerExt, this.redTeam);
   }
@@ -771,6 +791,7 @@ export class AutoBot {
         inTeam.push(item);
       }
       let inFavor = [playerIds[1], playerIds[2]]; // first, second and third original player
+      inFavor = inFavor.filter(playerId => this.lastAutoSelectedPlayerIds.includes(playerId));
       AMLog(`Przesuwam wybierającego id:${choserIdx} na dół, inFavor=${inFavor}`);
       return [choserIdx, inFavor];
     }
@@ -878,10 +899,16 @@ export class AutoBot {
       const [player] = fromTeam.splice(index, 1);
       if (onTop) toTeam.unshift(player);
       else toTeam.push(player);
-      AMLog(`change assignment ${player.name}`);
+      AMLog(`change assignment ${player.name} to ${toTeam}`);
     } else {
-      throw new Error(`Cannot change assignment ${playerId}`);
+      AMLog(`Cannot change assignment ${playerId} to ${toTeam}`);
     }
+  }
+
+  topNonAfkSpecAutoSelect() {
+    let spec = this.topNonAfkSpec();
+    if (spec) this.lastAutoSelectedPlayerIds.push(spec.id);
+    return spec;
   }
 
   topNonAfkSpec() {

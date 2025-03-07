@@ -96,6 +96,11 @@ class Commander {
       sd: this.commandSpamCheckDisable,
       other_names: this.commandPlayerOtherNames,
 
+      votekick: this.commandVoteKick,
+      yes: this.commandVoteYes,
+      tak: this.commandVoteYes,
+      no: this.commandVoteNo,
+      nie: this.commandVoteNo,
       report: this.commandReport,
       me: this.commandMe,
       stat: this.commandStat,
@@ -103,13 +108,13 @@ class Commander {
       top: this.commandTop10,
       top10: this.commandTop10,
       auth: this.commandPrintAuth,
-      vote: this.commandVote,
-      voteup: this.commandVoteUp,
-      vote_up: this.commandVoteUp,
-      votedown: this.commandVoteDown,
-      vote_down: this.commandVoteDown,
-      voteremove: this.commandVoteRemove,
-      vote_remove: this.commandVoteRemove,
+      vote: this.commandThumbVote,
+      voteup: this.commandThumbVoteUp,
+      vote_up: this.commandThumbVoteUp,
+      votedown: this.commandThumbVoteDown,
+      vote_down: this.commandThumbVoteDown,
+      voteremove: this.commandThumbVoteRemove,
+      vote_remove: this.commandThumbVoteRemove,
       trust: this.commandTrust,
       verify: this.commandVerify,
       t: this.commandTrust,
@@ -706,6 +711,25 @@ class Commander {
     this.sendMsgToPlayer(player, `Ostatnie 5 nazw: ${(await lastPlayerNames).join(', ')}`);
   }
 
+  async commandVoteKick(player: PlayerObject, cmds: string[]) {
+    if (!cmds.length) return this.commandVoteYes(player, cmds); // no param means vote yes
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer || cmdPlayer.id == player.id) return;
+    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    let byPlayerExt = this.Pid(player.id);
+    this.hb_room.auto_bot.voteKicker.handle(cmdPlayerExt, byPlayerExt);
+  }
+
+  async commandVoteYes(player: PlayerObject, cmds: string[]) {
+    let byPlayerExt = this.Pid(player.id);
+    this.hb_room.auto_bot.voteKicker.handleYes(byPlayerExt);
+  }
+
+  async commandVoteNo(player: PlayerObject, cmds: string[]) {
+    let byPlayerExt = this.Pid(player.id);
+    this.hb_room.auto_bot.voteKicker.handleNo(byPlayerExt);
+  }
+
   async commandReport(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
@@ -749,12 +773,12 @@ class Commander {
     }
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     let firstHalf = top10.slice(0, 5).map(([name, rating, fullGames], index) =>
-      `${rankEmojis[index]} ${name.length > 10 ? name.slice(0, 10) + "…" : name}⭐${rating}`
+      `${rankEmojis[index]} ${name.length > 10 ? name.slice(0, 9) + "…" : name}⭐${rating}`
     ).join("");
     this.sendMsgToPlayer(player, `🏆 ${firstHalf}`, Colors.Stats);
     if (top10.length > 5) {
       let secondHalf = top10.slice(5, 10).map(([name, rating, fullGames], index) =>
-        `${rankEmojis[index + 5]} ${name.length > 10 ? name.slice(0, 10) + "…" : name}⭐${rating}`
+        `${rankEmojis[index + 5]} ${name.length > 10 ? name.slice(0, 9) + "…" : name}⭐${rating}`
       ).join("");
       this.sendMsgToPlayer(player, `🏆 ${secondHalf}`, Colors.Stats);
     }
@@ -764,7 +788,7 @@ class Commander {
     this.sendMsgToPlayer(player, `Twój auth ID to: ${this.Pid(player.id).auth_id}`);
   }
 
-  async commandVote(player: PlayerObject) {
+  async commandThumbVote(player: PlayerObject) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     this.hb_room.game_state.getPlayerVotes(playerExt.auth_id).then(({ upvotes, downvotes }) => {
@@ -774,7 +798,7 @@ class Commander {
     });
   }
 
-  async commandVoteUp(player: PlayerObject, cmds: string[]) {
+  async commandThumbVoteUp(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
@@ -789,7 +813,7 @@ class Commander {
     this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w górę!`);
   }
 
-  async commandVoteDown(player: PlayerObject, cmds: string[]) {
+  async commandThumbVoteDown(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
@@ -804,7 +828,7 @@ class Commander {
     this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w dół!`);
   }
 
-  async commandVoteRemove(player: PlayerObject, cmds: string[]) {
+  async commandThumbVoteRemove(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
