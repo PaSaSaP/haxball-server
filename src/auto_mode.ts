@@ -64,6 +64,7 @@ export class AutoBot {
   MatchStartedTimeout = 20 * 1000; // [ms]
   AfterPositionsResetTimeout = 15 * 1000; // [ms]
   MaxMatchTime = 6 * 60; // [s]
+  LobbySleepTime = 3 * 1000; // [ms]
   WinStreakLimit = 100; // matches when winner moves to spec // TODO change to lower value in future
   matchHistory: MatchHistory;
   currentMatch: Match;
@@ -580,9 +581,10 @@ export class AutoBot {
   async stopAndGoToLobby() {
     if (this.lobbyMonitoringTimer) return; // only one monitoring timer!
     this.clearAllTimers();
-    this.lastAutoSelectedPlayerIds = [];
-    this.room.stopGame();
     AMLog(`stopAndGoToLobby: r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
+    this.lastAutoSelectedPlayerIds = [];
+    await sleep(this.LobbySleepTime);
+    this.room.stopGame();
     this.lobbyMonitoringTimer = setInterval(async () => {
       // mix a little bit if under limit
       this.shuffleIfNeeded();

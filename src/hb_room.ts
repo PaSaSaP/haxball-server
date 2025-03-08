@@ -895,16 +895,17 @@ export class HaxballRoom {
         let saved = 0;
         let redTeamStr = '';
         let blueTeamStr = '';
+        const separator = '🔸';
         const muToStr = (oldMu: number, newMu: number, penalty: number) => {
-          let str = ` ${oldMu}${newMu-oldMu>=0?'+':''}${newMu-oldMu}`;
+          let str = `${oldMu}${newMu-oldMu>=0?'+':''}${newMu-oldMu}`;
           if (penalty) str += `-${penalty}`;
           return str;
         }
         for (const [playerId, oldMu, newMu, penalty] of this.ratings.results) {
           if (this.auto_bot.currentMatch.redTeam.includes(playerId))
-            redTeamStr += muToStr(oldMu, newMu, penalty);
+            redTeamStr += (redTeamStr?separator:'') + muToStr(oldMu, newMu, penalty);
           else if (this.auto_bot.currentMatch.blueTeam.includes(playerId))
-            blueTeamStr += muToStr(oldMu, newMu, penalty);
+            blueTeamStr += (blueTeamStr?separator:'') + muToStr(oldMu, newMu, penalty);
 
           let playerExt = this.players_ext_all.get(playerId)!;
           if (!playerExt.trust_level) continue;
@@ -914,7 +915,7 @@ export class HaxballRoom {
         let predictedWinner = this.ratings.expectedScoreRed >= 50? '🔴': '🔵';
         let predictedP = Math.round(this.ratings.expectedScoreRed);
         if (predictedP < 50) predictedP = 100 - predictedP;
-        const txt = `🔴${redTeamStr} vs${blueTeamStr}🔵 Przewidywano zwycięstwo ${predictedWinner}${predictedP}%`;
+        const txt = `🔴${redTeamStr}⚔️${blueTeamStr}🔵 Przewidywano zwycięstwo ${predictedWinner}${predictedP}%`;
         hb_log(txt);
         this.sendMsgToAll(txt, Colors.GameState, 'italic');
         this.updateTop10();
