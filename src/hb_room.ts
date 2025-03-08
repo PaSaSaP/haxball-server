@@ -11,7 +11,7 @@ import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData, PlayerStat } from './structs';
+import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData } from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
@@ -62,8 +62,8 @@ export class HaxballRoom {
   last_player_team_changed_by_admin_time: number;
   last_winner_team: number;
   auto_mode: boolean;
+  auto_afk: boolean;
   limit: number;
-  // commands: Record<string, Function>;
   commander: Commander;
   default_map_name: string;
   last_selected_map_name: string | null;
@@ -72,7 +72,7 @@ export class HaxballRoom {
   room_link: string;
   room_data_sync_timer: any | null;
   god_player: PlayerObject;
-  top10: [string, number, number][]; // [name, rating, full games]
+  top10: PlayerTopRatingData[]; // [name, rating, full games]
   player_names_by_auth: Map<string, string>;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
@@ -116,6 +116,7 @@ export class HaxballRoom {
     this.ratings = new Ratings(this.glicko);
     this.ratings_for_all_games = false;
     this.auto_mode = this.limit === 3; // TODO for now only for 3vs3
+    this.auto_afk = true;
     this.room_link = '';
     this.room_data_sync_timer = null;
     this.god_player = this.createGodPlayer();
@@ -304,24 +305,26 @@ export class HaxballRoom {
       }
     }
 
-    // check for AFK
-    const MaxAllowedNoMoveTime = 15.0 * 1000; // [ms]
     let current_time = Date.now();
     let afk_players_num = 0;
-    players.forEach(player_ext => {
-      if (player_ext.team) {
-        const afkTime = current_time - player_ext.activity.game; // [ms]
-        if (afkTime > MaxAllowedNoMoveTime) {
-          if (!player_ext.afk) { this.commander.commandSetAfkExt(player_ext); player_ext.afk_switch_time -= 15_000; } // do not block auto detected
-          else if (player_ext.afk_maybe) this.moveAfkMaybeToSpec(player_ext);
-        } else if (afkTime > MaxAllowedNoMoveTime - 9 * 1000) {
-          let idx = Math.min(8 - Math.floor((MaxAllowedNoMoveTime - afkTime)/1000), 8);
-          player_ext.afk_avatar = Emoji.CountdownEmojis[idx];
-          this.room.setPlayerAvatar(player_ext.id, player_ext.afk_avatar);
+    // check for AFK
+    if (this.auto_afk) {
+      const MaxAllowedNoMoveTime = 15.0 * 1000; // [ms]
+      players.forEach(player_ext => {
+        if (player_ext.team) {
+          const afkTime = current_time - player_ext.activity.game; // [ms]
+          if (afkTime > MaxAllowedNoMoveTime) {
+            if (!player_ext.afk) { this.commander.commandSetAfkExt(player_ext); player_ext.afk_switch_time -= 15_000; } // do not block auto detected
+            else if (player_ext.afk_maybe) this.moveAfkMaybeToSpec(player_ext);
+          } else if (afkTime > MaxAllowedNoMoveTime - 9 * 1000) {
+            let idx = Math.min(8 - Math.floor((MaxAllowedNoMoveTime - afkTime) / 1000), 8);
+            player_ext.afk_avatar = Emoji.CountdownEmojis[idx];
+            this.room.setPlayerAvatar(player_ext.id, player_ext.afk_avatar);
+          }
+          if (player_ext.afk) afk_players_num++;
         }
-        if (player_ext.afk) afk_players_num++;
-      }
-    });
+      });
+    }
 
     if (!this.auto_mode) {
       if (afk_players_num == players.length) {
@@ -887,8 +890,11 @@ export class HaxballRoom {
     if (scores.red > scores.blue) this.last_winner_team = 1;
     else if (scores.blue > scores.red) this.last_winner_team = 2;
     else this.last_winner_team = 0;
+    if (this.auto_mode) this.auto_bot.handleTeamVictory(scores);
+  }
+
+  async updateRatingsAndTop10() {
     if (this.auto_mode) {
-      this.auto_bot.handleTeamVictory(scores);
       if (this.auto_bot.ranked || this.ratings_for_all_games) {
         hb_log("Aktualizujemy teraz dane w bazie");
         this.ratings.updatePlayerStats(this.auto_bot.currentMatch, this.player_stats);
@@ -897,22 +903,22 @@ export class HaxballRoom {
         let blueTeamStr = '';
         const separator = '🔸';
         const muToStr = (oldMu: number, newMu: number, penalty: number) => {
-          let str = `${oldMu}${newMu-oldMu>=0?'+':''}${newMu-oldMu}`;
+          let str = `${oldMu}${newMu - oldMu >= 0 ? '+' : ''}${newMu - oldMu}`;
           if (penalty) str += `-${penalty}`;
           return str;
         }
         for (const [playerId, oldMu, newMu, penalty] of this.ratings.results) {
           if (this.auto_bot.currentMatch.redTeam.includes(playerId))
-            redTeamStr += (redTeamStr?separator:'') + muToStr(oldMu, newMu, penalty);
+            redTeamStr += (redTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
           else if (this.auto_bot.currentMatch.blueTeam.includes(playerId))
-            blueTeamStr += (blueTeamStr?separator:'') + muToStr(oldMu, newMu, penalty);
+            blueTeamStr += (blueTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
 
           let playerExt = this.players_ext_all.get(playerId)!;
           if (!playerExt.trust_level) continue;
           this.game_state.savePlayerRating(playerExt.auth_id, this.player_stats.get(playerExt.id)!);
           saved++;
         }
-        let predictedWinner = this.ratings.expectedScoreRed >= 50? '🔴': '🔵';
+        let predictedWinner = this.ratings.expectedScoreRed >= 50 ? '🔴' : '🔵';
         let predictedP = Math.round(this.ratings.expectedScoreRed);
         if (predictedP < 50) predictedP = 100 - predictedP;
         const txt = `🔴${redTeamStr}⚔️${blueTeamStr}🔵 Przewidywano zwycięstwo ${predictedWinner}${predictedP}%`;
@@ -925,13 +931,14 @@ export class HaxballRoom {
   }
 
   updateTop10() {
-    this.game_state.getTop10Players().then((results) => {
-      this.top10 = [];
-      for (let result of results) {
-        let name = this.player_names_by_auth.get(result[0]) ?? 'GOD';
-        this.top10.push([name, Math.round(result[1]), result[2]]);
-      }
-      hb_log('Top 10 zaktualizowane');
+    this.game_state.updateTopRatings(this.player_names_by_auth).then(() => {
+      this.game_state.getTop10Players().then((results) => {
+        this.top10 = [];
+        for (let result of results) {
+          this.top10.push(result);
+        }
+        hb_log('Top 10 zaktualizowane');
+      })
     });
   }
 

@@ -544,7 +544,7 @@ class Commander {
   }
 
   async commandAutoMode(player: PlayerObject, values: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(this.Pid(player.id))) return;
+    if (this.warnIfPlayerIsNotHost(player, "auto_mode")) return;
     if (values.length == 0) return;
     const arg = values[0].toLowerCase();
     if (arg == "on") {
@@ -774,13 +774,13 @@ class Commander {
       return;
     }
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
-    let firstHalf = top10.slice(0, 5).map(([name, rating, fullGames], index) =>
-      `${rankEmojis[index]} ${name.length > 10 ? name.slice(0, 9) + "…" : name}⭐${rating}`
+    let firstHalf = top10.slice(0, 5).map((e, index) =>
+      `${rankEmojis[index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`
     ).join("");
     this.sendMsgToPlayer(player, `🏆 ${firstHalf}`, Colors.Stats);
     if (top10.length > 5) {
-      let secondHalf = top10.slice(5, 10).map(([name, rating, fullGames], index) =>
-        `${rankEmojis[index + 5]} ${name.length > 10 ? name.slice(0, 9) + "…" : name}⭐${rating}`
+      let secondHalf = top10.slice(5, 10).map((e, index) =>
+        `${rankEmojis[index + 5]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`
       ).join("");
       this.sendMsgToPlayer(player, `🏆 ${secondHalf}`, Colors.Stats);
     }
@@ -949,7 +949,7 @@ class Commander {
   }
 
   async commandUnlockWriting(player: PlayerObject, cmds: string[]) {
-    if (this.hostOnlyCommand(player, 'u')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'u')) return;
     if (cmds.length == 0) {
       this.hb_room.anti_spam.clearMute(player);
       this.hb_room.captcha.clearCaptcha(player);
@@ -999,7 +999,7 @@ class Commander {
   }
 
   async commandAntiSpam(player: PlayerObject, cmds: string[]) {
-    if (this.hostOnlyCommand(player, 'anti_spam')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'anti_spam')) return;
     if (cmds.length == 0) return;
     let new_state = toBoolean(cmds[0]);
     this.hb_room.anti_spam.setEnabled(new_state);
@@ -1012,7 +1012,7 @@ class Commander {
   }
 
   async commandTriggerCaptcha(player: PlayerObject, cmds: string[]) {
-    if (this.hostOnlyCommand(player, 'captcha')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'captcha')) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(player, "Podkomendy: gen, clear, gen_me, set [0/1]");
     }
@@ -1035,7 +1035,7 @@ class Commander {
   }
 
   async commandOnlyTrustedJoin(player: PlayerObject, cmds: string[]) {
-    if (this.hostOnlyCommand(player, 'only_trusted_join')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'only_trusted_join')) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(player, "wołaj z on/off");
       return;
@@ -1046,7 +1046,7 @@ class Commander {
   }
 
   async commandOnlyTrustedChat(player: PlayerObject, cmds: string[]) {
-    if (this.hostOnlyCommand(player, 'only_trusted_chat')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'only_trusted_chat')) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(player, "wołaj z on/off");
       return;
@@ -1064,13 +1064,22 @@ class Commander {
   }
 
   async commandAutoDebug(player: PlayerObject, cmds: string[]) {
-    if (this.hostOnlyCommand(player, 'auto_debug')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'auto_debug')) return;
+    if (!this.hb_room.ratings_for_all_games) {
+      this.hb_room.limit = 3;
+      this.hb_room.auto_afk = false;
+      this.hb_room.auto_bot.MaxMatchTime = 150;
+      this.commandAutoMode(player, ["on"]);
+    } else {
+      this.hb_room.auto_afk = true;
+      this.commandAutoMode(player, ["off"]);
+    }
     this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
     this.sendMsgToPlayer(player, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
   }
 
   async commandServerRestart(player: PlayerObject) {
-    if (this.hostOnlyCommand(player, 'server_restart')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'server_restart')) return;
     for (let i = 0; i < 3; ++i) {
       this.hb_room.sendMsgToAll(`Reset za ${3 - i} sekund`, Colors.Warning, 'bold', 2);
       await sleep(1000);
@@ -1081,7 +1090,7 @@ class Commander {
   }
 
   async commandGodTest(player: PlayerObject, cmds: string[]) {
-    if (this.hostOnlyCommand(player, 'server_restart')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'server_restart')) return;
     let cmd = cmds.join(" ");
     this.sendMsgToPlayer(player, `trying to exec: ${cmd}`);
     this.r().onPlayerChat(this.hb_room.god_player, cmd);
@@ -1116,7 +1125,7 @@ class Commander {
     return player.admin_level <= 0;
   }
 
-  hostOnlyCommand(player: PlayerObject, cmd_name: string) {
+  warnIfPlayerIsNotHost(player: PlayerObject, cmd_name: string) {
     if (!this.hb_room.isPlayerHost(player)) {
       this.sendMsgToPlayer(player, `Nieznana komenda:${cmd_name} `);
       return true;

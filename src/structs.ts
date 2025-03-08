@@ -1,3 +1,4 @@
+import { NONAME } from "dns";
 import { AntiSpam } from "./anti_spam";
 import { ScoreCaptcha } from "./captcha";
 import * as config from "./config";
@@ -171,6 +172,13 @@ export interface PlayerRatingData {
   left_server: number;
 }
 
+export interface PlayerTopRatingData {
+  auth_id: string;
+  player_name: string;
+  rating: number;
+  total_full_games: number;
+}
+
 export class PlayerStat {
   id: number; // player id
   glickoPlayer: Glicko2.Player|null;
@@ -227,6 +235,12 @@ export class PlayerStatInMatch {
   isLeftStatusSet() { return this.leftDueTo != PlayerLeavedDueTo.none; }
 }
 
+export enum RatingProcessingState {
+  none,
+  ranked,
+  updated
+}
+
 export class Match {
   redScore: number; // goals scored by red
   blueScore: number; // goals scored by blue
@@ -237,6 +251,7 @@ export class Match {
   blueTeam: number[]; // player ids
   playerStats: Map<number, PlayerStatInMatch>; // player id -> stat
   goals: [number, 1|2][]; // list of tuples (time, team) where time is in seconds, team 1 is red, 2 is blue
+  ratingState: RatingProcessingState;
 
   winnerTeam: 0 | 1 | 2; // red = 1, blue = 2
   winStreak: number; // streak is for team so if player is in team then he "has" streak
@@ -253,14 +268,17 @@ export class Match {
     this.blueTeam = [];
     this.playerStats = new Map<number, PlayerStatInMatch>();
     this.goals = [];
+    this.ratingState = RatingProcessingState.none;
     this.winnerTeam = 0;
     this.winStreak = 0;
     this.pressureRed = 0;
     this.pressureBlue = 0;
   }
-  setEnd() {
+  setEnd(ranked: boolean) {
     this.endedAt = Date.now();
+    if (ranked) this.ratingState = RatingProcessingState.ranked;
   }
+  isEnded() { return this.endedAt > 0; }
   stat(id: number): PlayerStatInMatch {
     if (!this.playerStats.has(id)) this.playerStats.set(id, new PlayerStatInMatch(id));
     return this.playerStats.get(id)!;

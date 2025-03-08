@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
 import sqlite3 from 'sqlite3';
-import { PlayerNamesDB, PlayerRatingsDB } from "../src/game_state";
+import {TopRatingsDB} from "../src/game_state";
 import * as config from "../src/config";
 
 const router = express.Router();
@@ -13,24 +13,17 @@ const CACHE_DURATION = 10 * 60 * 1000; // 10 minut
 
 async function fetchTop10() {
   console.log("Pobieranie danych z bazy...");
-  let mainDb = new sqlite3.Database(roomConfig.playersDbFile, (err) => {
-    if (err) console.error('Error opening database:', err.message);
-  });
   let otherDb = new sqlite3.Database(roomConfig.otherDbFile, (err) => {
     if (err) console.error('Error opening database:', err.message);
   });
-  let playerNamesDB = new PlayerNamesDB(mainDb);
-  let ratingDB = new PlayerRatingsDB(otherDb);
-  playerNamesDB.getAllPlayerNames().then((playerNames) => {
-    ratingDB.getTop10Players().then((ratings) => {
+  let topRatingsDB = new TopRatingsDB(otherDb);
+  topRatingsDB.getTopNPlayers(10).then((ratings) => {
       let result: [string, number, number][] = [];
-      for (let rating of ratings) {
-        let playerName = playerNames.get(rating[0]) || "GOD";
-        result.push([playerName, Math.round(rating[1]), Math.round(rating[2])]);
-      }
-      cache = result;
-      lastFetchTime = Date.now();
-    });
+    for (let rating of ratings) {
+      result.push([rating.player_name, rating.rating, rating.total_full_games]);
+    }
+    cache = result;
+    lastFetchTime = Date.now();
   });
 }
 

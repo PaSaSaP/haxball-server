@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { PlayerData, PlayerStat, PlayerRatingData } from './structs';
+import { PlayerData, PlayerStat, PlayerRatingData, PlayerTopRatingData } from './structs';
 import ChatLogger from './chat_logger';
 
 class PlayersDB {
@@ -430,22 +430,109 @@ export class PlayerRatingsDB {
       });
     });
   }
+}
 
-  async getTop10Players(): Promise<[string, number, number][]> {
+export class TopRatingsDB {
+  db: sqlite3.Database;
+
+  constructor(db: sqlite3.Database) {
+    this.db = db;
+  }
+
+  setupDatabase(): void {
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS top_ratings (
+        rank INTEGER PRIMARY KEY,
+        auth_id TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        rating INTEGER NOT NULL,
+        total_full_games INTEGER NOT NULL
+      );
+    `;
+    this.db.run(createTableQuery, (err) => {
+      if (err) console.error('Error creating top_ratings table:', err.message);
+      else console.log('Table "top_ratings" created or already exists.');
+    });
+  }
+
+  async updateTopRatings(playerMap: Map<string, string>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.run("BEGIN TRANSACTION");
+  
+        this.db.run("DELETE FROM top_ratings", (err) => {
+          if (err) {
+            this.db.run("ROLLBACK");
+            return reject("Error deleting from top_ratings: " + err.message);
+          }
+  
+          const insertQuery = `
+            INSERT INTO top_ratings (rank, auth_id, player_name, rating, total_full_games)
+            VALUES (?, ?, ?, ?, ?)
+          `;
+  
+          const selectQuery = `
+            SELECT auth_id, rating, total_full_games 
+            FROM player_ratings 
+            WHERE total_full_games >= 10 
+            ORDER BY rating DESC 
+            LIMIT 100;
+          `;
+  
+          this.db.all(selectQuery, [], (err, rows) => {
+            if (err) {
+              this.db.run("ROLLBACK");
+              return reject("Error selecting top players: " + err.message);
+            }
+  
+            if (!Array.isArray(rows)) {
+              this.db.run("ROLLBACK");
+              return reject("Unexpected data format from database");
+            }
+  
+            const stmt = this.db.prepare(insertQuery);
+            rows.forEach((row, index) => {
+              const playerData = row as PlayerTopRatingData;
+              const playerName = playerMap.get(playerData.auth_id) || "GOD";
+              stmt.run(index + 1, playerData.auth_id, playerName, playerData.rating, playerData.total_full_games);
+            });
+  
+            stmt.finalize((err) => {
+              if (err) {
+                this.db.run("ROLLBACK");
+                return reject("Error finalizing statement: " + err.message);
+              }
+  
+              this.db.run("COMMIT", (err) => {
+                if (err) reject("Error committing transaction: " + err.message);
+                else resolve();
+              });
+            });
+          });
+        });
+      });
+    });
+  }
+
+  async getTopNPlayers(n: number): Promise<PlayerTopRatingData[]> {
     return new Promise((resolve, reject) => {
       const query = `
-        SELECT auth_id, rating, total_full_games 
-        FROM player_ratings
-        WHERE total_full_games >= 10
-        ORDER BY rating DESC
-        LIMIT 10;
+        SELECT rank, auth_id, player_name, rating, total_full_games 
+        FROM top_ratings 
+        ORDER BY rank ASC 
+        LIMIT ?;
       `;
-      this.db.all(query, [], (err, rows: any[]) => {
+  
+      this.db.all(query, [n], (err, rows) => {
         if (err) {
-          reject('Error fetching top 10 players: ' + err.message);
-        } else {
-          resolve(rows.map(row => [row.auth_id, row.rating, row.total_full_games]));
+          return reject("Error fetching top players: " + err.message);
         }
+  
+        if (!Array.isArray(rows)) {
+          return reject("Unexpected data format from database");
+        }
+  
+        resolve(rows as PlayerTopRatingData[]);
       });
     });
   }
@@ -459,6 +546,7 @@ export class DBHandler {
   votes: VotesDB;
   reports: ReportsDB;
   ratings: PlayerRatingsDB;
+  top_ratings: TopRatingsDB;
 
   constructor(playersDbFile: string, otherDbFile: string) {
     this.playersDb = new sqlite3.Database(playersDbFile, (err) => {
@@ -475,6 +563,7 @@ export class DBHandler {
     // and second table
     this.reports = new ReportsDB(this.otherDb);
     this.ratings = new PlayerRatingsDB(this.otherDb);
+    this.top_ratings = new TopRatingsDB(this.otherDb);
 
     this.setupDatabases();
   }
@@ -484,6 +573,7 @@ export class DBHandler {
     this.playerNames.setupDatabase();
     this.votes.setupDatabase();
     this.ratings.setupDatabase();
+    this.top_ratings.setupDatabase();
   }
 
   closeDatabases() {
@@ -551,8 +641,12 @@ export class GameState {
     return this.dbHandler.ratings.savePlayerRating(auth_id, player);
   }
 
+  updateTopRatings(playerMap: Map<string, string>) {
+    return this.dbHandler.top_ratings.updateTopRatings(playerMap);
+  }
+
   getTop10Players() {
-    return this.dbHandler.ratings.getTop10Players();
+    return this.dbHandler.top_ratings.getTopNPlayers(10);
   }
 
   logMessage(user_name: string, action: string, text: string, for_discord: boolean) {

@@ -23,7 +23,7 @@ const futsal_3vs3: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFile: `${dbDir}/other_futsal_3vs3.db`,
   chatLogDbFile: "./haxball_player_chat.mpk",
-  roomName: "🍌 FUTSAL 3vs3 XxX",
+  roomName: "🍌 FUTSAL 3vs3 XxX Banana League!",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   playersInTeamLimit: 3,
@@ -38,13 +38,13 @@ const futsal_1vs1: RoomServerConfig = {
   otherDbFile: `${dbDir}/other_futsal_1vs1.db`,
   chatLogDbFile: "./haxball_player_chat_1vs1.mpk",
   roomName: "🍌 FUTSAL FreeStYLe XxX",
-  isPublic: true,
+  isPublic: false,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   playersInTeamLimit: 1,
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
-  token: 'thr1.AAAAAGfL8NYyt2qtgiDOng.GfvmxTi9Ngo',
+  token: 'thr1.AAAAAGfMTGL1WJQ9zqCtxQ.El-ZdlXHK_w',
 };
 
 export const getRoomConfig = (name: string): RoomServerConfig => {
