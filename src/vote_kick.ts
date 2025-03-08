@@ -1,6 +1,6 @@
 import { Colors } from "./colors";
 import { AutoBot } from "./auto_mode";
-import { PlayerData } from "./structs";
+import { PlayerData, PlayerLeavedDueTo } from "./structs";
 import { getTimestampHMS } from "./utils";
 
 export class VoteKicker {
@@ -77,6 +77,7 @@ export class VoteKicker {
     }
     if (y >= n + 3) {
       this.autobot.hb_room.sendMsgToAll(`(!votekick) Wniosek o szkalowanie gracza ${this.voted.name} przyjęty (${y}/${n})`, Colors.BrightBlue, 'italic');
+      this.autobot.setPlayerLeftStatusTo(this.voted, PlayerLeavedDueTo.voteKicked);
       this.autobot.movePlayerToSpec(this.voted, this.team == 1 ? this.autobot.redTeam : this.autobot.blueTeam);
       this.autobot.fillByPreparedSelection();
       this.reset();

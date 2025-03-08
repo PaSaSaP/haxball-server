@@ -584,6 +584,7 @@ class Commander {
   }
 
   async commandClaimAdmin(player: PlayerObject) {
+    if (this.hb_room.auto_mode) return; // no admin in auto mode
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     if (playerExt.admin_level > 0) {
@@ -593,6 +594,7 @@ class Commander {
   }
 
   async commandSelectOneAdmin(player: PlayerObject) {
+    if (this.hb_room.auto_mode) return; // no admin in auto mode
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     let currentAdmins: PlayerData[] = [];

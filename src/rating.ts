@@ -1,15 +1,19 @@
-import { PlayerStat, PlayerStatInMatch, Match } from "./structs";
+import { PlayerStat, PlayerStatInMatch, Match, PlayerLeavedDueTo } from "./structs";
 import Glicko2 from 'glicko2';
 
 export class Ratings {
   private glicko: Glicko2.Glicko2;
+  expectedScoreRed: number;
+  results: [number, number, number, number][];
 
   constructor(glicko: Glicko2.Glicko2) {
     this.glicko = glicko;
+    this.expectedScoreRed = 0;
+    this.results = [];
   }
 
-  private calculatePlayerWeight(stat: PlayerStatInMatch, match: Match, timePlayed: number, matchDuration: number): number {
-    if (stat.joinedAt === 0 && stat.leavedAt === -1) return 1.0;
+  private calculatePlayerWeightV1(stat: PlayerStatInMatch, match: Match, timePlayed: number, matchDuration: number): number {
+    if (stat.joinedAt === 0 && stat.leftAt === -1) return 1.0;
     const safeMatchDuration = matchDuration > 0 ? matchDuration : 60*6; // Domyślna wartość, jeśli coś jest nie tak
     const timeFraction = Math.min(timePlayed / safeMatchDuration, 1.0);
 
@@ -28,25 +32,44 @@ export class Ratings {
     return weight;
   }
 
-  private rate(match: Match, playerStats: Map<number, PlayerStat>): void {
+  private calculatePlayerWeight(stat: PlayerStatInMatch, match: Match, timePlayed: number, matchDuration: number): number {
+    if (stat.joinedAt === 0 && stat.leftAt === -1) return 1.0;
+    const safeMatchDuration = matchDuration > 0 ? matchDuration : 60 * 6;
+    const timeFraction = Math.min(timePlayed / safeMatchDuration, 1.0);
+    this.Log(`Player ${stat.id}: timePlayed=${timePlayed}, matchDuration=${safeMatchDuration}, timeFraction=${timeFraction}, weight=${timeFraction}`);
+    return timeFraction;
+  }
+
+  private rate(match: Match, playerStats: Map<number, PlayerStat>, redTeam: number[], blueTeam: number[]): void {
+    const matchDuration = match.matchEndTime;
     const redTeamPlayers: Glicko2.Player[] = [];
     const blueTeamPlayers: Glicko2.Player[] = [];
-
-    for (const playerId of match.redTeam) {
+  
+    for (const playerId of redTeam) {
       const playerStat = playerStats.get(playerId);
       if (!playerStat || !playerStat.glickoPlayer) {
         throw new Error(`Player ${playerId} from red team has no glickoPlayer initialized`);
       }
       redTeamPlayers.push(playerStat.glickoPlayer);
     }
-
-    for (const playerId of match.blueTeam) {
+  
+    for (const playerId of blueTeam) {
       const playerStat = playerStats.get(playerId);
       if (!playerStat || !playerStat.glickoPlayer) {
         throw new Error(`Player ${playerId} from blue team has no glickoPlayer initialized`);
       }
       blueTeamPlayers.push(playerStat.glickoPlayer);
     }
+
+    // Obliczanie średniego ratingu dla drużyn
+    const redAvgRating = redTeamPlayers.length > 0
+      ? redTeamPlayers.reduce((sum, p) => sum + p.getRating(), 0) / redTeamPlayers.length: 0;
+
+    const blueAvgRating = blueTeamPlayers.length > 0
+      ? blueTeamPlayers.reduce((sum, p) => sum + p.getRating(), 0) / blueTeamPlayers.length: 0;
+
+    // Obliczanie przewidywanego wyniku meczu
+    this.expectedScoreRed = 100 / (1 + Math.pow(10, (blueAvgRating - redAvgRating) / 400)); // [%]
 
     const matches: [Glicko2.Player, Glicko2.Player, number][] = [];
     for (const redPlayer of redTeamPlayers) {
@@ -55,53 +78,91 @@ export class Ratings {
         matches.push([redPlayer, bluePlayer, outcome]);
       }
     }
-
+  
     this.glicko.updateRatings(matches);
   }
 
-  updatePlayerStats(match: Match, playerStats: Map<number, PlayerStat>): number[] {
+  updatePlayerStats(match: Match, playerStats: Map<number, PlayerStat>) {
     const matchDuration = match.matchEndTime;
     const weights: Map<number, number> = new Map();
     const oldRatings: Map<number, number> = new Map();
-    const playerIdsInMatch: number[] = match.redTeam.concat(match.blueTeam);
-
+    const shouldNotRatePlayer = (stat: PlayerStatInMatch) => { return stat.leftAt === 0 || matchDuration - stat.joinedAt < 10 };
+    const theOnlyRedTeam = match.redTeam.filter(id => !shouldNotRatePlayer(match.stat(id)));
+    const theOnlyBlueTeam = match.blueTeam.filter(id => !shouldNotRatePlayer(match.stat(id)));
+    const playerIdsInMatch: number[] = theOnlyRedTeam.concat(theOnlyBlueTeam).filter(id => match.stat(id).id == id);
+    this.results = [];
+    this.expectedScoreRed = 50;
+  
     for (const playerId of playerIdsInMatch) {
       const stat = match.stat(playerId);
       let player = playerStats.get(playerId);
-      if (!player) {
-        throw new Error(`Player ${playerId} has null stat during update`);
+      if (!player || !player.glickoPlayer) {
+        throw new Error(`Player ${playerId} has null stat or glickoPlayer during update`);
       }
-      if (!player.glickoPlayer) {
-        throw new Error(`Player ${playerId} has null glickoPlayer during update`);
-      }
-
-      const timePlayed = stat.leavedAt === -1 ? matchDuration - stat.joinedAt : stat.leavedAt - stat.joinedAt;
+  
+      const timePlayed = stat.leftAt === -1 ? matchDuration - stat.joinedAt : stat.leftAt - stat.joinedAt;
       const weight = this.calculatePlayerWeight(stat, match, timePlayed, matchDuration);
       weights.set(playerId, weight);
-
+  
       oldRatings.set(playerId, player.glickoPlayer.getRating());
-
+  
       player.totalGames++;
-      if (stat.joinedAt === 0 && stat.leavedAt === -1) player.totalFullGames++;
+      if (stat.joinedAt === 0 && stat.leftAt === -1) player.totalFullGames++;
       if ((match.winnerTeam === 1 && match.redTeam.includes(playerId)) || 
           (match.winnerTeam === 2 && match.blueTeam.includes(playerId))) {
         player.wonGames++;
       }
     }
-
-    this.rate(match, playerStats);
-
+  
+    this.rate(match, playerStats, theOnlyRedTeam, theOnlyBlueTeam);
+  
     for (const playerId of playerIdsInMatch) {
       const player = playerStats.get(playerId)!;
+      const stat = match.stat(playerId);
       const oldMu = oldRatings.get(playerId)!;
       const newMu = player.glickoPlayer!.getRating();
       const weight = weights.get(playerId)!;
-      const newRating = oldMu + (newMu - oldMu) * weight;
-      this.Log(`id=${player.id} o=${oldMu} n=${newMu} w=${weight} n=${newRating}`);
-      player.glickoPlayer!.setRating(newRating); // skalowanie zmiany
-    }
+      let penalty = 0;
+      let adjustedRating = newMu;
+      const isLoser = (match.winnerTeam === 1 && match.blueTeam.includes(playerId)) ||
+        (match.winnerTeam === 2 && match.redTeam.includes(playerId));
 
-    return playerIdsInMatch;
+      // Ochrona przed spadkiem dla graczy dołączających w trakcie, jeśli nie opuścili meczu
+      if (stat.joinedAt > 0 && (stat.leftDueTo === PlayerLeavedDueTo.none || stat.leftAt === -1)) {
+        adjustedRating = Math.max(adjustedRating, oldMu);
+        this.Log(`Player ${playerId} joined late, no penalty, rating protected: ${adjustedRating}`);
+      }
+      if (!isLoser && weight < 1.0 && adjustedRating > oldMu) { // zwycięzca zagrał mecz do końca
+        adjustedRating = oldMu + (adjustedRating - oldMu) * weight; // ale nie grał od początku, to skalujemy
+      }
+
+      // Kara dla wychodzących w trakcie
+      if (stat.leftDueTo !== PlayerLeavedDueTo.none && stat.leftAt !== -1) {
+        const timeFraction = stat.leftAt / matchDuration;
+        let penaltyPercent = 0;
+        if (timeFraction < 0.95) {
+          switch (stat.leftDueTo) {
+            case PlayerLeavedDueTo.afk:
+              penaltyPercent = 0.08 * (1 - timeFraction); // Max 8%
+              break;
+            case PlayerLeavedDueTo.voteKicked:
+              penaltyPercent = 0.04 * (1 - timeFraction); // Max 4%
+              break;
+            case PlayerLeavedDueTo.leftServer:
+              penaltyPercent = 0.10 * (1 - timeFraction); // Max 10%
+              break;
+          }
+          if (!isLoser) penaltyPercent /= 2;
+          penalty = newMu * penaltyPercent; // newMu or adjustedRating?
+          adjustedRating = Math.max(adjustedRating - penalty, 0);
+          this.Log(`Player ${playerId} penalized: reason=${stat.leftDueTo}, penaltyPercent=${penaltyPercent}, penalty=${penalty}, newRating=${adjustedRating}`);
+        }
+      }
+  
+      this.Log(`id=${player.id} o=${oldMu} n=${newMu} w=${weight} final=${adjustedRating}`);
+      player.glickoPlayer!.setRating(adjustedRating);
+      this.results.push([playerId, Math.round(oldMu), Math.round(newMu), Math.round(penalty)]);
+    }
   }
 
   clear() {

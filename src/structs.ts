@@ -166,6 +166,9 @@ export interface PlayerRatingData {
   total_games: number;
   total_full_games: number;
   won_games: number;
+  left_afk: number;
+  left_votekick: number;
+  left_server: number;
 }
 
 export class PlayerStat {
@@ -175,21 +178,20 @@ export class PlayerStat {
   totalFullGames: number; // games when player played from the beginning (joinedAt 0) to end (leavedAt -1)
   wonGames: number; // losses is (total - won) I think
 
+  counterAfk: number;
+  counterVoteKicked: number;
+  counterLeftServer: number;
+
   constructor(id: number) {
     this.id = id;
     this.glickoPlayer = null;
-    // this.glickoPlayer = new Glicko2.Player(
-    //   PlayerStat.DefaultRating, // rating (mu)
-    //   PlayerStat.DefaultRd,  // rd (sigma)
-    //   PlayerStat.DefaultVol, // vol (zmienność, standardowa wartość)
-    //   PlayerStat.DefaultTau,  // tau (domyślna wartość w wielu implementacjach)
-    //   PlayerStat.DefaultRating, // default_rating
-    //   PlayerStat.VolFunction, // Prosta funkcja volatility (stała wartość, można dostosować)
-    //   id    // id gracza
-    // );
     this.totalGames = 0;
     this.totalFullGames = 0;
     this.wonGames = 0;
+
+    this.counterAfk = 0;
+    this.counterVoteKicked = 0;
+    this.counterLeftServer = 0;
   }
 
   updatePlayer(glickoPlayer: Glicko2.Player) {
@@ -197,22 +199,32 @@ export class PlayerStat {
   }
 
   static DefaultRating: number = 1500;
-  static DefaultRd: number = 350;
-  static DefaultVol: number = 0.06;
+  static DefaultRd: number = 150;
+  static DefaultVol: number = 0.02;
   static DefaultTau: number = 0.5;
-  // static VolFunction: any = (v: number, d: number) => 0.06;
+}
+
+export enum PlayerLeavedDueTo {
+  none, // default value
+  afk, // player was afk so it left game, should be punished because of he destroys game other players
+  voteKicked, // player was kicked by other players requested by player from the same team, little punishment
+  leftServer, // even worse than AFK except before starting game or at the end of match; win or loose - should be punished
 }
 
 export class PlayerStatInMatch {
   id: number; // player id
   joinedAt: number; // the same timelime like matchEndTime, 0 for players playing from the beginning
-  leavedAt: number; // any value greater than -1 means that player leaved match; 0 means that player leaved even before first ball touch
+  leftAt: number; // any value greater than -1 means that player leaved match; 0 means that player leaved even before first ball touch
+  leftDueTo: PlayerLeavedDueTo;
 
   constructor(id: number) {
     this.id = id;
     this.joinedAt = 0;
-    this.leavedAt = -1;
+    this.leftAt = -1;
+    this.leftDueTo = PlayerLeavedDueTo.none;
   }
+
+  isLeftStatusSet() { return this.leftDueTo != PlayerLeavedDueTo.none; }
 }
 
 export class Match {
@@ -266,3 +278,4 @@ export class Match {
     return [];
   }
 }
+

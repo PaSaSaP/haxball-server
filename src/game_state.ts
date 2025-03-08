@@ -338,7 +338,10 @@ export class PlayerRatingsDB {
         volatility REAL NOT NULL,
         total_games INTEGER NOT NULL,
         total_full_games INTEGER NOT NULL,
-        won_games INTEGER NOT NULL
+        won_games INTEGER NOT NULL,
+        left_afk INTEGER NOT NULL DEFAULT 0,
+        left_votekick INTEGER NOT NULL DEFAULT 0,
+        left_server INTEGER NOT NULL DEFAULT 0
       );
     `;
     this.db.run(createPlayerRatingsTableQuery, (err) => {
@@ -350,7 +353,7 @@ export class PlayerRatingsDB {
   async loadPlayerRating(auth_id: string): Promise<PlayerRatingData> {
     return new Promise((resolve, reject) => {
       const query = `
-        SELECT auth_id, rating, rd, volatility, total_games, total_full_games, won_games
+        SELECT auth_id, rating, rd, volatility, total_games, total_full_games, won_games, left_afk, left_votekick, left_server
         FROM player_ratings
         WHERE auth_id = ?;
       `;
@@ -361,13 +364,16 @@ export class PlayerRatingsDB {
           // Zwracamy domyślne wartości dla nowego gracza
           resolve({
             rating: {
-              mu: PlayerStat.DefaultRating,  // Domyślne Glicko2 rating
-              rd: PlayerStat.DefaultRd,   // Domyślne Glicko2 rd
-              vol: PlayerStat.DefaultVol, // Domyślne Glicko2 volatility
+              mu: PlayerStat.DefaultRating,
+              rd: PlayerStat.DefaultRd,
+              vol: PlayerStat.DefaultVol,
             },
             total_games: 0,
             total_full_games: 0,
             won_games: 0,
+            left_afk: 0,
+            left_votekick: 0,
+            left_server: 0,
           });
         } else {
           resolve({
@@ -379,6 +385,9 @@ export class PlayerRatingsDB {
             total_games: row.total_games,
             total_full_games: row.total_full_games,
             won_games: row.won_games,
+            left_afk: row.left_afk,
+            left_votekick: row.left_votekick,
+            left_server: row.left_server,
           });
         }
       });
@@ -388,8 +397,18 @@ export class PlayerRatingsDB {
   async savePlayerRating(auth_id: string, player: PlayerStat): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT OR REPLACE INTO player_ratings (auth_id, rating, rd, volatility, total_games, total_full_games, won_games)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO player_ratings (auth_id, rating, rd, volatility, total_games, total_full_games, won_games, left_afk, left_votekick, left_server)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(auth_id) DO UPDATE SET
+          rating = excluded.rating,
+          rd = excluded.rd,
+          volatility = excluded.volatility,
+          total_games = excluded.total_games,
+          total_full_games = excluded.total_full_games,
+          won_games = excluded.won_games,
+          left_afk = excluded.left_afk,
+          left_votekick = excluded.left_votekick,
+          left_server = excluded.left_server;
       `;
       this.db.run(query, [
         auth_id,
@@ -398,7 +417,10 @@ export class PlayerRatingsDB {
         player.glickoPlayer!.getVol(), // Zakładam, że Player ma właściwość vol
         player.totalGames,
         player.totalFullGames,
-        player.wonGames
+        player.wonGames,
+        player.counterAfk,
+        player.counterVoteKicked,
+        player.counterLeftServer,
       ], (err) => {
         if (err) {
           reject('Error saving player rating: ' + err.message);

@@ -1,7 +1,6 @@
-import { Match, PlayerStat, PlayerStatInMatch, PlayerData } from './src/structs';
-import { Ratings } from './src/rating';
+import { Match, PlayerStat, PlayerStatInMatch, PlayerData, PlayerLeavedDueTo } from '../src/structs';
+import { Ratings } from '../src/rating';
 import Glicko2 from 'glicko2';
-import { exit } from 'process';
 
 function assertTrue(condition: boolean, message: string): void {
   if (!condition) {
@@ -31,9 +30,9 @@ function runTest(testName: string, testFn: () => void): void {
 }
 
 
-function createPlayerStat(id: number, glicko: Glicko2.Glicko2) {
+function createPlayerStat(id: number, glicko: Glicko2.Glicko2, rating: number = 1500, rd: number = 150, vol: number = 0.02) {
   let stat = new PlayerStat(id);
-  stat.glickoPlayer = glicko.makePlayer(1500, 350, 0.06);
+  stat.glickoPlayer = glicko.makePlayer(rating, rd, vol);
   return stat;
 }
 
@@ -109,7 +108,7 @@ runTest("3v3 one player leaves early with lead", () => {
   match.winnerTeam = 1;
   match.goals = [[100, 1], [150, 1], [200, 1]];
   match.matchEndTime = 3 * 60;
-  match.stat(3).leavedAt = 30;
+  match.stat(3).leftAt = 30;
 
   ratings.updatePlayerStats(match, playerStats);
 
@@ -199,6 +198,7 @@ runTest("1000 matches for 20 players with specific win ratios", () => {
           if (match.winnerTeam === 2) wins.set(id, (wins.get(id) || 0) + 1);
         });
   }
+  // ratings.debug = true;
   ratings.LogTop();
 
   const player1 = playerStats.get(1)!;
@@ -301,7 +301,7 @@ runTest("3vs3 rematch - win then lose x 1000", () => {
 runTest("3v3 unbalanced teams - rating reflects skill gap", () => {
   let glicko = new Glicko2.Glicko2();
   let ratings = new Ratings(glicko);
-  ratings.debug = true;
+  // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) {
     playerStats.set(i, createPlayerStat(i, glicko));
@@ -343,7 +343,7 @@ runTest("3v3 partial participation - weights affect rating", () => {
   match.winnerTeam = 1;
   match.matchEndTime = 3 * 60;
   match.stat(1).joinedAt = 90; // Gracz 1 dołącza w połowie
-  match.stat(4).leavedAt = 90; // Gracz 4 wychodzi w połowie
+  match.stat(4).leftAt = 90; // Gracz 4 wychodzi w połowie
 
   ratings.updatePlayerStats(match, playerStats);
 
@@ -362,3 +362,446 @@ runTest("3v3 partial participation - weights affect rating", () => {
   assertApproxEqual(player4.glickoPlayer!.getRating(), 1495, 10, "Player 4 rating change should be small due to early leave");
 });
 
+runTest("3v3 - AFK penalty at halftime", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) {
+    playerStats.set(i, createPlayerStat(i, glicko));
+  }
+
+  const match = new Match();
+  match.redTeam = [1, 2, 3];
+  match.blueTeam = [4, 5, 6];
+  match.winnerTeam = 1;
+  match.matchEndTime = 3 * 60; // 180s
+  match.stat(4).leftAt = 90; // Gracz 4 wychodzi w połowie
+  match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
+
+  ratings.updatePlayerStats(match, playerStats);
+
+  const player4 = playerStats.get(4)!;
+  assertEqual(player4.totalGames, 1, "Player 4 should have 1 game");
+  assertTrue(player4.glickoPlayer!.getRating() < 1500, "Player 4 rating should decrease due to AFK");
+  assertApproxEqual(player4.glickoPlayer!.getRating(), 1475, 15, "Player 4 should lose ~25 points for AFK at halftime");
+});
+
+runTest("3v3 - VoteKicked penalty near start", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) {
+    playerStats.set(i, createPlayerStat(i, glicko));
+  }
+
+  const match = new Match();
+  match.redTeam = [1, 2, 3];
+  match.blueTeam = [4, 5, 6];
+  match.winnerTeam = 1;
+  match.matchEndTime = 3 * 60; // 180s
+  match.stat(2).leftAt = 30; // Gracz 2 wychodzi po 30s
+  match.stat(2).leftDueTo = PlayerLeavedDueTo.voteKicked;
+
+  ratings.updatePlayerStats(match, playerStats);
+
+  const player2 = playerStats.get(2)!;
+  assertEqual(player2.totalGames, 1, "Player 2 should have 1 game");
+  assertTrue(player2.glickoPlayer!.getRating() < 1500, "Player 2 rating should decrease due to vote kick");
+  assertApproxEqual(player2.glickoPlayer!.getRating(), 1485, 10, "Player 2 should lose ~15 points for vote kick near start");
+});
+
+runTest("3v3 - LeftServer penalty late but before 90%", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) {
+    playerStats.set(i, createPlayerStat(i, glicko));
+  }
+
+  const match = new Match();
+  match.redTeam = [1, 2, 3];
+  match.blueTeam = [4, 5, 6];
+  match.winnerTeam = 2;
+  match.matchEndTime = 3 * 60; // 180s
+  match.stat(1).leftAt = 150; // Gracz 1 wychodzi na 30s przed końcem (83%)
+  match.stat(1).leftDueTo = PlayerLeavedDueTo.leftServer;
+
+  ratings.updatePlayerStats(match, playerStats);
+
+  const player1 = playerStats.get(1)!;
+  assertEqual(player1.totalGames, 1, "Player 1 should have 1 game");
+  assertTrue(player1.glickoPlayer!.getRating() < 1500, "Player 1 rating should decrease due to leaving server");
+  assertApproxEqual(player1.glickoPlayer!.getRating(), 1175, 10, "Player 1 should lose ~10 points for leaving late");
+});
+
+runTest("AFK at start", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).leftAt = 0; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1450, "Player 4 should lose ~50 for AFK at start");
+});
+
+runTest("AFK at start 5s loser", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).leftAt = 5; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1450, "Player 4 should lose ~50 for AFK at start");
+});
+
+runTest("AFK at start 5s winner", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
+  match.stat(4).leftAt = 5; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1450, "Player 4 should lose ~50 for AFK at start");
+});
+
+runTest("AFK at end", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).leftAt = 170; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() > 1470, "Player 4 should lose <30 for AFK near end");
+});
+
+runTest("LeftServer at start", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).leftAt = 0; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1470, "Player 4 should lose ~30 for leaving at start");
+});
+
+runTest("LeftServer at end", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).leftAt = 170; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() > 1200, "Player 4 should lose <20 for leaving near end");
+});
+
+runTest("LeftServer at beginning", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).leftAt = 0; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() > 1200, "Player 4 should lose <20 for leaving near end");
+});
+
+runTest("Join mid-game, no leave - no penalty", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).joinedAt = 90; // Dołącza w połowie
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() >= 1500, "Player 4 should not lose rating for joining mid-game");
+});
+
+runTest("Join mid-game, AFK mid-game - penalty", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).joinedAt = 60; match.stat(4).leftAt = 120; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1500, "Player 4 should lose rating for AFK after joining mid-game");
+});
+
+runTest("Join at start, leave mid-game - penalty", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
+  match.stat(4).joinedAt = 0; match.stat(4).leftAt = 90; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1470, "Player 4 should lose rating for leaving mid-game");
+});
+
+runTest("Join mid-game, finish - gain rating", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
+  match.stat(5).joinedAt = 90; // Dołącza w połowie, wygrywa
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(5)!.glickoPlayer!.getRating() > 1500, "Player 5 should gain rating for joining mid-game and winning");
+});
+
+runTest("Mid-game join, big impact", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
+  match.stat(5).joinedAt = 90; match.goals = [[100, 2], [120, 2]]; // +2 po dołączeniu
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(5)!.glickoPlayer!.getRating() > 1500, "Player 5 should gain for big impact");
+});
+
+runTest("Join then leave", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+  for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
+  match.stat(5).joinedAt = 90; match.stat(5).leftAt = 130; match.stat(5).leftDueTo = PlayerLeavedDueTo.leftServer;
+  match.goals = [[100, 2], [120, 2]]; // +2 po dołączeniu
+  ratings.updatePlayerStats(match, playerStats);
+  assertTrue(playerStats.get(5)!.glickoPlayer!.getRating() > 1500, "Player 5 should gain for big impact");
+});
+
+runTest("Top player with 2200 loses with teammates 1850 vs 1750 opponents", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+
+  // Tworzenie graczy z określonymi ratingami i RD = 30
+  playerStats.set(1, createPlayerStat(1, glicko, 2200, 30, 0.02)); // Top gracz
+  playerStats.set(2, createPlayerStat(2, glicko, 1850, 30, 0.02)); // Teammate 1
+  playerStats.set(3, createPlayerStat(3, glicko, 1850, 30, 0.02)); // Teammate 2
+  playerStats.set(4, createPlayerStat(4, glicko, 1750, 30, 0.02)); // Przeciwnik 1
+  playerStats.set(5, createPlayerStat(5, glicko, 1750, 30, 0.02)); // Przeciwnik 2
+  playerStats.set(6, createPlayerStat(6, glicko, 1750, 30, 0.02)); // Przeciwnik 3
+
+  // Definiowanie meczu: czerwoni (2200, 1850, 1850) vs niebiescy (1750, 1750, 1750)
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; // Drużyna z top graczem
+  match.blueTeam = [4, 5, 6]; // Drużyna przeciwna
+  match.winnerTeam = 2; // Niebiescy wygrywają (2 = blue team)
+  match.matchEndTime = 180; // Standardowy czas meczu (3 minuty)
+
+  // Aktualizacja statystyk po meczu
+  ratings.updatePlayerStats(match, playerStats);
+
+  // Sprawdzenie wyników
+  const topPlayerRatingAfter = playerStats.get(1)!.glickoPlayer!.getRating();
+  console.log(`Top player rating after loss: ${topPlayerRatingAfter}`);
+  assertTrue(topPlayerRatingAfter < 2200, "Player 1 (2200) should lose rating after losing to weaker team");
+  assertTrue(topPlayerRatingAfter > 2100, "Player 1 should not drop below 2100 from 2200 in one game");
+});
+
+
+runTest("Top player with 2200 loses with teammates 1850 vs 1750 opponents current", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+
+  // Tworzenie graczy z określonymi ratingami i RD = 30
+  playerStats.set(1, createPlayerStat(1, glicko, 2200, 80, 0.06)); // Top gracz
+  playerStats.set(2, createPlayerStat(2, glicko, 1850, 80, 0.06)); // Teammate 1
+  playerStats.set(3, createPlayerStat(3, glicko, 1850, 80, 0.06)); // Teammate 2
+  playerStats.set(4, createPlayerStat(4, glicko, 1750, 80, 0.06)); // Przeciwnik 1
+  playerStats.set(5, createPlayerStat(5, glicko, 1750, 80, 0.06)); // Przeciwnik 2
+  playerStats.set(6, createPlayerStat(6, glicko, 1750, 80, 0.06)); // Przeciwnik 3
+
+  // Definiowanie meczu: czerwoni (2200, 1850, 1850) vs niebiescy (1750, 1750, 1750)
+  const match = new Match();
+  match.redTeam = [1, 2, 3]; // Drużyna z top graczem
+  match.blueTeam = [4, 5, 6]; // Drużyna przeciwna
+  match.winnerTeam = 2; // Niebiescy wygrywają (2 = blue team)
+  match.matchEndTime = 180; // Standardowy czas meczu (3 minuty)
+
+  // Aktualizacja statystyk po meczu
+  ratings.updatePlayerStats(match, playerStats);
+
+  // Sprawdzenie wyników
+  const topPlayerRatingAfter = playerStats.get(1)!.glickoPlayer!.getRating();
+  console.log(`Top player rating after loss: ${topPlayerRatingAfter}`);
+  assertTrue(topPlayerRatingAfter < 2200, "Player 1 (2200) should lose rating after losing to weaker team");
+  assertTrue(topPlayerRatingAfter > 2100, "Player 1 should not drop below 2100 from 2200 in one game");
+});
+
+runTest("Player with 2 wins and 1 loss reaching rating milestones", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+
+  // Inicjalizacja graczy (wszyscy z domyślnymi wartościami)
+  for (let i = 1; i <= 7; i++) playerStats.set(i, createPlayerStat(i, glicko, 1500, 150, 0.02));
+  // Gracz 1 to nasz testowany gracz, 2 i 3 to teammates, 4-7 to przeciwnicy
+
+  const milestones = [1600, 1700, 1800, 1900, 2000, 2100, 2200];
+  let matchesPlayed = 0;
+  let currentRating = 1500;
+
+  while (currentRating < 2200) {
+    // Cykl: 2 wygrane, 1 przegrana
+    for (let i = 0; i < 3; i++) {
+      const match = new Match();
+      match.redTeam = [1, 2, 3]; // Nasz gracz + teammates
+      match.blueTeam = [4, 5, 6]; // Przeciwnicy
+      match.matchEndTime = 180;
+
+      if (i < 2) {
+        match.winnerTeam = 1; // Wygrana czerwonych (2 razy)
+      } else {
+        match.winnerTeam = 2; // Przegrana czerwonych (1 raz)
+      }
+
+      ratings.updatePlayerStats(match, playerStats);
+      matchesPlayed++;
+      currentRating = playerStats.get(1)!.glickoPlayer!.getRating();
+      for (let i = 2; i <= 6; i++) playerStats.get(i)!.glickoPlayer?.setRating(currentRating);
+
+      // Logowanie przekroczenia progów
+      for (const milestone of milestones) {
+        if (currentRating >= milestone && playerStats.get(1)!.glickoPlayer!.getRating() - milestone < 50) {
+          console.log(`Reached ${milestone} after ${matchesPlayed} matches`);
+          milestones.splice(milestones.indexOf(milestone), 1); // Usuwamy osiągnięty próg
+          break;
+        }
+      }
+    }
+  }
+  ratings.debug = true;
+  ratings.LogTop();
+});
+
+runTest("Player with 3 wins and 1 loss reaching rating milestones", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+
+  // Inicjalizacja graczy (wszyscy z domyślnymi wartościami)
+  for (let i = 1; i <= 7; i++) playerStats.set(i, createPlayerStat(i, glicko, 1500, 150, 0.02));
+
+  const milestones = [1600, 1700, 1800, 1900, 2000, 2100, 2200];
+  let matchesPlayed = 0;
+  let currentRating = 1500;
+
+  while (currentRating < 2200) {
+    // Cykl: 3 wygrane, 1 przegrana
+    for (let i = 0; i < 4; i++) {
+      const match = new Match();
+      match.redTeam = [1, 2, 3]; // Nasz gracz + teammates
+      match.blueTeam = [4, 5, 6]; // Przeciwnicy
+      match.matchEndTime = 180;
+
+      if (i < 3) {
+        match.winnerTeam = 1; // Wygrana czerwonych (3 razy)
+      } else {
+        match.winnerTeam = 2; // Przegrana czerwonych (1 raz)
+      }
+
+      ratings.updatePlayerStats(match, playerStats);
+      matchesPlayed++;
+      currentRating = playerStats.get(1)!.glickoPlayer!.getRating();
+      for (let i = 2; i <= 6; i++) playerStats.get(i)!.glickoPlayer?.setRating(currentRating);
+
+      // Logowanie przekroczenia progów
+      for (const milestone of milestones) {
+        if (currentRating >= milestone && playerStats.get(1)!.glickoPlayer!.getRating() - milestone < 50) {
+          console.log(`Reached ${milestone} after ${matchesPlayed} matches`);
+          milestones.splice(milestones.indexOf(milestone), 1);
+          break;
+        }
+      }
+    }
+  }
+  ratings.debug = true;
+  ratings.LogTop();
+});
+
+runTest("Player with 4 wins and 1 loss reaching rating milestones", () => {
+  let glicko = new Glicko2.Glicko2();
+  let ratings = new Ratings(glicko);
+  // ratings.debug = true;
+  const playerStats = new Map<number, PlayerStat>();
+
+  // Inicjalizacja graczy (wszyscy z domyślnymi wartościami)
+  for (let i = 1; i <= 7; i++) playerStats.set(i, createPlayerStat(i, glicko, 1500, 150, 0.02));
+
+  const milestones = [1600, 1700, 1800, 1900, 2000, 2100, 2200];
+  let matchesPlayed = 0;
+  let currentRating = 1500;
+
+  while (currentRating < 2200) {
+    // Cykl: 4 wygrane, 1 przegrana
+    for (let i = 0; i < 5; i++) {
+      const match = new Match();
+      match.redTeam = [1, 2, 3]; // Nasz gracz + teammates
+      match.blueTeam = [4, 5, 6]; // Przeciwnicy
+      match.matchEndTime = 180;
+
+      if (i < 4) {
+        match.winnerTeam = 1; // Wygrana czerwonych (4 razy)
+      } else {
+        match.winnerTeam = 2; // Przegrana czerwonych (1 raz)
+      }
+
+      ratings.updatePlayerStats(match, playerStats);
+      matchesPlayed++;
+      currentRating = playerStats.get(1)!.glickoPlayer!.getRating();
+      for (let i = 2; i <= 6; i++) playerStats.get(i)!.glickoPlayer?.setRating(currentRating);
+
+      // Logowanie przekroczenia progów
+      for (const milestone of milestones) {
+        if (currentRating >= milestone && playerStats.get(1)!.glickoPlayer!.getRating() - milestone < 50) {
+          console.log(`Reached ${milestone} after ${matchesPlayed} matches`);
+          milestones.splice(milestones.indexOf(milestone), 1);
+          break;
+        }
+      }
+    }
+  }
+  ratings.debug = true;
+  ratings.LogTop();
+});

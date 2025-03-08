@@ -1,5 +1,5 @@
 import { HaxballRoom } from "./hb_room";
-import { PlayerData, PlayerStat, PlayerStatInMatch, Match } from "./structs";
+import { PlayerData, PlayerStat, PlayerStatInMatch, Match, PlayerLeavedDueTo } from "./structs";
 import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
 import { VoteKicker } from "./vote_kick";
@@ -146,9 +146,7 @@ export class AutoBot {
   async handlePlayerJoin(playerExt: PlayerData) {
     AMLog(`${playerExt.name} joined`);
     this.addPlayerToSpec(playerExt);
-    if ([MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) {
-      return; // add to spec because no game in progress
-    }
+    if (this.isLobbyTime()) return; // add to spec becaues no game in progress
     const limit = this.limit();
     let rl = this.redTeam.length;
     let bl = this.blueTeam.length;
@@ -188,8 +186,19 @@ export class AutoBot {
       AMLog(`${playerExt.name} leaved some other universum`); // should not happen but happens...
       return;
     }
-    if ([MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) return; // add players only while game
-    if (redLeft || blueLeft) this.fillMissingGapsInTeams(redLeft);
+    if (this.isLobbyTime()) return; // add players only while game
+    if (redLeft || blueLeft) {
+      this.setPlayerLeftStatusTo(playerExt, PlayerLeavedDueTo.leftServer);
+      this.fillMissingGapsInTeams(redLeft);
+    }
+  }
+
+  setPlayerLeftStatusTo(playerExt: PlayerData, dueTo: PlayerLeavedDueTo) {
+    let pstats = this.currentMatch.playerStats.get(playerExt.id);
+    if (pstats && !pstats.isLeftStatusSet()) {
+      pstats.leftAt = this.currentScores?.time ?? 0;
+      pstats.leftDueTo = dueTo;
+    }
   }
 
   async handlePlayerTeamChange(changedPlayer: PlayerData) {
@@ -206,13 +215,17 @@ export class AutoBot {
       this.changeAssignment(changedPlayer.id, this.blueTeam, changedPlayer.team == 0 ? this.specTeam : this.redTeam);
       if (changedPlayer.team == 0) blueLeft = true;
     }
-    if ([MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) return; // add players only while game
-    if (redLeft || blueLeft) this.fillMissingGapsInTeams(redLeft);
+    if (this.isLobbyTime()) return; // add players only while game
+    if (redLeft || blueLeft) {
+      if (changedPlayer.afk || changedPlayer.afk_maybe)
+        this.setPlayerLeftStatusTo(changedPlayer, PlayerLeavedDueTo.afk);
+      this.fillMissingGapsInTeams(redLeft);
+    }
   }
 
   async handlePlayerBackFromAfk(playerExt: PlayerData) {
     AMLog(`${this.matchState} handler player returning from AFK ${playerExt.name}`);
-    if ([MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) return; // add players only while game
+    if (this.isLobbyTime()) return; // add players only while game
     const limit = this.limit();
     if (limit == 3) {
       let rl = this.redTeam.length;
@@ -288,11 +301,10 @@ export class AutoBot {
     this.currentMatchGameTime = 0;
     this.currentMatchLastGoalScorer = 0;
     this.lastOneMatchLoserTeamIds = [];
-    this.lastAutoSelectedPlayerIds = [];
     this.shuffled = false;
     this.pauseUsedByRed = false;
     this.pauseUsedByBlue = false;
-    this.restartRequestedByBlue = false;
+    this.restartRequestedByRed = false;
     this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
@@ -409,6 +421,7 @@ export class AutoBot {
   }
 
   async handlePauseRequest(byPlayer: PlayerData) {
+    if (this.isLobbyTime()) return;
     if (!this.pauseUsedByRed) {
       let p = this.redTeam.filter(e => e.id === byPlayer.id);
       if (p) {
@@ -430,7 +443,7 @@ export class AutoBot {
   }
 
   async handleRestartRequested(byPlayer: PlayerData) {
-    if ([MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) return; // add players only while game
+    if (this.isLobbyTime()) return; // add players only while game
     if (!this.ranked || !this.currentScores || this.currentScores.time > 10) return;
     if (!this.restartRequestedByRed) {
       let p = this.redTeam.filter(e => e.id === byPlayer.id);
@@ -439,7 +452,8 @@ export class AutoBot {
         else this.hb_room.sendMsgToAll(`(!r) ${byPlayer.name} jako gracz Red zgodził się na restart meczu`, Colors.BrightGreen, 'bold');
         this.restartRequestedByRed = true;
       }
-    } else if (!this.restartRequestedByBlue) {
+    }
+    if (!this.restartRequestedByBlue) {
       let p = this.blueTeam.filter(e => e.id === byPlayer.id);
       if (p) {
         if (!this.restartRequestedByRed) this.hb_room.sendMsgToAll(`(!r) ${byPlayer.name} jako gracz Blue poprosił o restart meczu, ktoś z Red musi się zgodzić`, Colors.BrightGreen, 'bold');
@@ -497,7 +511,7 @@ export class AutoBot {
   startMissingPlayersInTeamsTimer() {
     if (this.missingPlayersInTeamsTimer) return;
     this.missingPlayersInTeamsTimer = setInterval(() => {
-      if ([MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) return; // add players only while game
+      if (this.isLobbyTime()) return; // add players only while game
       const limit = this.limit();
       const rl = this.redTeam.length;
       const bl = this.blueTeam.length;
@@ -867,7 +881,7 @@ export class AutoBot {
   movePlayerToRed(playerExt: PlayerData, fromTeam: PlayerData[], onTop = false) {
     playerExt.team = 1;
     this.movePlayer(playerExt.id, fromTeam, this.redTeam, playerExt.team, onTop);
-    if (![MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) { // if match in progress
+    if (!this.isLobbyTime()) { // if match in progress
       this.currentMatch.redTeam.push(playerExt.id);
       let stat = this.currentMatch.stat(playerExt.id);
       if (this.currentScores) stat.joinedAt = this.currentScores.time;
@@ -876,7 +890,7 @@ export class AutoBot {
   movePlayerToBlue(playerExt: PlayerData, fromTeam: PlayerData[], onTop = false) {
     playerExt.team = 2;
     this.movePlayer(playerExt.id, fromTeam, this.blueTeam, playerExt.team, onTop);
-    if (![MatchState.lobby, MatchState.afterVictory].includes(this.matchState)) { // if match in progress
+    if (!this.isLobbyTime()) { // if match in progress
       this.currentMatch.blueTeam.push(playerExt.id);
       let stat = this.currentMatch.stat(playerExt.id);
       if (this.currentScores) stat.joinedAt = this.currentScores.time;
@@ -899,9 +913,9 @@ export class AutoBot {
       const [player] = fromTeam.splice(index, 1);
       if (onTop) toTeam.unshift(player);
       else toTeam.push(player);
-      AMLog(`change assignment ${player.name} to ${toTeam}`);
+      AMLog(`change assignment ${player.name}`);
     } else {
-      AMLog(`Cannot change assignment ${playerId} to ${toTeam}`);
+      AMLog(`Cannot change assignment ${playerId}`);
     }
   }
 

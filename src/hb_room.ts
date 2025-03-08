@@ -627,6 +627,7 @@ export class HaxballRoom {
         let stat = this.player_stats.get(idx);
         if (stat) {
           hb_log(`#ST# get prev stat`);
+          stat.id = playerExt.id;
           playerExt.stat = stat;
           this.player_stats.set(playerExt.id, playerExt.stat);
         }
@@ -890,16 +891,34 @@ export class HaxballRoom {
       this.auto_bot.handleTeamVictory(scores);
       if (this.auto_bot.ranked || this.ratings_for_all_games) {
         hb_log("Aktualizujemy teraz dane w bazie");
-        const playerIdsInMatch = this.ratings.updatePlayerStats(this.auto_bot.currentMatch, this.player_stats);
+        this.ratings.updatePlayerStats(this.auto_bot.currentMatch, this.player_stats);
         let saved = 0;
-        for (const playerId of playerIdsInMatch) {
+        let redTeamStr = '';
+        let blueTeamStr = '';
+        const muToStr = (oldMu: number, newMu: number, penalty: number) => {
+          let str = ` ${oldMu}${newMu-oldMu>=0?'+':''}${newMu-oldMu}`;
+          if (penalty) str += `-${penalty}`;
+          return str;
+        }
+        for (const [playerId, oldMu, newMu, penalty] of this.ratings.results) {
+          if (this.auto_bot.currentMatch.redTeam.includes(playerId))
+            redTeamStr += muToStr(oldMu, newMu, penalty);
+          else if (this.auto_bot.currentMatch.blueTeam.includes(playerId))
+            blueTeamStr += muToStr(oldMu, newMu, penalty);
+
           let playerExt = this.players_ext_all.get(playerId)!;
           if (!playerExt.trust_level) continue;
           this.game_state.savePlayerRating(playerExt.auth_id, this.player_stats.get(playerExt.id)!);
           saved++;
         }
+        let predictedWinner = this.ratings.expectedScoreRed >= 50? '🔴': '🔵';
+        let predictedP = Math.round(this.ratings.expectedScoreRed);
+        if (predictedP < 50) predictedP = 100 - predictedP;
+        const txt = `🔴${redTeamStr} vs${blueTeamStr}🔵 Przewidywano zwycięstwo ${predictedWinner}${predictedP}%`;
+        hb_log(txt);
+        this.sendMsgToAll(txt, Colors.GameState, 'italic');
         this.updateTop10();
-        hb_log(`Aktualizujemy - zrobione (${saved}/${playerIdsInMatch.length}})!`);
+        hb_log(`Aktualizujemy - zrobione (${saved}/${this.ratings.results.length})!`);
       }
     }
   }

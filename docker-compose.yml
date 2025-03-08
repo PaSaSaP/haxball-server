@@ -1,8 +1,8 @@
 version: '3'
 services:
-  puppeteer:
+  futsal-3vs3:
     image: hx-puppeteer:1.0
-    container_name: haxball-server
+    container_name: haxball-server-3vs3
     restart: unless-stopped
     ports:
       - "0.0.0.0:50000-50100:50000-50100/udp"
