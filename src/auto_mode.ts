@@ -1,8 +1,8 @@
 import { HaxballRoom } from "./hb_room";
-import { PlayerData, PlayerStat, PlayerStatInMatch, Match, PlayerLeavedDueTo, RatingProcessingState } from "./structs";
+import { PlayerData, Match, PlayerLeavedDueTo, RatingProcessingState } from "./structs";
 import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
-import { VoteKicker } from "./vote_kick";
+import { AutoVoteHandler } from "./vote_kick";
 
 enum MatchState {
   lobby,
@@ -74,7 +74,7 @@ export class AutoBot {
   restartRequestedByBlue: boolean;
   minuteLeftReminder: boolean;
   chosingPlayerNextReminder: number;
-  voteKicker: VoteKicker;
+  autoVoter: AutoVoteHandler;
 
   constructor(hb_room: HaxballRoom) {
     this.hb_room = hb_room;
@@ -106,7 +106,7 @@ export class AutoBot {
     this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
-    this.voteKicker = new VoteKicker(this);
+    this.autoVoter = new AutoVoteHandler(this);
   }
 
   async reset() {
@@ -119,7 +119,7 @@ export class AutoBot {
     this.lastWinner = 0;
     this.winStreak = 0;
     this.matchState = MatchState.lobby;
-    this.voteKicker.reset();
+    this.autoVoter.resetOnMatchStarted();
   }
 
   async resetAndStart() {
@@ -175,7 +175,7 @@ export class AutoBot {
   async handlePlayerLeave(playerExt: PlayerData) {
     AMLog(`${this.matchState} ${playerExt.name} ${playerExt.id} leaved`);
     // AMLog(`r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
-    this.voteKicker.handleChangeAssignment(playerExt);
+    this.autoVoter.handleChangeAssignment(playerExt);
     if (this.removePlayerInSpec(playerExt)) return; // don't care about him
     let redLeft = this.removePlayerInRed(playerExt);
     let blueLeft = false;
@@ -203,7 +203,7 @@ export class AutoBot {
     AMLog(`${this.matchState} handle player team change ${changedPlayer.name} to team ${changedPlayer.team}`);
     let redLeft = false;
     let blueLeft = false;
-    this.voteKicker.handleChangeAssignment(changedPlayer);
+    this.autoVoter.handleChangeAssignment(changedPlayer);
     if (this.isPlayerInSpec(changedPlayer) && changedPlayer.team) {
       this.changeAssignment(changedPlayer.id, this.specTeam, changedPlayer.team == 1 ? this.redTeam : this.blueTeam);
     } else if (this.isPlayerInRed(changedPlayer) && changedPlayer.team != 1) {
@@ -313,7 +313,7 @@ export class AutoBot {
     this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
-    this.voteKicker.reset();
+    this.autoVoter.resetOnMatchStarted();
     this.currentMatch = new Match();
     this.currentMatch.redTeam = [...this.redTeam.map(e=>e.id)];
     this.currentMatch.blueTeam = [...this.blueTeam.map(e=>e.id)];
@@ -376,7 +376,7 @@ export class AutoBot {
         }
       }
       this.setLastWinner(lastWinner);
-      this.currentMatch.setEnd(this.ranked || this.hb_room.ratings_for_all_games);
+      this.currentMatch.setEnd(this.ranked);
       this.moveSomeTeamToSpec();
       this.justStopGame();
     }
@@ -420,7 +420,7 @@ export class AutoBot {
     this.currentMatch.redScore = scores.red;
     this.currentMatch.blueScore = scores.blue;
     this.currentMatch.matchEndTime = scores.time;
-    this.currentMatch.setEnd(this.ranked || this.hb_room.ratings_for_all_games);
+    this.currentMatch.setEnd(this.ranked);
     this.matchHistory.push(this.currentMatch);
     this.matchState = MatchState.afterVictory;
     let lastWinner: 1|2 = scores.red > scores.blue ? 1 : 2;
@@ -564,7 +564,7 @@ export class AutoBot {
           this.moveLoserRedToSpec();
           this.moveWinnerBlueToRedIfRanked();
         }
-        this.currentMatch.setEnd(this.ranked || this.hb_room.ratings_for_all_games);
+        this.currentMatch.setEnd(this.ranked);
         this.justStopGame();
       }
     }, this.AfterPositionsResetTimeout);
@@ -654,13 +654,14 @@ export class AutoBot {
           await sleep(500);
           this.matchState = MatchState.started;
           this.ranked = false;
+          if (this.hb_room.ratings_for_all_games) this.ranked = true;
           this.room.startGame();
         }
       }
     }, this.LobbyMonitoringTimeout);
   }
 
-  static ShortMatchHelp = 'Restart: !r, Pauza: !p, !votekick';
+  static ShortMatchHelp = 'Restart: !r, Pauza: !p, !votekick !votemute';
   
   checkForPreparedSelection(spec: PlayerData) {
     let rl = this.redTeam.length;

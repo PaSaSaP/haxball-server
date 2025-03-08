@@ -115,6 +115,7 @@ class Commander {
       other_names: this.commandPlayerOtherNames,
 
       votekick: this.commandVoteKick,
+      votemute: this.commandVoteMute,
       yes: this.commandVoteYes,
       tak: this.commandVoteYes,
       no: this.commandVoteNo,
@@ -783,17 +784,26 @@ class Commander {
     if (!cmdPlayer || cmdPlayer.id == player.id) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.voteKicker.handle(cmdPlayerExt, byPlayerExt);
+    this.hb_room.auto_bot.autoVoter.requestVoteKick(cmdPlayerExt, byPlayerExt);
+  }
+
+  async commandVoteMute(player: PlayerObject, cmds: string[]) {
+    if (!cmds.length) return this.commandVoteYes(player, cmds); // no param means vote yes
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer || cmdPlayer.id == player.id) return;
+    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    let byPlayerExt = this.Pid(player.id);
+    this.hb_room.auto_bot.autoVoter.requestVoteMute(cmdPlayerExt, byPlayerExt);
   }
 
   async commandVoteYes(player: PlayerObject, cmds: string[]) {
     let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.voteKicker.handleYes(byPlayerExt);
+    this.hb_room.auto_bot.autoVoter.handleYes(byPlayerExt);
   }
 
   async commandVoteNo(player: PlayerObject, cmds: string[]) {
     let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.voteKicker.handleNo(byPlayerExt);
+    this.hb_room.auto_bot.autoVoter.handleNo(byPlayerExt);
   }
 
   async commandReport(player: PlayerObject, cmds: string[]) {
@@ -1127,6 +1137,7 @@ class Commander {
       this.hb_room.limit = 3;
       this.hb_room.auto_afk = false;
       this.hb_room.auto_bot.MaxMatchTime = 150;
+      this.hb_room.auto_bot.autoVoter.setRequiredVotes(2);
       this.commandAutoMode(player, ["on"]);
     } else {
       this.hb_room.auto_afk = true;

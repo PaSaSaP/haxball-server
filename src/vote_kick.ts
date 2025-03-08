@@ -2,8 +2,19 @@ import { Colors } from "./colors";
 import { AutoBot } from "./auto_mode";
 import { PlayerData, PlayerLeavedDueTo } from "./structs";
 import { getTimestampHMS } from "./utils";
+import { HaxballRoom } from "./hb_room";
 
-export class VoteKicker {
+export interface AutoVoter {
+  active(): boolean;
+  handle(votedPlayer: PlayerData | null, byPlayer: PlayerData): void;
+  handleYes(byPlayer: PlayerData): void;
+  handleNo(byPlayer: PlayerData): void;
+  handleChangeAssignment(player: PlayerData): void;
+  reset(): void;
+}
+
+export class VoteKicker implements AutoVoter {
+  RequiredVotes = 3;
   autobot: AutoBot;
   team: 0 | 1 | 2;
   voted: PlayerData|null;
@@ -20,8 +31,12 @@ export class VoteKicker {
     this.at = 0;
   }
 
-  active() {
-    return this.team != 0 && this.voted;
+  expired() {
+    return Date.now() - this.at > 60_000;
+  }
+
+  active(): boolean {
+    return this.team != 0 && this.voted != null && !this.expired();
   }
 
   handle(votedPlayer: PlayerData|null, byPlayer: PlayerData) {
@@ -61,7 +76,7 @@ export class VoteKicker {
     if (this.team != 0 && this.voted && player.id == this.voted.id && !player.team) this.reset();
   }
 
-  check() {
+  private check() {
     if (!this.team || !this.voted) return;
     if (Date.now() - this.at > 60_000) {
       this.autobot.hb_room.sendMsgToAll(`(!votekick) Upłynął limit czasu na szkalowanie gracza ${this.voted.name}`, Colors.BrightBlue, 'italic');
@@ -70,12 +85,12 @@ export class VoteKicker {
     }
     const y = this.agreedBy.size;
     const n = this.disagreedBy.size;
-    if (n >= y + 3) {
+    if (n >= y + this.RequiredVotes) {
       this.autobot.hb_room.sendMsgToAll(`(!votekick) Wniosek o szkalowanie gracza ${this.voted.name} odrzucony (${y}/${n})`, Colors.BrightBlue, 'italic');
       this.reset();
       return;
     }
-    if (y >= n + 3) {
+    if (y >= n + this.RequiredVotes) {
       this.autobot.hb_room.sendMsgToAll(`(!votekick) Wniosek o szkalowanie gracza ${this.voted.name} przyjęty (${y}/${n})`, Colors.BrightBlue, 'italic');
       this.autobot.setPlayerLeftStatusTo(this.voted, PlayerLeavedDueTo.voteKicked);
       this.autobot.movePlayerToSpec(this.voted, this.team == 1 ? this.autobot.redTeam : this.autobot.blueTeam);
@@ -93,6 +108,162 @@ export class VoteKicker {
   }
 }
 
+export class VoteMuter implements AutoVoter {
+  RequiredVotes = 3;
+  hb_room: HaxballRoom;
+  voted: PlayerData|null;
+  agreedBy: Set<number>;
+  disagreedBy: Set<number>;
+  at: number;
+
+  constructor(hb_room: HaxballRoom) {
+    this.hb_room = hb_room;
+    this.voted = null;
+    this.agreedBy = new Set<number>();
+    this.disagreedBy = new Set<number>();
+    this.at = 0;
+  }
+
+  expired() {
+    return Date.now() - this.at > 60_000;
+  }
+
+  active(): boolean {
+    return this.voted != null && !this.expired();
+  }
+
+  handle(votedPlayer: PlayerData|null, byPlayer: PlayerData) {
+    if (votedPlayer != null && !this.active()) {
+      if (votedPlayer.id == byPlayer.id) return;
+      this.at = Date.now();
+      this.voted = votedPlayer;
+      this.agreedBy.add(byPlayer.id);
+      this.hb_room.sendMsgToAll(`(!votemute) Rozpoczęto wyciszanie gracza ${votedPlayer.name} (!votemute !tak !yes !nie !no)`, Colors.BrightBlue, 'italic');
+      AMLog(`votemute ${votedPlayer.name} by ${byPlayer.name}`);
+      return; // added new votekick so no more here
+    }
+    if (votedPlayer == null && this.active()) this.handleYes(byPlayer);
+  }
+
+  handleYes(byPlayer: PlayerData) {
+    if (!this.voted || this.voted.id == byPlayer.id) return;
+    this.agreedBy.add(byPlayer.id);
+    this.check();
+    AMLog(`votemute BY: ${byPlayer.name} YES`);
+  }
+
+  handleNo(byPlayer: PlayerData) {
+    if (!this.voted || this.voted.id == byPlayer.id) return;
+    this.disagreedBy.add(byPlayer.id);
+    this.check();
+    AMLog(`votemute BY: ${byPlayer.name} NO`);
+  }
+
+  handleChangeAssignment(player: PlayerData) {
+  }
+
+  private check() {
+    if (!this.voted) return;
+    if (this.expired()) {
+      this.hb_room.sendMsgToAll(`(!votemute) Upłynął limit czasu na wyciszenie gracza ${this.voted.name}`, Colors.BrightBlue, 'italic');
+      this.reset();
+      return;
+    }
+    const y = this.agreedBy.size;
+    const n = this.disagreedBy.size;
+    if (n >= y + this.RequiredVotes) {
+      this.hb_room.sendMsgToAll(`(!votemute) Wniosek o wyciszenie gracza ${this.voted.name} odrzucony (${y}/${n})`, Colors.BrightBlue, 'italic');
+      this.reset();
+      return;
+    }
+    if (y >= n + this.RequiredVotes) {
+      this.hb_room.sendMsgToAll(`(!votemute) Wniosek o wyciszenie gracza ${this.voted.name} przyjęty (${y}/${n})`, Colors.BrightBlue, 'italic');
+      this.hb_room.players_game_state_manager.setPlayerTimeMuted(this.voted, 60 * 60);
+      this.reset();
+      return;
+    }
+  }
+
+  reset() {
+    this.voted = null;
+    this.agreedBy.clear();
+    this.disagreedBy.clear();
+  }
+}
+
+export class AutoVoteHandler implements AutoVoter {
+  hbRoom: HaxballRoom;
+  voteKicker: VoteKicker;
+  voteMuter: VoteMuter;
+  activeVoter: AutoVoter|null;
+
+  constructor(autoBot: AutoBot) {
+    this.hbRoom = autoBot.hb_room;
+    this.voteKicker = new VoteKicker(autoBot);
+    this.voteMuter = new VoteMuter(autoBot.hb_room);
+    this.activeVoter = null;
+  }
+
+  resetOnMatchStarted() {
+    if (this.activeVoter === this.voteKicker) {
+      this.voteKicker.reset();
+    }
+  }
+  active(): boolean {
+    if (this.activeVoter === null) return false;
+    if (!this.activeVoter.active()) {
+      this.activeVoter.reset();
+      this.activeVoter = null;
+      return false;
+    }
+    return true;
+  }
+  requestVoteKick(votedPlayer: PlayerData | null, byPlayer: PlayerData) {
+    AMLog(`requestedVoteKick by ${byPlayer.name}`);
+    if (this.active()) {
+      this.hbRoom.sendMsgToPlayer(byPlayer, 'Inne głosowanie jest w trakcie!', Colors.Warning);
+      return false;
+    }
+    this.activeVoter = this.voteKicker;
+    this.voteKicker.handle(votedPlayer, byPlayer);
+    return true;
+  }
+  requestVoteMute(votedPlayer: PlayerData | null, byPlayer: PlayerData) {
+    AMLog(`requestedVoteMute by ${byPlayer.name}`);
+    if (this.active()) {
+      this.hbRoom.sendMsgToPlayer(byPlayer, 'Inne głosowanie jest w trakcie!', Colors.Warning);
+      return false;
+    }
+    this.activeVoter = this.voteMuter;
+    this.voteMuter.handle(votedPlayer, byPlayer);
+    return true;
+  }
+  handle(votedPlayer: PlayerData | null, byPlayer: PlayerData): void {
+    if (this.activeVoter == null) return;
+    this.activeVoter.handle(votedPlayer, byPlayer);
+  }
+  handleYes(byPlayer: PlayerData): void {
+    if (this.activeVoter == null) return;
+    this.activeVoter.handleYes(byPlayer);
+  }
+  handleNo(byPlayer: PlayerData): void {
+    if (this.activeVoter == null) return;
+    this.activeVoter.handleNo(byPlayer);
+  }
+  handleChangeAssignment(player: PlayerData): void {
+    if (this.activeVoter == null) return;
+    this.activeVoter.handleChangeAssignment(player);
+  }
+  reset(): void {
+    if (this.activeVoter === null) return;
+    this.activeVoter.reset();
+    this.activeVoter = null;
+  }
+  setRequiredVotes(n: number) {
+    this.voteKicker.RequiredVotes = n;
+    this.voteMuter.RequiredVotes = n;
+  }
+}
 
 function AMLog(text: string) {
   console.log(`#VK# [${getTimestampHMS()}] ${text}`);
