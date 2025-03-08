@@ -11,7 +11,7 @@ import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData } from './structs';
+import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState } from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
@@ -20,7 +20,8 @@ import Commander from './commands';
 import { AutoBot } from './auto_mode';
 import { Ratings } from './rating';
 import Glicko2 from 'glicko2';
-import { resourceLimits } from 'worker_threads';
+import { PlayersGameStateManager } from './pg_manager';
+import { hb_log, hb_log_to_console } from './log';
 
 
 export class HaxballRoom {
@@ -74,6 +75,8 @@ export class HaxballRoom {
   god_player: PlayerObject;
   top10: PlayerTopRatingData[]; // [name, rating, full games]
   player_names_by_auth: Map<string, string>;
+  player_ids_by_normalized_name: Map<string, number>;
+  players_game_state_manager: PlayersGameStateManager;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -122,6 +125,8 @@ export class HaxballRoom {
     this.god_player = this.createGodPlayer();
     this.top10 = [];
     this.player_names_by_auth = new Map<string, string>();
+    this.player_ids_by_normalized_name = new Map<string, number>();
+    this.players_game_state_manager = new PlayersGameStateManager(this);
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -154,12 +159,16 @@ export class HaxballRoom {
     this.room.setTeamsLock(true);
     this.setDefaultKickRateLimit();
     this.setDefaultScoreTimeLimit();
-    this.initPlayerNames();
+    this.initData();
+  }
 
+  private initData() {
+    this.initPlayerNames();
+    this.players_game_state_manager.initPlayersGameState();
     if (this.auto_mode) this.auto_bot.resetAndStart();
   }
 
-  initPlayerNames() {
+  private initPlayerNames() {
     this.game_state.getAllPlayerNames().then((result) => {
       this.player_names_by_auth = result;
       hb_log(`#I# initPlayerNames(${this.player_names_by_auth.size})`);
@@ -167,7 +176,8 @@ export class HaxballRoom {
     });
   }
 
-  createGodPlayer() {
+
+  private createGodPlayer() {
     // it does not sent do chat but can send announcements of course
     let team: TeamID = 0;
     const ppp: PPP = {
@@ -582,6 +592,7 @@ export class HaxballRoom {
     hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}]`);
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
+    if (this.players_game_state_manager.checkIfPlayerIsNotTimeKicked(player)) return;
     if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
     if (this.checkIfDotPlayerIsHost(player)) return;
     if (this.checkForPlayerDuplicate(player)) return;
@@ -606,6 +617,7 @@ export class HaxballRoom {
       }
       if (!kicked) {
         this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
+        this.player_ids_by_normalized_name.set(playerExt.name_normalized, playerExt.id);
         this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name);
         this.updateAdmins(null);
         this.loadPlayerStat(playerExt);
@@ -654,6 +666,8 @@ export class HaxballRoom {
       });
     }
   }
+
+
 
   checkIfPlayerNameContainsNotAllowedChars(player: PlayerObject) {
     if ('﷽' == player.name) return false; // there is such player with that name so it is olny exception :)
@@ -946,12 +960,18 @@ export class HaxballRoom {
     if (this.auto_mode) this.auto_bot.handlePositionsReset();
   }
 
+
   handlePlayerChat(player: PlayerObject, message: string): boolean {
     message = message.trim();
     if (!message) return false; // not interested in empty messages
     const userLogMessage = (for_discord: boolean) => { this.game_state.logMessage(player.name, "chat", message, for_discord); return for_discord; }
     if (!message.startsWith('!kb_')) { // to not spam
       hb_log_to_console(player, message)
+    }
+    let playerExt = this.P(player);
+    playerExt.activity.updateChat();
+    if (this.players_game_state_manager.isPlayerTimeMuted(playerExt, true)) {
+      return userLogMessage(false);
     }
     if (this.containsWideCharacters(message)) {
       if (!this.isPlayerMuted(player)) {
@@ -960,8 +980,6 @@ export class HaxballRoom {
       }
       return userLogMessage(false);
     }
-    let playerExt = this.P(player);
-    playerExt.activity.updateChat();
     if (this.captcha.hasPendingCaptcha(player)) {
       this.captcha.checkAnswer(player, message);
       return userLogMessage(false); // wait till captcha passed at first
@@ -1247,6 +1265,34 @@ export class HaxballRoom {
     return result;
   }
 
+  getPlayerDataByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false, allPlayers = false): PlayerData | null {
+    // TODO for now it checks all players, added parameter allPlayers, not yet impelmented
+    if (!playerName.length) {
+      if (byPlayerIfNameNotSpecified && byPlayer) return this.Pid(byPlayer.id); // command refers to caller player
+      return null; // no name specified, then cannot find player
+    }
+
+    let name = Array.isArray(playerName) ? playerName.join(" ") : playerName;
+    if (name.startsWith('#')) {
+      let cmdPlayerId = Number.parseInt(name.slice(1));
+      if (!isNaN(cmdPlayerId)) {
+        let cmdPlayer = this.players_ext_all.get(cmdPlayerId);
+        if (cmdPlayer) return cmdPlayer;
+      }
+    }
+    if (name.startsWith('@')) name = name.slice(1);
+    let nameNormalized = normalizeNameString(name);
+    let cmdPlayerId = this.player_ids_by_normalized_name.get(nameNormalized);
+    if (cmdPlayerId === undefined) return null;
+    let cmdPlayer = this.players_ext_all.get(cmdPlayerId);
+    if (!cmdPlayer) {
+      if (byPlayer)
+        this.sendMsgToPlayer(byPlayer, `Nie mogę znaleźć gracza o nicku ${name}`, Colors.PlayerNotFound, 'bold');
+      return null;
+    }
+    return cmdPlayer;
+  }
+
   getPlayerObjectByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false): PlayerObject | null {
     if (!playerName.length) {
       if (byPlayerIfNameNotSpecified) return byPlayer; // command refers to caller player
@@ -1365,24 +1411,10 @@ function clearPlayerAvatar(player_name: string) {
   });
 }
 
-function hb_log_to_console(player: PlayerObject | PlayerData, msg: string) {
-  if (!hb_log_chat_to_console_enabled) return;
-  console.debug(`[${getTimestampHMS()} ${player.name}][${player.id}] ${msg}`);
-}
-
-function hb_log(msg: string, timestamp: boolean = false) {
-  if (!hb_debug_enabled) return;
-  let txt = msg;
-  if (timestamp) txt = `[${getTimestampHMS()}] ${txt}`;
-  console.debug(txt);
-}
-
 let hb_room: HaxballRoom | null = null;
 let chat_logger: ChatLogger | null = null;
 let db_handler: DBHandler | null = null;
 let game_state: GameState | null = null;
-let hb_log_chat_to_console_enabled = true;
-let hb_debug_enabled = true;
 
 export const hb_room_main = (room: RoomObject, roomConfig: config.RoomServerConfig): HaxballRoom => {
   db_handler = new DBHandler(roomConfig.playersDbFile, roomConfig.otherDbFile);

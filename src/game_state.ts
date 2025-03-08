@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { PlayerData, PlayerStat, PlayerRatingData, PlayerTopRatingData } from './structs';
+import { PlayerData, PlayerStat, PlayerRatingData, PlayerTopRatingData, PlayersGameState } from './structs';
 import ChatLogger from './chat_logger';
 
 class PlayersDB {
@@ -494,7 +494,7 @@ export class TopRatingsDB {
             rows.forEach((row, index) => {
               const playerData = row as PlayerTopRatingData;
               const playerName = playerMap.get(playerData.auth_id) || "GOD";
-              stmt.run(index + 1, playerData.auth_id, playerName, playerData.rating, playerData.total_full_games);
+              stmt.run(index + 1, playerData.auth_id, playerName, Math.round(playerData.rating), playerData.total_full_games);
             });
   
             stmt.finalize((err) => {
@@ -538,15 +538,95 @@ export class TopRatingsDB {
   }
 }
 
+export class PlayersStateDB {
+  db: sqlite3.Database;
+
+  constructor(db: sqlite3.Database) {
+    this.db = db;
+  }
+
+  setupDatabase(): void {
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS players_state (
+        auth_id TEXT PRIMARY KEY,
+        muted_to INTEGER NOT NULL DEFAULT 0,
+        kicked_to INTEGER NOT NULL DEFAULT 0
+      );
+    `;
+
+    this.db.run(createTableQuery, (err) => {
+      if (err) console.error('Error creating players_state table:', err.message);
+      else console.log('Table "players_state" created or already exists.');
+    });
+  }
+
+  async getAllPlayersGameState(): Promise<Map<string, PlayersGameState>> {
+    return new Promise((resolve, reject) => {
+      const query = `SELECT auth_id, muted_to, kicked_to FROM players_state;`;
+
+      this.db.all(query, [], (err: any, rows: (PlayersGameState & { auth_id: string })[]) => {
+        if (err) {
+          return reject('Error fetching player states: ' + err.message);
+        }
+
+        if (!Array.isArray(rows)) {
+          return reject('Unexpected data format from database');
+        }
+
+        const playersMap = new Map<string, PlayersGameState>();
+        rows.forEach((row) => {
+          playersMap.set(row.auth_id, {
+            muted_to: row.muted_to,
+            kicked_to: row.kicked_to
+          });
+        });
+
+        resolve(playersMap);
+      });
+    });
+  }
+
+  async updateOrInsertPlayerStateKicked(auth_id: string, kicked_to: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO players_state (auth_id, kicked_to, muted_to)
+        VALUES (?, ?, 0)
+        ON CONFLICT(auth_id) DO UPDATE SET kicked_to = excluded.kicked_to;
+      `;
+
+      this.db.run(query, [auth_id, kicked_to], (err) => {
+        if (err) return reject('Error updating kicked_to: ' + err.message);
+        resolve();
+      });
+    });
+  }
+
+  async updateOrInsertPlayerStateMuted(auth_id: string, muted_to: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO players_state (auth_id, muted_to, kicked_to)
+        VALUES (?, ?, 0)
+        ON CONFLICT(auth_id) DO UPDATE SET muted_to = excluded.muted_to;
+      `;
+
+      this.db.run(query, [auth_id, muted_to], (err) => {
+        if (err) return reject('Error updating muted_to: ' + err.message);
+        resolve();
+      });
+    });
+  }
+}
+
 export class DBHandler {
   playersDb: sqlite3.Database;
   otherDb: sqlite3.Database;
   players: PlayersDB;
   playerNames: PlayerNamesDB;
   votes: VotesDB;
+  playerState: PlayersStateDB;
   reports: ReportsDB;
   ratings: PlayerRatingsDB;
-  top_ratings: TopRatingsDB;
+  topRatings: TopRatingsDB;
 
   constructor(playersDbFile: string, otherDbFile: string) {
     this.playersDb = new sqlite3.Database(playersDbFile, (err) => {
@@ -561,9 +641,10 @@ export class DBHandler {
     this.playerNames = new PlayerNamesDB(this.playersDb);
     this.votes = new VotesDB(this.playersDb);
     // and second table
+    this.playerState = new PlayersStateDB(this.otherDb);
     this.reports = new ReportsDB(this.otherDb);
     this.ratings = new PlayerRatingsDB(this.otherDb);
-    this.top_ratings = new TopRatingsDB(this.otherDb);
+    this.topRatings = new TopRatingsDB(this.otherDb);
 
     this.setupDatabases();
   }
@@ -572,8 +653,10 @@ export class DBHandler {
     this.players.setupDatabase();
     this.playerNames.setupDatabase();
     this.votes.setupDatabase();
+    this.playerState.setupDatabase();
+    this.reports.setupDatabase();
     this.ratings.setupDatabase();
-    this.top_ratings.setupDatabase();
+    this.topRatings.setupDatabase();
   }
 
   closeDatabases() {
@@ -642,11 +725,23 @@ export class GameState {
   }
 
   updateTopRatings(playerMap: Map<string, string>) {
-    return this.dbHandler.top_ratings.updateTopRatings(playerMap);
+    return this.dbHandler.topRatings.updateTopRatings(playerMap);
   }
 
   getTop10Players() {
-    return this.dbHandler.top_ratings.getTopNPlayers(10);
+    return this.dbHandler.topRatings.getTopNPlayers(10);
+  }
+
+  getAllPlayersGameState() {
+    return this.dbHandler.playerState.getAllPlayersGameState();
+  }
+
+  updateOrInsertPlayerStateKicked(auth_id: string, kicked_to: number) {
+    return this.dbHandler.playerState.updateOrInsertPlayerStateKicked(auth_id, kicked_to);
+  }
+
+  updateOrInsertPlayerStateMuted(auth_id: string, muted_to: number) {
+    return this.dbHandler.playerState.updateOrInsertPlayerStateMuted(auth_id, muted_to);
   }
 
   logMessage(user_name: string, action: string, text: string, for_discord: boolean) {

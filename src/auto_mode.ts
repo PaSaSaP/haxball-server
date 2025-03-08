@@ -400,14 +400,14 @@ export class AutoBot {
   }
 
   async handlePositionsReset() {
-    AMLog("handling positions reset");
+    // AMLog("handling positions reset");
     this.clearAfterPositionsResetTimer();
     this.matchState = MatchState.afterGoal;
     this.startAfterPositionsResetTimer();
   }
 
   async handleTeamGoal(team: 0|1|2) {
-    AMLog("handling team goal");
+    // AMLog("handling team goal");
     this.currentMatchLastGoalScorer = team;
     if (team) this.currentMatch.goals.push([this.currentScores?.time || 0, team]);
     let rl = this.redTeam.length;
@@ -416,7 +416,7 @@ export class AutoBot {
   }
 
   async handleTeamVictory(scores: ScoresObject) {
-    AMLog("handling team victory");
+    // AMLog("handling team victory");
     this.currentMatch.redScore = scores.red;
     this.currentMatch.blueScore = scores.blue;
     this.currentMatch.matchEndTime = scores.time;

@@ -74,6 +74,24 @@ class Commander {
       kkr: this.commandKickAllRed,
       kkb: this.commandKickAllBlue,
       kks: this.commandKickAllSpec,
+      tkick_5m: this.commandTimeKickPlayer5m,
+      tkick5m: this.commandTimeKickPlayer5m,
+      tkick_1h: this.commandTimeKickPlayer1h,
+      tkick1h: this.commandTimeKickPlayer1h,
+      tkick_1d: this.commandTimeKickPlayer1d,
+      tkick1d: this.commandTimeKickPlayer1d,
+      tkick_24h: this.commandTimeKickPlayer1d,
+      tkick24h: this.commandTimeKickPlayer1d,
+      "tkick-": this.commandTimeKickPlayerReset,
+      tmute_5m: this.commandTimeMutePlayer5m,
+      tmute5m: this.commandTimeMutePlayer5m,
+      tmute_1h: this.commandTimeMutePlayer1h,
+      tmute1h: this.commandTimeMutePlayer1h,
+      tmute_1d: this.commandTimeMutePlayer1d,
+      tmute1d: this.commandTimeMutePlayer1d,
+      tmute_24h: this.commandTimeMutePlayer1d,
+      tmute24h: this.commandTimeMutePlayer1d,
+      "tmute-": this.commandTimeMuteReset,
       auto_mode: this.commandAutoMode,
       limit: this.commandLimit,
       emoji: this.commandEmoji,
@@ -181,6 +199,10 @@ class Commander {
 
   sendMsgToAll(message: string, color: number | undefined = undefined, style: string | undefined = undefined, sound: number = 0) {
     this.hb_room.sendMsgToAll(message, color, style, sound);
+  }
+
+  getPlayerDataByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false, allPlayers = false): PlayerData | null {
+    return this.hb_room.getPlayerDataByName(playerName, byPlayer, byPlayerIfNameNotSpecified, allPlayers);
   }
 
   getPlayerObjectByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false): PlayerObject | null {
@@ -543,6 +565,49 @@ class Commander {
     this.hb_room.kickAllTeamExceptTrusted(player, 0);
   }
 
+  commandTimeKickPlayer5m(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickPlayer(player, cmds, 5 * 60, true);
+  }
+  commandTimeKickPlayer1h(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickPlayer(player, cmds, 60 * 60, true);
+  }
+  commandTimeKickPlayer1d(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickPlayer(player, cmds, 24 * 60 * 60, true);
+  }
+  commandTimeKickPlayerReset(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickPlayer(player, cmds, -1, false);
+  }
+  async execCommandTimeKickPlayer(player: PlayerObject, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotAdmin(player)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayer) return;
+    if (player.id == cmdPlayer.id) return;
+    this.hb_room.players_game_state_manager.setPlayerTimeKicked(cmdPlayer, seconds, kick);
+    if (seconds < 0) this.hb_room.sendMsgToPlayer(player, `Wyczyściłeś czasowy kick dla ${cmdPlayer.name}`);
+  }
+
+  commandTimeMutePlayer5m(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(player, cmds, 5 * 60);
+  }
+  commandTimeMutePlayer1h(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(player, cmds, 60 * 60);
+  }
+  commandTimeMutePlayer1d(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(player, cmds, 24 * 60 * 60);
+  }
+  commandTimeMuteReset(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(player, cmds, -1);
+  }
+
+  async execCommandTimeMutePlayer(player: PlayerObject, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotAdmin(player)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayer) return;
+    if (player.id == cmdPlayer.id) return;
+    this.hb_room.players_game_state_manager.setPlayerTimeMuted(cmdPlayer, seconds);
+    this.hb_room.sendMsgToPlayer(player, `Ustawiłeś czasowy mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+  }
+
   async commandAutoMode(player: PlayerObject, values: string[]) {
     if (this.warnIfPlayerIsNotHost(player, "auto_mode")) return;
     if (values.length == 0) return;
@@ -628,7 +693,7 @@ class Commander {
 
   async commandAdminStats(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player, true);
+    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
     if (!cmdPlayer) return;
     let p = this.Pid(cmdPlayer.id);
     let s = p.admin_stats;
@@ -706,9 +771,8 @@ class Commander {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza");
       return;
     }
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer) return;
-    let cmdPlayerExt = this.P(cmdPlayer);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayerExt) return;
     let lastPlayerNames = this.hb_room.game_state.getPlayerNames(cmdPlayerExt.auth_id);
     this.sendMsgToPlayer(player, `Ostatnie 5 nazw: ${(await lastPlayerNames).join(', ')}`);
   }
@@ -742,9 +806,8 @@ class Commander {
   }
 
   async commandMe(player: PlayerObject, cmds: string[]) {
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player, true);
-    if (!cmdPlayer) return;
-    let cmdPlayerExt = this.P(cmdPlayer);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, player, true);
+    if (!cmdPlayerExt) return;
     let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
     let dateStr = getTimestampHM();
@@ -752,10 +815,8 @@ class Commander {
   }
 
   async commandStat(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player, true);
-    if (!cmdPlayer) return;
-    let cmdPlayerExt = this.P(cmdPlayer);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, player, true);
+    if (!cmdPlayerExt) return;
     let playerStats = cmdPlayerExt.stat;
     let rating = Math.round(playerStats.glickoPlayer!.getRating());
     let rd = Math.round(playerStats.glickoPlayer!.getRd());
@@ -764,7 +825,7 @@ class Commander {
     let wins = playerStats.wonGames;
     let winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : 0;
     let msg = `${cmdPlayerExt.name} ⭐${rating} ±${rd} 🎮Rozegrane: ${games} 🔲Pełne mecze: ${fullGames} 🏆Wygrane: ${wins} (WR: ${winRate}%)`;
-    this.sendMsgToPlayer(playerExt, msg, Colors.Stats);
+    this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
 
   async commandTop10(player: PlayerObject, cmds: string[]) {
@@ -807,10 +868,9 @@ class Commander {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz dać kciuka w górę!");
       return;
     }
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
-    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayerExt) return;
+    if (player.id == cmdPlayerExt.id) return;
     this.hb_room.game_state.voteUp(playerExt.auth_id, cmdPlayerExt.auth_id);
     this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w górę!`);
   }
@@ -822,10 +882,9 @@ class Commander {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz dać kciuka w dół!");
       return;
     }
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
-    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayerExt) return;
+    if (player.id == cmdPlayerExt.id) return;
     this.hb_room.game_state.voteDown(playerExt.auth_id, cmdPlayerExt.auth_id);
     this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w dół!`);
   }
@@ -837,10 +896,9 @@ class Commander {
       this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz zabrać swojego kciuka!");
       return;
     }
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
-    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayerExt) return;
+    if (player.id == cmdPlayerExt.id) return;
     this.hb_room.game_state.removeVote(playerExt.auth_id, cmdPlayerExt.auth_id);
     this.sendMsgToPlayer(player, `Zabrałeś ${cmdPlayerExt.name} kciuka!`);
   }

@@ -297,3 +297,7 @@ export class Match {
   }
 }
 
+export interface PlayersGameState {
+  muted_to: number;
+  kicked_to: number;
+}
