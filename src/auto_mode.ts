@@ -427,7 +427,7 @@ export class AutoBot {
     this.hb_room.sendMsgToAll(`${lastWinner == 1 ? 'Red' : 'Blue'} wygrywa mecz! Mecz kończy się wynikiem Red🔴 ${scores.red}:${scores.blue} 🔵Blue, Gratulacje!`, Colors.GameState, 'italic');
     this.setLastWinner(lastWinner);
     this.moveSomeTeamToSpec();
-    this.justStopGame();
+    // this.justStopGame();
   }
 
   async handlePauseRequest(byPlayer: PlayerData) {

@@ -318,7 +318,7 @@ export class HaxballRoom {
     let current_time = Date.now();
     let afk_players_num = 0;
     // check for AFK
-    if (this.auto_afk) {
+    if (this.auto_afk && (!this.auto_mode || (this.auto_mode && !this.auto_bot.isLobbyTime()))) {
       const MaxAllowedNoMoveTime = 15.0 * 1000; // [ms]
       players.forEach(player_ext => {
         if (player_ext.team) {
@@ -667,8 +667,6 @@ export class HaxballRoom {
     }
   }
 
-
-
   checkIfPlayerNameContainsNotAllowedChars(player: PlayerObject) {
     if ('﷽' == player.name) return false; // there is such player with that name so it is olny exception :)
     if (this.containsWideCharacters(player.name)) {
@@ -970,9 +968,31 @@ export class HaxballRoom {
     }
     let playerExt = this.P(player);
     playerExt.activity.updateChat();
-    if (this.players_game_state_manager.isPlayerTimeMuted(playerExt, true)) {
-      return userLogMessage(false);
+    // at first check captcha
+    if (this.captcha.hasPendingCaptcha(player)) {
+      this.captcha.checkAnswer(player, message);
+      return userLogMessage(false); // wait till captcha passed at first
     }
+    // then handle commands
+    if (message[0] == '!') {
+      // Handle last command
+      if (message == "!!") {
+        let last_command_str = this.last_command.get(player.id);
+        if (last_command_str == null) {
+          this.sendMsgToPlayer(player, "Brak ostatniej komendy");
+          return false;
+        }
+        message = last_command_str;
+      }
+      this.last_command.set(player.id, message);
+
+      message = message.substring(1);
+      let message_split = message.split(" ");
+      let command = message_split[0];
+      this.executeCommand(command, player, message_split.slice(1).filter(e => e));
+      return false; // Returning false will prevent the message from being broadcasted
+    }
+    // then check for wide characters and if so then block any other action
     if (this.containsWideCharacters(message)) {
       if (!this.isPlayerMuted(player)) {
         this.addPlayerMuted(player);
@@ -980,47 +1000,34 @@ export class HaxballRoom {
       }
       return userLogMessage(false);
     }
-    if (this.captcha.hasPendingCaptcha(player)) {
-      this.captcha.checkAnswer(player, message);
-      return userLogMessage(false); // wait till captcha passed at first
+    // no check if it time muted
+    if (this.players_game_state_manager.isPlayerTimeMuted(playerExt, true)) {
+      return userLogMessage(false);
     }
+    // then check if only trusted can write
     if (this.allow_chatting_only_trusted && !playerExt.trust_level) {
       return userLogMessage(false); // only trusted can write
     }
+    // then if anti spam is enabled - check there
     let anti_spam_muted = !this.anti_spam.canSendMessage(player, message);
     if (this.checkPossibleSpamBot(player)) {
       return userLogMessage(false);
     }
-    if (message[0] != "!") {
-      if (!this.isPlayerMuted(player) && !anti_spam_muted) {
-        if (message.startsWith("t ") || message.startsWith("T ")) {
-          this.sendMessageToSameTeam(player, message.slice(2));
-          return userLogMessage(false);
-        }
-        userLogMessage(true);
-        if (playerExt.trust_level > 0) return true;
-        this.sendMsgToAll(`${player.name}: ${message}`, Colors.TrustZero, undefined, 0);
-        return false;
+    // OK, we can send message if is not muted nor filtered by anti spam
+    if (!this.isPlayerMuted(player) && !anti_spam_muted) {
+      // there is team message
+      if (message.startsWith("t ") || message.startsWith("T ")) {
+        this.sendMessageToSameTeam(player, message.slice(2));
+        return userLogMessage(false);
       }
+      userLogMessage(true);
+      // show as normal for trusted players
+      if (playerExt.trust_level > 0) return true;
+      // show as grey
+      this.sendMsgToAll(`${player.name}: ${message}`, Colors.TrustZero, undefined, 0);
       return false;
     }
-
-    // Handle last command
-    if (message == "!!") {
-      let last_command_str = this.last_command.get(player.id);
-      if (last_command_str == null) {
-        this.sendMsgToPlayer(player, "Brak ostatniej komendy");
-        return false;
-      }
-      message = last_command_str;
-    }
-    this.last_command.set(player.id, message);
-
-    message = message.substring(1);
-    let message_split = message.split(" ");
-    let command = message_split[0];
-    this.executeCommand(command, player, message_split.slice(1).filter(e => e));
-    return false; // Returning false will prevent the message from being broadcasted
+    return false;
   }
 
   async executeCommand(command: string, player: PlayerObject, args: string[] = []) {

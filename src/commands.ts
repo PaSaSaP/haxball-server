@@ -6,7 +6,6 @@ import { sleep, getTimestampHM, toBoolean } from "./utils";
 import { generateVerificationLink } from "./verification";
 import { Colors } from "./colors";
 import * as config from './config';
-import { threadId } from "worker_threads";
 
 class Commander {
   hb_room: HaxballRoom;
@@ -116,6 +115,7 @@ class Commander {
 
       votekick: this.commandVoteKick,
       votemute: this.commandVoteMute,
+      votereset: this.commandVoteReset,
       yes: this.commandVoteYes,
       tak: this.commandVoteYes,
       no: this.commandVoteNo,
@@ -127,13 +127,13 @@ class Commander {
       top: this.commandTop10,
       top10: this.commandTop10,
       auth: this.commandPrintAuth,
-      vote: this.commandThumbVote,
-      voteup: this.commandThumbVoteUp,
-      vote_up: this.commandThumbVoteUp,
-      votedown: this.commandThumbVoteDown,
-      vote_down: this.commandThumbVoteDown,
-      voteremove: this.commandThumbVoteRemove,
-      vote_remove: this.commandThumbVoteRemove,
+      thumb: this.commandThumbVote,
+      thumbup: this.commandThumbVoteUp,
+      thumb_up: this.commandThumbVoteUp,
+      thumbdown: this.commandThumbVoteDown,
+      thumb_down: this.commandThumbVoteDown,
+      thumbremove: this.commandThumbVoteRemove,
+      thumb_remove: this.commandThumbVoteRemove,
       trust: this.commandTrust,
       verify: this.commandVerify,
       t: this.commandTrust,
@@ -394,7 +394,7 @@ class Commander {
     }
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level > 0) {
-      this.sendMsgToPlayer(player, ": !vote !voteup !votedown !voteremove !report !verify", Colors.Help);
+      this.sendMsgToPlayer(player, ": !thumb !thumb_up !thump_down !thumb_remove !report !verify", Colors.Help);
     }
     this.sendMsgToPlayer(player, "By wywołać ostatnią komendę, uzyj !!", Colors.Help);
   }
@@ -579,7 +579,7 @@ class Commander {
     this.execCommandTimeKickPlayer(player, cmds, -1, false);
   }
   async execCommandTimeKickPlayer(player: PlayerObject, cmds: string[], seconds: number, kick: boolean) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     let cmdPlayer = this.getPlayerDataByName(cmds, player);
     if (!cmdPlayer) return;
     if (player.id == cmdPlayer.id) return;
@@ -601,7 +601,7 @@ class Commander {
   }
 
   async execCommandTimeMutePlayer(player: PlayerObject, cmds: string[], seconds: number) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     let cmdPlayer = this.getPlayerDataByName(cmds, player);
     if (!cmdPlayer) return;
     if (player.id == cmdPlayer.id) return;
@@ -630,7 +630,7 @@ class Commander {
   }
 
   async commandLimit(player: PlayerObject, values: string[]) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+    if (this.warnIfPlayerIsNotHost(player, 'limit')) return;
     if (values.length == 0) return;
     try {
       const limit = parseInt(values[0], 10);
@@ -796,6 +796,13 @@ class Commander {
     this.hb_room.auto_bot.autoVoter.requestVoteMute(cmdPlayerExt, byPlayerExt);
   }
 
+  async commandVoteReset(player: PlayerObject, cmds: string[]) {
+    let playerExt = this.Pid(player.id);
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.auto_bot.autoVoter.reset();
+    this.sendMsgToPlayer(player, 'Głosowanie zresetowane');
+  }
+
   async commandVoteYes(player: PlayerObject, cmds: string[]) {
     let byPlayerExt = this.Pid(player.id);
     this.hb_room.auto_bot.autoVoter.handleYes(byPlayerExt);
@@ -865,7 +872,7 @@ class Commander {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     this.hb_room.game_state.getPlayerVotes(playerExt.auth_id).then(({ upvotes, downvotes }) => {
-      this.sendMsgToPlayer(player, `Masz ${upvotes} 👍 oraz ${downvotes} 👎, daj komuś kciuka w górę: !voteup @kebab`, Colors.Help);
+      this.sendMsgToPlayer(player, `Masz ${upvotes} 👍 oraz ${downvotes} 👎, daj komuś kciuka w górę: !thumb_up @kebab`, Colors.Help);
     }).catch((error) => {
       console.error('Błąd przy pobieraniu reputacji:', error);
     });
@@ -1190,7 +1197,8 @@ class Commander {
     return false;
   }
 
-  warnIfPlayerIsNotApprovedAdmin(player: PlayerData) {
+  warnIfPlayerIsNotApprovedAdmin(player: PlayerObject|PlayerData) {
+    if (!("admin_level" in player)) return this.Pid(player.id).admin_level <= 0;
     return player.admin_level <= 0;
   }
 
