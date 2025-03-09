@@ -75,6 +75,7 @@ class Commander {
       kks: this.commandKickAllSpec,
       tkick_5m: this.commandTimeKickPlayer5m,
       tkick5m: this.commandTimeKickPlayer5m,
+      tkick: this.commandTimeKickPlayer1h,
       tkick_1h: this.commandTimeKickPlayer1h,
       tkick1h: this.commandTimeKickPlayer1h,
       tkick_1d: this.commandTimeKickPlayer1d,
@@ -84,6 +85,8 @@ class Commander {
       "tkick-": this.commandTimeKickPlayerReset,
       tmute_5m: this.commandTimeMutePlayer5m,
       tmute5m: this.commandTimeMutePlayer5m,
+      tm: this.commandTimeMutePlayer1h,
+      tmute: this.commandTimeMutePlayer1h,
       tmute_1h: this.commandTimeMutePlayer1h,
       tmute1h: this.commandTimeMutePlayer1h,
       tmute_1d: this.commandTimeMutePlayer1d,
@@ -1026,13 +1029,13 @@ class Commander {
   async commandUnlockWriting(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(player, 'u')) return;
     if (cmds.length == 0) {
-      this.hb_room.anti_spam.clearMute(player);
+      this.hb_room.anti_spam.clearMute(player.id);
       this.hb_room.captcha.clearCaptcha(player);
       this.hb_room.giveAdminTo(player);
     } else {
       let cmdPlayer = this.getPlayerObjectByName(cmds, player);
       if (!cmdPlayer) return;
-      this.hb_room.anti_spam.clearMute(cmdPlayer);
+      this.hb_room.anti_spam.clearMute(cmdPlayer.id);
       this.hb_room.captcha.clearCaptcha(cmdPlayer);
       this.sendMsgToPlayer(player, `Usunąłem blokady dla gracza: ${cmdPlayer.name}`);
     }

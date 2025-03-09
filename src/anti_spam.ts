@@ -9,6 +9,7 @@ export class AntiSpam {
   check_spam_disabled: Set<number>;
   player_messages: Map<number, [number, string][]>;
   enabled: boolean;
+  onMute: (playerId: number) => void;
 
   constructor(max_messages: number, interval_ms: number, mute_duration_ms: number, initial_mute_ms: number = 30000, same_message_interval_ms: number = 10000) {
     this.max_messages = max_messages;       // Maksymalna liczba wiadomości w oknie czasowym
@@ -21,6 +22,11 @@ export class AntiSpam {
     this.check_spam_disabled = new Set();
     this.player_messages = new Map();       // Gracz -> historia [czas, wiadomość]
     this.enabled = false;
+    this.onMute = (playerId: number) => { };
+  }
+
+  setOnMute(callback: (playerId: number) => void) {
+    this.onMute = callback;
   }
 
   setEnabled(enabled: boolean = true) {
@@ -70,14 +76,15 @@ export class AntiSpam {
       this.muted_players.set(player.id, now + this.mute_duration_ms); // Nałóż mute
       this.message_logs.delete(player.id); // Wyczyść historię czasową wiadomości
       this.player_messages.delete(player.id); // Wyczyść treści wiadomości
+      this.onMute(player.id);
       return false;
     }
 
     return true; // Można wysłać wiadomość
   }
 
-  clearMute(player: PlayerObject) {
-    this.muted_players.delete(player.id);
+  clearMute(playerId: number) {
+    this.muted_players.delete(playerId);
   }
 
   logMessage(player: PlayerObject, message: string, timestamp: number) {

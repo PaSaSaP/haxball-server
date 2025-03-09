@@ -279,6 +279,14 @@ export class AutoBot {
     if (rl == 3 && bl == 2 || rl == 2 && bl == 3) return;
     const currentMap = this.hb_room.last_selected_map_name;
     if (currentMap == "futsal_big") {
+      if (!this.currentMatch.isEnded()) {
+        if (!this.currentMatch.winnerTeam && this.currentScores) {
+          if (this.currentScores.red > this.currentScores.blue) this.setLastWinner(1);
+          else if (this.currentScores.blue > this.currentScores.red) this.setLastWinner(2);
+          else this.setLastWinner(this.hb_room.pressure_right >= this.hb_room.pressure_left ? 1 : 2);
+        }
+        this.currentMatch.setEnd(this.ranked);
+      }
       this.hb_room.sendMsgToAll("Zmiana na mniejszą mapę", Colors.GameState, "italic");
       await this.justStopGame(); // 2v2, 3v1, 2v1...
       return;

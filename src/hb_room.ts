@@ -167,7 +167,15 @@ export class HaxballRoom {
   private initData() {
     this.initPlayerNames();
     this.players_game_state_manager.initPlayersGameState();
-    if (this.auto_mode) this.auto_bot.resetAndStart();
+    if (this.auto_mode) {
+      this.auto_bot.resetAndStart();
+      this.anti_spam.setEnabled(true); // enable anti spam there
+      // on spam set timed mute for 5 mintues
+      this.anti_spam.setOnMute((playerId: number) => {
+        this.players_game_state_manager.setPlayerTimeMuted(this.Pid(playerId), 5 * 60);
+        this.anti_spam.clearMute(playerId);
+      });
+    }
   }
 
   private initPlayerNames() {
@@ -177,7 +185,6 @@ export class HaxballRoom {
       this.updateTop10();
     });
   }
-
 
   private createGodPlayer() {
     // it does not sent do chat but can send announcements of course
@@ -1053,7 +1060,8 @@ export class HaxballRoom {
 
   checkPossibleSpamBot(player: PlayerObject) {
     if (this.anti_spam.isSpammingSameMessage(player)) {
-      this.room.kickPlayer(player.id, "Nastepnym razem cie pokonam Hautameki", false);
+      if (this.auto_mode) this.players_game_state_manager.setPlayerTimeMuted(this.Pid(player.id), 5 * 60);
+      else this.room.kickPlayer(player.id, "Nastepnym razem cie pokonam Hautameki", false);
       return true;
     }
     return false;
@@ -1229,6 +1237,7 @@ export class HaxballRoom {
 
   removePlayerMuted(player: PlayerObject | PlayerData) {
     this.muted_players.delete(player.id);
+    this.anti_spam.clearMute(player.id);
   }
 
   isPlayerMuted(player: PlayerObject | PlayerData) {
