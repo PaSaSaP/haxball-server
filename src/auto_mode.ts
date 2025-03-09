@@ -75,6 +75,7 @@ export class AutoBot {
   minuteLeftReminder: boolean;
   chosingPlayerNextReminder: number;
   autoVoter: AutoVoteHandler;
+  lobbyAction: () => boolean;
 
   constructor(hb_room: HaxballRoom) {
     this.hb_room = hb_room;
@@ -107,6 +108,11 @@ export class AutoBot {
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
     this.autoVoter = new AutoVoteHandler(this);
+    this.lobbyAction = () => { return false; };
+  }
+
+  resetLobbyAction() {
+    this.lobbyAction = () => { return false; };
   }
 
   async reset() {
@@ -120,6 +126,7 @@ export class AutoBot {
     this.winStreak = 0;
     this.matchState = MatchState.lobby;
     this.autoVoter.resetOnMatchStarted();
+    this.resetLobbyAction();
   }
 
   async resetAndStart() {
@@ -360,25 +367,40 @@ export class AutoBot {
     this.showMinuteLeftReminder(scores);
     this.showChosingPlayerReminder(scores);
 
-    if (scores.time > this.MaxMatchTime && !this.currentMatch.isEnded()) {
-      // AMLog("Exceeded max match time");
-      let lastWinner: 0 | 1 | 2 = 0;
-      if (scores.red != scores.blue) { // idk why, but maybe?
-        lastWinner = scores.red > scores.blue ? 1 : 2;
-      } else {
-        lastWinner = this.hb_room.pressure_right >= this.hb_room.pressure_left ? 1 : 2;
-        if (lastWinner == 1) {
-          let red_pressure = (this.hb_room.pressure_right / this.hb_room.pressure_total) * 100;
-          this.hb_room.sendMsgToAll(`Red wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(red_pressure)}%`, Colors.GameState, 'italic');
+    if (scores.time > this.MaxMatchTime) {
+      if (!this.currentMatch.isEnded()) {
+        // AMLog("Exceeded max match time");
+        let lastWinner: 0 | 1 | 2 = 0;
+        let matchEndedWithGoal = false;
+        if (scores.red != scores.blue) { // idk why, but maybe?
+          lastWinner = scores.red > scores.blue ? 1 : 2;
+          matchEndedWithGoal = true;
         } else {
-          let blue_pressure = (this.hb_room.pressure_left / this.hb_room.pressure_total) * 100;
-          this.hb_room.sendMsgToAll(`Blue wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(blue_pressure)}%`, Colors.GameState, 'italic');
+          lastWinner = this.hb_room.pressure_right >= this.hb_room.pressure_left ? 1 : 2;
+          if (lastWinner == 1) {
+            let red_pressure = (this.hb_room.pressure_right / this.hb_room.pressure_total) * 100;
+            this.hb_room.sendMsgToAll(`Red wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(red_pressure)}%`, Colors.GameState, 'italic');
+          } else {
+            let blue_pressure = (this.hb_room.pressure_left / this.hb_room.pressure_total) * 100;
+            this.hb_room.sendMsgToAll(`Blue wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(blue_pressure)}%`, Colors.GameState, 'italic');
+          }
         }
+        this.setLastWinner(lastWinner);
+        this.currentMatch.setEnd(this.ranked);
+        this.lobbyAction = () => {
+          this.moveSomeTeamToSpec();
+          return true;
+        }
+        if (matchEndedWithGoal) {
+          this.justStopGame();
+          return;
+        }
+        // else, take ball out of game
+        this.room.setDiscProperties(0, { "xspeed": 0, "yspeed": 0, "x": 0, "y": 0 , "cGroup": 0});
+      } else if ( scores.time - this.MaxMatchTime > 3) {
+        // give 3 seconds for happiness!
+        this.justStopGame();
       }
-      this.setLastWinner(lastWinner);
-      this.currentMatch.setEnd(this.ranked);
-      this.moveSomeTeamToSpec();
-      this.justStopGame();
     }
   }
 
@@ -426,8 +448,11 @@ export class AutoBot {
     let lastWinner: 1|2 = scores.red > scores.blue ? 1 : 2;
     this.hb_room.sendMsgToAll(`${lastWinner == 1 ? 'Red' : 'Blue'} wygrywa mecz! Mecz kończy się wynikiem Red🔴 ${scores.red}:${scores.blue} 🔵Blue, Gratulacje!`, Colors.GameState, 'italic');
     this.setLastWinner(lastWinner);
-    this.moveSomeTeamToSpec();
-    // this.justStopGame();
+    this.lobbyAction = () => {
+      this.moveSomeTeamToSpec();
+      return true;
+    }
+    if (!this.ranked) this.justStopGame();
   }
 
   async handlePauseRequest(byPlayer: PlayerData) {
@@ -504,8 +529,11 @@ export class AutoBot {
         this.hb_room.sendMsgToAll(`Druzyna Red nie rozpoczęła meczu w przeciągu ${this.MatchStartedTimeout / 1000} sekund...`, Colors.GameState, 'italic');
         this.currentMatch.setEnd(false); // if they don't want to play then... just let them
         this.setLastWinner(2);
-        this.moveLoserRedToSpec();
-        this.moveWinnerBlueToRedIfRanked();
+        this.lobbyAction = () => {
+          this.moveLoserRedToSpec();
+          this.moveWinnerBlueToRedIfRanked();
+          return true;
+        }
         this.justStopGame();
       }
     }, this.MatchStartedTimeout);
@@ -557,12 +585,18 @@ export class AutoBot {
         if (this.currentMatchLastGoalScorer == 1) {
           this.hb_room.sendMsgToAll(`Druzyna Blue nie kontynuuje meczu po zdobyciu bramki w ciągu ${this.AfterPositionsResetTimeout / 1000} sekund...`, Colors.GameState, 'italic');
           this.setLastWinner(1);
-          this.moveLoserBlueToSpec();
+          this.lobbyAction = () => {
+            this.moveLoserBlueToSpec();
+            return true;
+          }
         } else {
           this.hb_room.sendMsgToAll(`Druzyna Red nie kontynuuje meczu po zdobyciu bramki w ciągu ${this.AfterPositionsResetTimeout / 1000} sekund...`, Colors.GameState, 'italic');
           this.setLastWinner(2);
-          this.moveLoserRedToSpec();
-          this.moveWinnerBlueToRedIfRanked();
+          this.lobbyAction = () => {
+            this.moveLoserRedToSpec();
+            this.moveWinnerBlueToRedIfRanked();
+            return true;
+          }
         }
         this.currentMatch.setEnd(this.ranked);
         this.justStopGame();
@@ -586,14 +620,18 @@ export class AutoBot {
     this.currentMatch.winStreak = this.winStreak;
     this.currentMatch.pressureRed = (this.hb_room.pressure_right / this.hb_room.pressure_total) * 100;
     this.currentMatch.pressureBlue = (this.hb_room.pressure_left / this.hb_room.pressure_total) * 100;
-    this.hb_room.sendMsgToAll(`Druzyna ${lastWinner == 1 ? "Red" : "Blue"} wygrała, jest to ich ${this.winStreak} zwycięstwo!`);
+    this.hb_room.sendMsgToAll(`Druzyna ${lastWinner == 1 ? "Red" : "Blue"} wygrała, jest to ich ${this.winStreak} zwycięstwo!`, Colors.GameState, 'italic');
   }
 
   async stopAndGoToLobby() {
     if (this.lobbyMonitoringTimer) return; // only one monitoring timer!
     this.clearAllTimers();
-    AMLog(`stopAndGoToLobby: r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
+    const pNames = (t: PlayerData[]) => { t.map(e => e.name).join(",") };
+    AMLog(`stopAndGoToLobby-A: r:${pNames(this.redTeam)} b:${pNames(this.blueTeam)} s:${pNames(this.specTeam)}`);
     this.room.stopGame(); // make sure game is stopped
+    const nonDefaultAction = this.lobbyAction(); // call defined action
+    this.resetLobbyAction(); // then reset to default one, which is empty action
+    if (nonDefaultAction) AMLog(`stopAndGoToLobby+A: r:${pNames(this.redTeam)} b:${pNames(this.blueTeam)} s:${pNames(this.specTeam)}`);
     this.lobbyMonitoringTimer = setInterval(async () => {
       // mix a little bit if under limit
       this.shuffleIfNeeded();

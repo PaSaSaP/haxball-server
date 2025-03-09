@@ -44,6 +44,7 @@ export class HaxballRoom {
   to_be_trusted: Set<number>;
   allow_connecting_only_trusted: boolean;
   allow_chatting_only_trusted: boolean;
+  player_duplicate_allowed: boolean;
   whitelisted_nontrusted_player_names: Set<string>;
   last_command: Map<number, string>;
   muted_players: Set<number>;
@@ -99,6 +100,7 @@ export class HaxballRoom {
     this.to_be_trusted = new Set();
     this.allow_connecting_only_trusted = false;
     this.allow_chatting_only_trusted = false;
+    this.player_duplicate_allowed = false;
     this.whitelisted_nontrusted_player_names = new Set();
     this.last_command = new Map();  // Mapa: id -> command_string
     this.muted_players = new Set();
@@ -689,6 +691,7 @@ export class HaxballRoom {
   }
 
   checkForPlayerDuplicate(player: PlayerObject) {
+    if (this.player_duplicate_allowed) return false;
     let kicked = false;
     let player_auth = player.auth || '';
     for (let p of this.getPlayersExt()) {

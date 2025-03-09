@@ -1141,13 +1141,17 @@ class Commander {
   async commandAutoDebug(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(player, 'auto_debug')) return;
     if (!this.hb_room.ratings_for_all_games) {
+      this.hb_room.player_duplicate_allowed = true;
       this.hb_room.limit = 3;
       this.hb_room.auto_afk = false;
-      this.hb_room.auto_bot.MaxMatchTime = 150;
+      this.hb_room.auto_bot.MaxMatchTime = cmds.length? 10: 150;
       this.hb_room.auto_bot.autoVoter.setRequiredVotes(2);
       this.commandAutoMode(player, ["on"]);
     } else {
+      this.hb_room.player_duplicate_allowed = false;
       this.hb_room.auto_afk = true;
+      this.hb_room.auto_bot.MaxMatchTime = 6*60;
+      this.hb_room.auto_bot.autoVoter.setRequiredVotes(3);
       this.commandAutoMode(player, ["off"]);
     }
     this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
