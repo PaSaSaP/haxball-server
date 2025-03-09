@@ -73,6 +73,7 @@ class Commander {
       kkr: this.commandKickAllRed,
       kkb: this.commandKickAllBlue,
       kks: this.commandKickAllSpec,
+
       tkick_5m: this.commandTimeKickPlayer5m,
       tkick5m: this.commandTimeKickPlayer5m,
       tkick: this.commandTimeKickPlayer1h,
@@ -93,7 +94,30 @@ class Commander {
       tmute1d: this.commandTimeMutePlayer1d,
       tmute_24h: this.commandTimeMutePlayer1d,
       tmute24h: this.commandTimeMutePlayer1d,
-      "tmute-": this.commandTimeMuteReset,
+      "tmute-": this.commandTimeMutePlayerReset,
+
+      nkick_5m: this.commandTimeKickNetwork5m,
+      nkick5m: this.commandTimeKickNetwork5m,
+      nkick: this.commandTimeKickNetwork1h,
+      nkick_1h: this.commandTimeKickNetwork1h,
+      nkick1h: this.commandTimeKickNetwork1h,
+      nkick_1d: this.commandTimeKickNetwork1d,
+      nkick1d: this.commandTimeKickNetwork1d,
+      nkick_24h: this.commandTimeKickNetwork1d,
+      nkick24h: this.commandTimeKickNetwork1d,
+      "nkick-": this.commandTimeKickNetworkReset,
+      nmute_5m: this.commandTimeMuteNetwork5m,
+      nmute5m: this.commandTimeMuteNetwork5m,
+      nm: this.commandTimeMuteNetwork1h,
+      nmute: this.commandTimeMuteNetwork1h,
+      nmute_1h: this.commandTimeMuteNetwork1h,
+      nmute1h: this.commandTimeMuteNetwork1h,
+      nmute_1d: this.commandTimeMuteNetwork1d,
+      nmute1d: this.commandTimeMuteNetwork1d,
+      nmute_24h: this.commandTimeMuteNetwork1d,
+      nmute24h: this.commandTimeMuteNetwork1d,
+      "nmute-": this.commandTimeMuteNetworkReset,
+
       auto_mode: this.commandAutoMode,
       limit: this.commandLimit,
       emoji: this.commandEmoji,
@@ -587,7 +611,7 @@ class Commander {
     if (!cmdPlayer) return;
     if (player.id == cmdPlayer.id) return;
     this.hb_room.players_game_state_manager.setPlayerTimeKicked(cmdPlayer, seconds, kick);
-    if (seconds < 0) this.hb_room.sendMsgToPlayer(player, `Wyczyściłeś czasowy kick dla ${cmdPlayer.name}`);
+    if (seconds < 0) this.hb_room.sendMsgToPlayer(player, `Wyczyściłeś Player_kick dla ${cmdPlayer.name}`);
   }
 
   commandTimeMutePlayer5m(player: PlayerObject, cmds: string[]) {
@@ -599,7 +623,7 @@ class Commander {
   commandTimeMutePlayer1d(player: PlayerObject, cmds: string[]) {
     return this.execCommandTimeMutePlayer(player, cmds, 24 * 60 * 60);
   }
-  commandTimeMuteReset(player: PlayerObject, cmds: string[]) {
+  commandTimeMutePlayerReset(player: PlayerObject, cmds: string[]) {
     return this.execCommandTimeMutePlayer(player, cmds, -1);
   }
 
@@ -609,7 +633,51 @@ class Commander {
     if (!cmdPlayer) return;
     if (player.id == cmdPlayer.id) return;
     this.hb_room.players_game_state_manager.setPlayerTimeMuted(cmdPlayer, seconds);
-    this.hb_room.sendMsgToPlayer(player, `Ustawiłeś czasowy mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    this.hb_room.sendMsgToPlayer(player, `Ustawiłeś Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+  }
+
+  commandTimeKickNetwork5m(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickNetwork(player, cmds, 5 * 60, true);
+  }
+  commandTimeKickNetwork1h(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickNetwork(player, cmds, 60 * 60, true);
+  }
+  commandTimeKickNetwork1d(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickNetwork(player, cmds, 24 * 60 * 60, true);
+  }
+  commandTimeKickNetworkReset(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeKickNetwork(player, cmds, -1, false);
+  }
+
+  async execCommandTimeKickNetwork(player: PlayerObject, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayer) return;
+    if (player.id == cmdPlayer.id) return;
+    this.hb_room.players_game_state_manager.setNetworkTimeKicked(cmdPlayer, seconds, kick);
+    if (seconds < 0) this.hb_room.sendMsgToPlayer(player, `Wyczyściłeś Network_kick dla ${cmdPlayer.name}`);
+  }
+
+  commandTimeMuteNetwork5m(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTimeMuteNetwork(player, cmds, 5 * 60);
+  }
+  commandTimeMuteNetwork1h(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTimeMuteNetwork(player, cmds, 60 * 60);
+  }
+  commandTimeMuteNetwork1d(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTimeMuteNetwork(player, cmds, 24 * 60 * 60);
+  }
+  commandTimeMuteNetworkReset(player: PlayerObject, cmds: string[]) {
+    this.execCommandTimeMuteNetwork(player, cmds, -1);
+  }
+
+  async execCommandTimeMuteNetwork(player: PlayerObject, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+    if (!cmdPlayer) return;
+    if (player.id == cmdPlayer.id) return;
+    this.hb_room.players_game_state_manager.setNetworkTimeMuted(cmdPlayer, seconds);
+    this.hb_room.sendMsgToPlayer(player, `Ustawiłeś Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
   }
 
   async commandAutoMode(player: PlayerObject, values: string[]) {

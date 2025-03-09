@@ -301,3 +301,8 @@ export interface PlayersGameState {
   muted_to: number;
   kicked_to: number;
 }
+
+export interface NetworksGameState {
+  muted_to: number;
+  kicked_to: number;
+}

@@ -166,7 +166,7 @@ export class HaxballRoom {
 
   private initData() {
     this.initPlayerNames();
-    this.players_game_state_manager.initPlayersGameState();
+    this.players_game_state_manager.initAllGameState();
     if (this.auto_mode) {
       this.auto_bot.resetAndStart();
       this.anti_spam.setEnabled(true); // enable anti spam there

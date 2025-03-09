@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { PlayerData, PlayerStat, PlayerRatingData, PlayerTopRatingData, PlayersGameState } from './structs';
+import { PlayerData, PlayerStat, PlayerRatingData, PlayerTopRatingData, PlayersGameState, NetworksGameState } from './structs';
 import ChatLogger from './chat_logger';
 
 class PlayersDB {
@@ -589,8 +589,8 @@ export class PlayersStateDB {
   async updateOrInsertPlayerStateKicked(auth_id: string, kicked_to: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO players_state (auth_id, kicked_to, muted_to)
-        VALUES (?, ?, 0)
+        INSERT INTO players_state (auth_id, kicked_to)
+        VALUES (?, ?)
         ON CONFLICT(auth_id) DO UPDATE SET kicked_to = excluded.kicked_to;
       `;
 
@@ -604,12 +604,91 @@ export class PlayersStateDB {
   async updateOrInsertPlayerStateMuted(auth_id: string, muted_to: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO players_state (auth_id, muted_to, kicked_to)
-        VALUES (?, ?, 0)
+        INSERT INTO players_state (auth_id, muted_to)
+        VALUES (?, ?)
         ON CONFLICT(auth_id) DO UPDATE SET muted_to = excluded.muted_to;
       `;
 
       this.db.run(query, [auth_id, muted_to], (err) => {
+        if (err) return reject('Error updating muted_to: ' + err.message);
+        resolve();
+      });
+    });
+  }
+}
+
+export class NetworksStateDB {
+  db: sqlite3.Database;
+
+  constructor(db: sqlite3.Database) {
+    this.db = db;
+  }
+
+  setupDatabase(): void {
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS networks_state (
+        conn_id TEXT PRIMARY KEY,
+        muted_to INTEGER NOT NULL DEFAULT 0,
+        kicked_to INTEGER NOT NULL DEFAULT 0
+      );
+    `;
+
+    this.db.run(createTableQuery, (err) => {
+      if (err) console.error('Error creating networks_state table:', err.message);
+      else console.log('Table "networks_state" created or already exists.');
+    });
+  }
+
+  async getAllNetworksGameState(): Promise<Map<string, NetworksGameState>> {
+    return new Promise((resolve, reject) => {
+      const query = `SELECT conn_id, muted_to, kicked_to FROM networks_state;`;
+
+      this.db.all(query, [], (err: any, rows: (NetworksGameState & { conn_id: string })[]) => {
+        if (err) {
+          return reject('Error fetching networks states: ' + err.message);
+        }
+
+        if (!Array.isArray(rows)) {
+          return reject('Unexpected data format from database');
+        }
+
+        const networksMap = new Map<string, NetworksGameState>();
+        rows.forEach((row) => {
+          networksMap.set(row.conn_id, {
+            muted_to: row.muted_to,
+            kicked_to: row.kicked_to
+          });
+        });
+
+        resolve(networksMap);
+      });
+    });
+  }
+
+  async updateOrInsertNetworkStateKicked(conn_id: string, kicked_to: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO networks_state (conn_id, kicked_to)
+        VALUES (?, ?)
+        ON CONFLICT(conn_id) DO UPDATE SET kicked_to = excluded.kicked_to;
+      `;
+  
+      this.db.run(query, [conn_id, kicked_to, conn_id], (err) => {
+        if (err) return reject('Error updating kicked_to: ' + err.message);
+        resolve();
+      });
+    });
+  }
+
+  async updateOrInsertNetworkStateMuted(conn_id: string, muted_to: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO networks_state (conn_id, muted_to)
+        VALUES (?, ?)
+        ON CONFLICT(conn_id) DO UPDATE SET muted_to = excluded.muted_to;
+      `;
+  
+      this.db.run(query, [conn_id, muted_to, conn_id], (err) => {
         if (err) return reject('Error updating muted_to: ' + err.message);
         resolve();
       });
@@ -624,6 +703,7 @@ export class DBHandler {
   playerNames: PlayerNamesDB;
   votes: VotesDB;
   playerState: PlayersStateDB;
+  networksState: NetworksStateDB;
   reports: ReportsDB;
   ratings: PlayerRatingsDB;
   topRatings: TopRatingsDB;
@@ -642,6 +722,7 @@ export class DBHandler {
     this.votes = new VotesDB(this.playersDb);
     // and second table
     this.playerState = new PlayersStateDB(this.otherDb);
+    this.networksState = new NetworksStateDB(this.otherDb);
     this.reports = new ReportsDB(this.otherDb);
     this.ratings = new PlayerRatingsDB(this.otherDb);
     this.topRatings = new TopRatingsDB(this.otherDb);
@@ -654,6 +735,7 @@ export class DBHandler {
     this.playerNames.setupDatabase();
     this.votes.setupDatabase();
     this.playerState.setupDatabase();
+    this.networksState.setupDatabase();
     this.reports.setupDatabase();
     this.ratings.setupDatabase();
     this.topRatings.setupDatabase();
@@ -742,6 +824,18 @@ export class GameState {
 
   updateOrInsertPlayerStateMuted(auth_id: string, muted_to: number) {
     return this.dbHandler.playerState.updateOrInsertPlayerStateMuted(auth_id, muted_to);
+  }
+
+  getAllNetworksGameState() {
+    return this.dbHandler.networksState.getAllNetworksGameState();
+  }
+
+  updateOrInsertNetworkStateKicked(conn_id: string, kicked_to: number) {
+    return this.dbHandler.networksState.updateOrInsertNetworkStateKicked(conn_id, kicked_to);
+  }
+
+  updateOrInsertNetworkStateMuted(conn_id: string, muted_to: number) {
+    return this.dbHandler.networksState.updateOrInsertNetworkStateMuted(conn_id, muted_to);
   }
 
   logMessage(user_name: string, action: string, text: string, for_discord: boolean) {
