@@ -106,12 +106,12 @@ export class Ratings {
 
       oldRatings.set(playerId, player.glickoPlayer.getRating());
 
-      player.totalGames++;
-      if (stat.joinedAt === 0 && stat.leftAt === -1) player.totalFullGames++;
-      if ((match.winnerTeam === 1 && match.redTeam.includes(playerId)) ||
-        (match.winnerTeam === 2 && match.blueTeam.includes(playerId))) {
-        player.wonGames++;
-      }
+      // player.games++;
+      // if (stat.joinedAt === 0 && stat.leftAt === -1) player.fullGames++;
+      // if ((match.winnerTeam === 1 && match.redTeam.includes(playerId)) ||
+      //   (match.winnerTeam === 2 && match.blueTeam.includes(playerId))) {
+      //   player.wins++;
+      // }
     }
 
     this.calculateWeightedExpectedScore(theOnlyRedTeam, theOnlyBlueTeam, weights, oldRatings);

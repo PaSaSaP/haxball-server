@@ -13,4 +13,5 @@ export class Colors {
   static BrightGreen = 0x95FA02;
   static BrightBlue = 0x4DA6FF;
   static Stats = 0xEFDECD;
+  static Goal = 0xEFEF8D;
 }

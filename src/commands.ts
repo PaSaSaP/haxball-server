@@ -149,6 +149,7 @@ class Commander {
       nie: this.commandVoteNo,
       report: this.commandReport,
       me: this.commandMe,
+      rank: this.commandStat,
       stat: this.commandStat,
       stats: this.commandStat,
       top: this.commandTop10,
@@ -544,7 +545,7 @@ class Commander {
   }
 
   async commandSetAfkOther(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     let cmdPlayer = this.getPlayerObjectByName(cmds, player);
     if (!cmdPlayer) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
@@ -552,7 +553,7 @@ class Commander {
   }
 
   async commandClearAfkOther(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     let cmdPlayer = this.getPlayerObjectByName(cmds, player);
     if (!cmdPlayer) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
@@ -564,7 +565,7 @@ class Commander {
   }
 
   async commandKick(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     let cmdPlayer = this.getPlayerObjectByName(cmds, player);
     if (!cmdPlayer) return;
     if (cmdPlayer.id == player.id) return;
@@ -572,24 +573,24 @@ class Commander {
   }
 
   async commandKickAllExceptVerified(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     for (let p of this.getPlayersExt()) {
       if (player.id != p.id && !p.trust_level) this.r().kickPlayer(p.id, "", false);
     }
   }
 
   async commandKickAllRed(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     this.hb_room.kickAllTeamExceptTrusted(player, 1);
   }
 
   async commandKickAllBlue(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     this.hb_room.kickAllTeamExceptTrusted(player, 2);
   }
 
   async commandKickAllSpec(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
     this.hb_room.kickAllTeamExceptTrusted(player, 0);
   }
 
@@ -898,21 +899,20 @@ class Commander {
     if (!cmdPlayerExt) return;
     let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
-    let dateStr = getTimestampHM();
+    let dateStr = getTimestampHM(playerExt.join_time);
     this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr} od:${dateStr}`);
   }
 
   async commandStat(player: PlayerObject, cmds: string[]) {
     let cmdPlayerExt = this.getPlayerDataByName(cmds, player, true);
     if (!cmdPlayerExt) return;
-    let playerStats = cmdPlayerExt.stat;
-    let rating = Math.round(playerStats.glickoPlayer!.getRating());
-    let rd = Math.round(playerStats.glickoPlayer!.getRd());
-    let games = playerStats.totalGames;
-    let fullGames = playerStats.totalFullGames;
-    let wins = playerStats.wonGames;
-    let winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : 0;
-    let msg = `${cmdPlayerExt.name} ⭐${rating} ±${rd} 🎮Rozegrane: ${games} 🔲Pełne mecze: ${fullGames} 🏆Wygrane: ${wins} (WR: ${winRate}%)`;
+    let stat = cmdPlayerExt.stat;
+    let rating = Math.round(stat.glickoPlayer!.getRating());
+    let rd = Math.round(stat.glickoPlayer!.getRd());
+    let playtimeMin = Math.floor(stat.playtime / 60);
+    let winRate = stat.fullGames > 0 ? ((stat.fullWins / stat.fullGames) * 100).toFixed(1) : 0;
+    let msg = `${cmdPlayerExt.name} ⭐${rating} ±${rd} ⚽${stat.goals} 🤝${stat.assists} ❌${stat.ownGoals} 🧤${stat.cleanSheets} ⏱️${playtimeMin}m`
+      + ` 🎮Pełne: ${stat.fullWins}/${stat.fullGames} 🔲Wszystkie: ${stat.wins}/${stat.games} (WR: ${winRate}%)`;
     this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
 

@@ -52,6 +52,7 @@ export class AutoBot {
   winStreak: number;
   currentMatchLastGoalScorer: 0 | 1 | 2;
   currentMatchGameTime: number;
+  fullTimeMatchPlayed: boolean;
   lastOneMatchLoserTeamIds: number[];
   lastAutoSelectedPlayerIds: number[];
 
@@ -92,6 +93,7 @@ export class AutoBot {
     this.winStreak = 0;
     this.currentMatchLastGoalScorer = 0;
     this.currentMatchGameTime = 0;
+    this.fullTimeMatchPlayed = false;
     this.lastOneMatchLoserTeamIds = [];
     this.lastAutoSelectedPlayerIds = [];
 
@@ -122,6 +124,7 @@ export class AutoBot {
     this.blueTeam = [];
     this.specTeam = [];
     this.ranked = false;
+    this.fullTimeMatchPlayed = false;
     this.lastWinner = 0;
     this.winStreak = 0;
     this.matchState = MatchState.lobby;
@@ -327,6 +330,7 @@ export class AutoBot {
     this.restartRequestedByRed = false;
     this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
+    this.fullTimeMatchPlayed = false;
     this.chosingPlayerNextReminder = 60;
     this.autoVoter.resetOnMatchStarted();
     this.currentMatch = new Match();
@@ -393,6 +397,7 @@ export class AutoBot {
             this.hb_room.sendMsgToAll(`Blue wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(blue_pressure)}%`, Colors.GameState, 'italic');
           }
         }
+        this.fullTimeMatchPlayed = true;
         this.setLastWinner(lastWinner);
         this.currentMatch.setEnd(this.ranked);
         this.lobbyAction = () => {
@@ -447,6 +452,7 @@ export class AutoBot {
 
   async handleTeamVictory(scores: ScoresObject) {
     // AMLog("handling team victory");
+    this.fullTimeMatchPlayed = true;
     this.currentMatch.redScore = scores.red;
     this.currentMatch.blueScore = scores.blue;
     this.currentMatch.matchEndTime = scores.time;
@@ -509,6 +515,10 @@ export class AutoBot {
       this.restartRequestedByRed = false;
       this.justStopGame(false);
     }
+  }
+
+  wasFullTimeMatchPlayed() {
+    return this.fullTimeMatchPlayed;
   }
 
   moveSomeTeamToSpec() {
@@ -634,7 +644,7 @@ export class AutoBot {
   async stopAndGoToLobby() {
     if (this.lobbyMonitoringTimer) return; // only one monitoring timer!
     this.clearAllTimers();
-    const pNames = (t: PlayerData[]) => { t.map(e => e.name).join(",") };
+    const pNames = (t: PlayerData[]) => { return t.map(e => e.name).join(",") };
     AMLog(`stopAndGoToLobby-A: r:${pNames(this.redTeam)} b:${pNames(this.blueTeam)} s:${pNames(this.specTeam)}`);
     this.room.stopGame(); // make sure game is stopped
     const nonDefaultAction = this.lobbyAction(); // call defined action

@@ -172,6 +172,21 @@ export interface PlayerRatingData {
   left_server: number;
 }
 
+export interface PlayerMatchStatsData {
+  games: number;
+  full_games: number;
+  wins: number;
+  full_wins: number;
+  goals: number;
+  assists: number;
+  own_goals: number;
+  playtime: number;
+  clean_sheets: number;
+  left_afk: number;
+  left_votekick: number;
+  left_server: number;
+}
+
 export interface PlayerTopRatingData {
   auth_id: string;
   player_name: string;
@@ -182,9 +197,17 @@ export interface PlayerTopRatingData {
 export class PlayerStat {
   id: number; // player id
   glickoPlayer: Glicko2.Player|null;
-  totalGames: number; // all played ranked games
-  totalFullGames: number; // games when player played from the beginning (joinedAt 0) to end (leavedAt -1)
-  wonGames: number; // losses is (total - won) I think
+
+  games: number; // all played ranked games
+  fullGames: number; // games when player played from the beginning (joinedAt 0) to end (leavedAt -1)
+  wins: number; // losses is (total - won) I think
+  fullWins: number;
+
+  goals: number;
+  assists: number;
+  ownGoals: number;
+  playtime: number;
+  cleanSheets: number;
 
   counterAfk: number;
   counterVoteKicked: number;
@@ -193,9 +216,16 @@ export class PlayerStat {
   constructor(id: number) {
     this.id = id;
     this.glickoPlayer = null;
-    this.totalGames = 0;
-    this.totalFullGames = 0;
-    this.wonGames = 0;
+
+    this.games = 0;
+    this.fullGames = 0;
+    this.wins = 0;
+    this.fullWins = 0;
+    this.goals = 0;
+    this.assists = 0;
+    this.ownGoals = 0;
+    this.playtime = 0;
+    this.cleanSheets = 0;
 
     this.counterAfk = 0;
     this.counterVoteKicked = 0;
@@ -241,6 +271,12 @@ export enum RatingProcessingState {
   updated
 }
 
+export enum MatchStatsProcessingState {
+  none,
+  ranked,
+  updated
+}
+
 export class Match {
   redScore: number; // goals scored by red
   blueScore: number; // goals scored by blue
@@ -252,6 +288,7 @@ export class Match {
   playerStats: Map<number, PlayerStatInMatch>; // player id -> stat
   goals: [number, 1|2][]; // list of tuples (time, team) where time is in seconds, team 1 is red, 2 is blue
   ratingState: RatingProcessingState;
+  matchStatsState: MatchStatsProcessingState;
 
   winnerTeam: 0 | 1 | 2; // red = 1, blue = 2
   winStreak: number; // streak is for team so if player is in team then he "has" streak
@@ -269,6 +306,7 @@ export class Match {
     this.playerStats = new Map<number, PlayerStatInMatch>();
     this.goals = [];
     this.ratingState = RatingProcessingState.none;
+    this.matchStatsState = MatchStatsProcessingState.none;
     this.winnerTeam = 0;
     this.winStreak = 0;
     this.pressureRed = 0;
@@ -276,7 +314,10 @@ export class Match {
   }
   setEnd(ranked: boolean) {
     this.endedAt = Date.now();
-    if (ranked) this.ratingState = RatingProcessingState.ranked;
+    if (ranked) {
+      this.ratingState = RatingProcessingState.ranked;
+      this.matchStatsState = MatchStatsProcessingState.ranked;
+    }
   }
   isEnded() { return this.endedAt > 0; }
   stat(id: number): PlayerStatInMatch {

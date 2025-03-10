@@ -11,7 +11,7 @@ import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState } from './structs';
+import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState, MatchStatsProcessingState } from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
@@ -22,12 +22,15 @@ import { Ratings } from './rating';
 import Glicko2 from 'glicko2';
 import { PlayersGameStateManager } from './pg_manager';
 import { hb_log, hb_log_to_console } from './log';
+import { MatchStats } from './stats';
+import { resourceLimits } from 'worker_threads';
 
 
 export class HaxballRoom {
   room: RoomObject;
   room_config: config.RoomServerConfig;
   server_start_time: number;
+  scores: ScoresObject|null;
   pressure_left: number;
   pressure_right: number;
   pressure_total: number;
@@ -59,10 +62,11 @@ export class HaxballRoom {
   glicko_players: Map<string, Glicko2.Player>;
   ratings: Ratings;
   ratings_for_all_games: boolean;
+  match_stats: MatchStats;
   game_stopped_timer: any | null;
   game_paused_timer: any | null;
   last_player_team_changed_by_admin_time: number;
-  last_winner_team: number;
+  last_winner_team: 0|1|2;
   auto_mode: boolean;
   auto_afk: boolean;
   limit: number;
@@ -84,6 +88,7 @@ export class HaxballRoom {
     this.room_config = roomConfig;
 
     this.server_start_time = Date.now();
+    this.scores = null;
     this.pressure_left = 0.0;
     this.pressure_right = 0.0;
     this.pressure_total = 0.0;
@@ -120,6 +125,7 @@ export class HaxballRoom {
     this.glicko_players = new Map<string, Glicko2.Player>();
     this.ratings = new Ratings(this.glicko);
     this.ratings_for_all_games = false;
+    this.match_stats = new MatchStats();
     this.auto_mode = this.limit === 3; // TODO for now only for 3vs3
     this.auto_afk = true;
     this.room_link = '';
@@ -206,6 +212,13 @@ export class HaxballRoom {
     return ppp;
   }
 
+  anyPlayer(): PlayerData|null {
+    for (let [id, player] of this.players_ext) {
+      return player;
+    }
+    return null;
+  }
+
   async handleRoomLink(link: string) {
     if (link != this.room_link) {
       hb_log(`New link: ${link}`, true);
@@ -253,15 +266,16 @@ export class HaxballRoom {
   async handleGameTick() {
     // Current time in ms
     let scores = this.room.getScores();
+    this.scores = scores;
     let players = this.getPlayersExtList(true);
     let current_tick = scores.time;
     let delta_time = current_tick - this.last_tick;
     this.last_tick = current_tick;
+    const ball_position = this.room.getDiscProperties(0);
 
     if (this.feature_pressure) {
 
       if (delta_time > 0) {
-        var ball_position = this.room.getDiscProperties(0);
 
         // Calc pressure
         if (ball_position.x < 0) {
@@ -353,6 +367,8 @@ export class HaxballRoom {
     this.acceleration_tasks.update();
     this.ball_possesion_tracker.trackPossession();
     if (this.auto_mode) this.auto_bot.handleGameTick(scores);
+    let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(players);
+    this.match_stats.handleGameTick(scores, ball_position, this.players_ext_all, redTeam, blueTeam);
   }
 
   moveAfkMaybeToSpec(player: PlayerData) {
@@ -438,6 +454,49 @@ export class HaxballRoom {
     this.gameStopTimerReset();
     this.ball_possesion_tracker.resetPossession();
     if (this.auto_mode) this.auto_bot.handleGameStart(null);
+    let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
+    let anyPlayerProperties = this.getAnyPlayerDiscProperties();
+    let ballProperties = this.getBallProperties();
+    if (anyPlayerProperties === null || ballProperties === null) {
+      hb_log(`ST coś jest null: ${anyPlayerProperties}, ${ballProperties}`);
+    } else {
+      this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
+    }
+  }
+
+  getAnyPlayerDiscProperties() {
+    for (let [id, player] of this.players_ext) {
+      return this.room.getPlayerDiscProperties(id);
+    }
+    return null;
+  }
+
+  getBallProperties() {
+    return this.room.getDiscProperties(0);
+  }
+
+  getBallPosition() {
+    return this.room.getBallPosition();
+  }
+
+  getRedBluePlayerIdsInTeams(from: PlayerData[]): [number[], number[]] {
+    let [redTeam, blueTeam] = this.getRedBluePlayerInTeams(from);
+    return [redTeam.map(e => e.id), blueTeam.map(e => e.id)];
+  }
+
+  getRedBluePlayerInTeams(from: PlayerData[]): [PlayerData[], PlayerData[]] {
+    if (this.auto_mode) return [this.auto_bot.redTeam, this.auto_bot.blueTeam];
+    return this.getRedBluePlayerTeamIdsFrom(from);
+  }
+
+  getRedBluePlayerTeamIdsFrom(players: PlayerData[]): [PlayerData[], PlayerData[]] {
+    let redTeam: PlayerData[] = [];
+    let blueTeam: PlayerData[] = [];
+    players.forEach(player => {
+      if (player.team == 1) redTeam.push(player);
+      else if (player.team == 2) blueTeam.push(player);
+    });
+    return [redTeam, blueTeam];
   }
 
   async handleGameStop(byPlayer: PlayerObject | null) {
@@ -450,8 +509,27 @@ export class HaxballRoom {
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
     }
+    let doUpdateState = false;
+    let fullTimeMatchPlayed = true;
     if (this.auto_mode) {
       this.auto_bot.handleGameStop(null);
+      this.match_stats.setWinner(this.auto_bot.currentMatch.winnerTeam as 1|2);
+      fullTimeMatchPlayed = this.auto_bot.wasFullTimeMatchPlayed();
+      if (this.auto_bot.currentMatch.matchStatsState == MatchStatsProcessingState.ranked) doUpdateState = true;
+    } else {
+      doUpdateState = true;
+      if (this.scores) {
+        if (this.scores.red > this.scores.blue) this.match_stats.setWinner(1);
+        else if (this.scores.blue > this.scores.red) this.match_stats.setWinner(2);
+      }
+    }
+    if (doUpdateState) {
+      let updatedPlayerIds = this.match_stats.updatePlayerStats(this.players_ext_all, fullTimeMatchPlayed);
+      this.updatePlayerStatsForIds(updatedPlayerIds);
+      if (this.auto_mode) this.auto_bot.currentMatch.matchStatsState = MatchStatsProcessingState.updated;
+    }
+    this.scores = null;
+    if (this.auto_mode) {
       return; // do not start below timer
     }
 
@@ -471,6 +549,20 @@ export class HaxballRoom {
         this.addNewAdmin();
       }
     }, 1000);
+  }
+
+  async updatePlayerStatsForIds(playerIds: Set<number>) {
+    hb_log(`Aktualizujemy match stats dla ${playerIds.size}`);
+    let updatedAuthIds: Set<string> = new Set<string>();
+    for (let playerId of playerIds) {
+      updatedAuthIds.add(this.players_ext_all.get(playerId)!.auth_id);
+    }
+    for (let authId of updatedAuthIds) {
+      let sId = this.player_stats_auth.get(authId)!;
+      if (sId === undefined) continue;
+      let stat = this.player_stats.get(sId)!;
+      this.game_state.savePlayerMatchStats(authId, stat);
+    }
   }
 
   async handleGamePause(byPlayer: PlayerObject | null) {
@@ -666,13 +758,25 @@ export class HaxballRoom {
     playerExt.stat.updatePlayer(glickoPlayer);
     if (playerExt.trust_level) {
       this.game_state.loadPlayerRating(playerExt.auth_id).then(result => { // load stats
-        playerExt.stat.totalGames = result.total_games;
-        playerExt.stat.totalFullGames = result.total_full_games;
-        playerExt.stat.wonGames = result.won_games;
         playerExt.stat.glickoPlayer!.setRating(result.rating.mu);
         playerExt.stat.glickoPlayer!.setRd(result.rating.rd);
         playerExt.stat.glickoPlayer!.setVol(result.rating.vol);
       });
+      this.game_state.loadPlayerMatchStats(playerExt.auth_id).then(result => {
+        let stat = playerExt.stat;
+        stat.games = result.games;
+        stat.fullGames = result.full_games;
+        stat.wins = result.wins;
+        stat.fullWins = result.full_wins;
+        stat.goals = result.goals;
+        stat.assists = result.assists;
+        stat.ownGoals = result.own_goals;
+        stat.playtime = result.playtime;
+        stat.cleanSheets = result.clean_sheets;
+        stat.counterAfk = result.left_afk;
+        stat.counterVoteKicked = result.left_votekick;
+        stat.counterLeftServer = result.left_server;
+      })
     }
   }
 
@@ -739,6 +843,7 @@ export class HaxballRoom {
     this.last_command.delete(player.id);
     this.removePlayerMuted(player);
     let playerExt = this.Pid(player.id);
+    this.match_stats.handlePlayerLeave(playerExt);
     if (this.auto_mode) this.auto_bot.handlePlayerLeave(playerExt);
     playerExt.mark_disconnected();
     this.players_ext.delete(player.id);
@@ -882,6 +987,8 @@ export class HaxballRoom {
       p.admin_stat_team();
     }
     if (this.auto_mode) this.auto_bot.handlePlayerTeamChange(changed_player_ext);
+    let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
+    this.match_stats.handlePlayerTeamChange(this.P(changedPlayer), redTeam, blueTeam);
   }
 
   async handlePlayerActivity(player: PlayerObject) {
@@ -900,12 +1007,20 @@ export class HaxballRoom {
   }
 
   async handlePlayerBallKick(player: PlayerObject) {
+    const ballPosition = this.getBallPosition();
     this.ball_possesion_tracker.registerBallKick(player);
+    this.match_stats.handlePlayerBallKick(this.P(player), ballPosition);
   }
 
   async handleTeamGoal(team: TeamID) {
     this.ball_possesion_tracker.onTeamGoal(team);
     if (this.auto_mode) this.auto_bot.handleTeamGoal(team);
+    const ballProperties = this.getBallProperties();
+    let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
+    if (team) {
+      let txt = this.match_stats.handleTeamGoal(team, ballProperties, this.players_ext_all, redTeam, blueTeam);
+      this.sendMsgToAll(txt, Colors.Goal, 'italic');
+    }
   }
 
   async handleTeamVictory(scores: ScoresObject) {
@@ -966,6 +1081,7 @@ export class HaxballRoom {
 
   async handlePositionsReset() {
     if (this.auto_mode) this.auto_bot.handlePositionsReset();
+    this.match_stats.handlePositionsReset();
   }
 
 

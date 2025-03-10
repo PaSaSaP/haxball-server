@@ -54,17 +54,17 @@ runTest("3v3 full match - red team wins", () => {
 
   for (let i = 1; i <= 3; i++) {
     const player = playerStats.get(i)!;
-    assertEqual(player.totalGames, 1, `Player ${i} should have 1 game`);
-    assertEqual(player.totalFullGames, 1, `Player ${i} should have 1 full game`);
-    assertEqual(player.wonGames, 1, `Player ${i} should have 1 win`);
+    assertEqual(player.games, 1, `Player ${i} should have 1 game`);
+    assertEqual(player.fullGames, 1, `Player ${i} should have 1 full game`);
+    assertEqual(player.wins, 1, `Player ${i} should have 1 win`);
     const currentRating = player.glickoPlayer!.getRating();
     assertTrue(player.glickoPlayer!.getRating() > 1500, `Player ${i} rating (${currentRating}) should increase`);
   }
   for (let i = 4; i <= 6; i++) {
     const player = playerStats.get(i)!;
-    assertEqual(player.totalGames, 1, `Player ${i} should have 1 game`);
-    assertEqual(player.totalFullGames, 1, `Player ${i} should have 1 full game`);
-    assertEqual(player.wonGames, 0, `Player ${i} should have 0 wins`);
+    assertEqual(player.games, 1, `Player ${i} should have 1 game`);
+    assertEqual(player.fullGames, 1, `Player ${i} should have 1 full game`);
+    assertEqual(player.wins, 0, `Player ${i} should have 0 wins`);
     assertTrue(player.glickoPlayer!.getRating() < 1500, `Player ${i} rating should decrease`);
   }
 });
@@ -87,9 +87,9 @@ runTest("3v3 one player joins late", () => {
   ratings.updatePlayerStats(match, playerStats);
 
   const player2 = playerStats.get(2)!;
-  assertEqual(player2.totalGames, 1, "Player 2 should have 1 game");
-  assertEqual(player2.totalFullGames, 0, "Player 2 should have 0 full games");
-  assertEqual(player2.wonGames, 1, "Player 2 should have 1 win");
+  assertEqual(player2.games, 1, "Player 2 should have 1 game");
+  assertEqual(player2.fullGames, 0, "Player 2 should have 0 full games");
+  assertEqual(player2.wins, 1, "Player 2 should have 1 win");
   assertTrue(player2.glickoPlayer!.getRating() > 1500, "Player 2 rating should increase");
   assertApproxEqual(player2.glickoPlayer!.getRating(), 1517, 3, "Player 2 rating change should be small due to late join");
 });
@@ -113,9 +113,9 @@ runTest("3v3 one player leaves early with lead", () => {
   ratings.updatePlayerStats(match, playerStats);
 
   const player3 = playerStats.get(3)!;
-  assertEqual(player3.totalGames, 1, "Player 3 should have 1 game");
-  assertEqual(player3.totalFullGames, 0, "Player 3 should have 0 full games");
-  assertEqual(player3.wonGames, 1, "Player 3 should have 1 win");
+  assertEqual(player3.games, 1, "Player 3 should have 1 game");
+  assertEqual(player3.fullGames, 0, "Player 3 should have 0 full games");
+  assertEqual(player3.wins, 1, "Player 3 should have 1 win");
   assertTrue(player3.glickoPlayer!.getRating() > 1500, "Player 3 rating should increase");
   assertApproxEqual(player3.glickoPlayer!.getRating(), 1514, 3, "Player 3 rating change should be very small due to early leave");
 });
@@ -202,15 +202,15 @@ runTest("1000 matches for 20 players with specific win ratios", () => {
   ratings.LogTop();
 
   const player1 = playerStats.get(1)!;
-  assertApproxEqual(player1.wonGames / player1.totalGames, 0.12, 0.05, "Player 1 win ratio should be ~12%");
+  assertApproxEqual(player1.wins / player1.games, 0.12, 0.05, "Player 1 win ratio should be ~12%");
   assertTrue(player1.glickoPlayer!.getRating() < 1500, "Player 1 rating should be below average");
 
   const player2 = playerStats.get(2)!;
-  assertApproxEqual(player2.wonGames / player2.totalGames, 0.8, 0.05, "Player 2 win ratio should be ~80%");
+  assertApproxEqual(player2.wins / player2.games, 0.8, 0.05, "Player 2 win ratio should be ~80%");
   assertTrue(player2.glickoPlayer!.getRating() > 1500, "Player 2 rating should be above average");
 
   const player5 = playerStats.get(5)!;
-  assertApproxEqual(player5.wonGames / player5.totalGames, 0.2, 0.05, "Player 5 win ratio should be ~20%");
+  assertApproxEqual(player5.wins / player5.games, 0.2, 0.05, "Player 5 win ratio should be ~20%");
   assertTrue(player5.glickoPlayer!.getRating() < 1500, "Player 5 rating should be below average");
 });
 
@@ -242,13 +242,13 @@ runTest("3v3 rematch after close win - rating stabilization", () => {
   ratings.LogTop();
 
   const player1 = playerStats.get(1)!;
-  assertEqual(player1.totalGames, 2, "Player 1 should have 2 games");
-  assertEqual(player1.wonGames, 1, "Player 1 should have 1 win");
+  assertEqual(player1.games, 2, "Player 1 should have 2 games");
+  assertEqual(player1.wins, 1, "Player 1 should have 1 win");
   assertApproxEqual(player1.glickoPlayer!.getRating(), 1500, 20, "Player 1 rating should stabilize near 1500");
 
   const player4 = playerStats.get(4)!;
-  assertEqual(player4.totalGames, 2, "Player 4 should have 2 games");
-  assertEqual(player4.wonGames, 1, "Player 4 should have 1 win");
+  assertEqual(player4.games, 2, "Player 4 should have 2 games");
+  assertEqual(player4.wins, 1, "Player 4 should have 1 win");
   assertApproxEqual(player4.glickoPlayer!.getRating(), 1500, 20, "Player 4 rating should stabilize near 1500");
 });
 
@@ -288,13 +288,13 @@ runTest("3vs3 rematch - win then lose x 1000", () => {
   ratings.LogTop();
 
   const player1 = playerStats.get(1)!;
-  assertEqual(player1.totalGames, 1000, "Player 1 should have 1000 games");
-  assertEqual(player1.wonGames, 500, "Player 1 should have 500 win");
+  assertEqual(player1.games, 1000, "Player 1 should have 1000 games");
+  assertEqual(player1.wins, 500, "Player 1 should have 500 win");
   assertApproxEqual(player1.glickoPlayer!.getRating(), 1500, 20, "Player 1 rating should stabilize near 1500");
 
   const player4 = playerStats.get(4)!;
-  assertEqual(player4.totalGames, 1000, "Player 4 should have 1000 games");
-  assertEqual(player4.wonGames, 500, "Player 4 should have 500 win");
+  assertEqual(player4.games, 1000, "Player 4 should have 1000 games");
+  assertEqual(player4.wins, 500, "Player 4 should have 500 win");
   assertApproxEqual(player4.glickoPlayer!.getRating(), 1500, 20, "Player 4 rating should stabilize near 1500");
 });
 
@@ -348,16 +348,16 @@ runTest("3v3 partial participation - weights affect rating", () => {
   ratings.updatePlayerStats(match, playerStats);
 
   const player1 = playerStats.get(1)!;
-  assertEqual(player1.totalGames, 1, "Player 1 should have 1 game");
-  assertEqual(player1.totalFullGames, 0, "Player 1 should have 0 full games");
-  assertEqual(player1.wonGames, 1, "Player 1 should have 1 win");
+  assertEqual(player1.games, 1, "Player 1 should have 1 game");
+  assertEqual(player1.fullGames, 0, "Player 1 should have 0 full games");
+  assertEqual(player1.wins, 1, "Player 1 should have 1 win");
   assertTrue(player1.glickoPlayer!.getRating() > 1500, "Player 1 rating should increase");
   assertApproxEqual(player1.glickoPlayer!.getRating(), 1505, 10, "Player 1 rating change should be small due to late join");
 
   const player4 = playerStats.get(4)!;
-  assertEqual(player4.totalGames, 1, "Player 4 should have 1 game");
-  assertEqual(player4.totalFullGames, 0, "Player 4 should have 0 full games");
-  assertEqual(player4.wonGames, 0, "Player 4 should have 0 wins");
+  assertEqual(player4.games, 1, "Player 4 should have 1 game");
+  assertEqual(player4.fullGames, 0, "Player 4 should have 0 full games");
+  assertEqual(player4.wins, 0, "Player 4 should have 0 wins");
   assertTrue(player4.glickoPlayer!.getRating() < 1500, "Player 4 rating should decrease");
   assertApproxEqual(player4.glickoPlayer!.getRating(), 1495, 10, "Player 4 rating change should be small due to early leave");
 });
@@ -381,7 +381,7 @@ runTest("3v3 - AFK penalty at halftime", () => {
   ratings.updatePlayerStats(match, playerStats);
 
   const player4 = playerStats.get(4)!;
-  assertEqual(player4.totalGames, 1, "Player 4 should have 1 game");
+  assertEqual(player4.games, 1, "Player 4 should have 1 game");
   assertTrue(player4.glickoPlayer!.getRating() < 1500, "Player 4 rating should decrease due to AFK");
   assertApproxEqual(player4.glickoPlayer!.getRating(), 1475, 15, "Player 4 should lose ~25 points for AFK at halftime");
 });
@@ -406,7 +406,7 @@ runTest("3v3 - VoteKicked penalty near start", () => {
   ratings.updatePlayerStats(match, playerStats);
 
   const player2 = playerStats.get(2)!;
-  assertEqual(player2.totalGames, 1, "Player 2 should have 1 game");
+  assertEqual(player2.games, 1, "Player 2 should have 1 game");
   assertTrue(player2.glickoPlayer!.getRating() < 1500, "Player 2 rating should decrease due to vote kick");
   assertApproxEqual(player2.glickoPlayer!.getRating(), 1485, 10, "Player 2 should lose ~15 points for vote kick near start");
 });
@@ -430,7 +430,7 @@ runTest("3v3 - LeftServer penalty late but before 90%", () => {
   ratings.updatePlayerStats(match, playerStats);
 
   const player1 = playerStats.get(1)!;
-  assertEqual(player1.totalGames, 1, "Player 1 should have 1 game");
+  assertEqual(player1.games, 1, "Player 1 should have 1 game");
   assertTrue(player1.glickoPlayer!.getRating() < 1500, "Player 1 rating should decrease due to leaving server");
   assertApproxEqual(player1.glickoPlayer!.getRating(), 1175, 10, "Player 1 should lose ~10 points for leaving late");
 });
