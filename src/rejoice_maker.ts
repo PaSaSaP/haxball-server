@@ -12,6 +12,65 @@ interface IRejoice {
   reset: () => void;
 }
 
+class GravityRejoice implements IRejoice {
+  name = 'gravity';
+  inProgress: boolean;
+  playerId: number;
+  gravityPlayers: number[];
+  properties: DiscPropertiesHandler;
+  multiplier: number = 0.5;
+  constructor(playerId: number, properties: DiscPropertiesHandler) {
+    this.inProgress = false;
+    this.playerId = playerId;
+    let [redTeam, blueTeam] = properties.getRedBluePlayerIds();
+    this.gravityPlayers = redTeam.concat(blueTeam).filter(e => e != playerId);
+    this.properties = properties;
+  }
+
+  isInProgress() {
+    return this.inProgress;
+  }
+  handleGameTick() {
+    if (!this.isInProgress()) return;
+    const centerPlayer = this.properties.getPlayerDiscProperties(this.playerId);
+    if (!centerPlayer) return; // can be null!
+    const cx = centerPlayer.x;
+    const cy = centerPlayer.y;
+    this.gravityPlayers.forEach(playerId => {
+      const props = this.properties.getPlayerDiscProperties(playerId);
+      if (props) {
+        const { x, y } = props;
+        let dx = cx - x;
+        let dy = cy - y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0.01) {  // Zapobiega dzieleniu przez zero
+          dx = (dx / distance) * this.multiplier;
+          dy = (dy / distance) * this.multiplier;
+        }
+        this.properties.setPlayerDiscProperties(playerId, { "xgravity": dx, "ygravity": dy });
+      }
+    });
+  }
+  handlePositionsReset() {
+    this.reset();
+  }
+  handleTeamGoal() {
+    let [redTeam, blueTeam] = this.properties.getRedBluePlayerIds();
+    this.gravityPlayers = redTeam.concat(blueTeam).filter(e => e != this.playerId);
+    this.inProgress = true;
+  }
+  handleGameStop() {
+    this.reset();
+  }
+  reset() {
+    this.gravityPlayers.forEach(playerId => {
+      this.properties.setPlayerDiscProperties(playerId, { "xgravity": 0, "ygravity": 0 });
+    });
+    this.inProgress = false;
+  }
+}
+
 class RadiusMultiplierRejoice implements IRejoice {
   name = 'getting_multiplied';
   inProgress: boolean;
@@ -102,6 +161,7 @@ class DiscPropertiesHandler {
   getDiscProperties: (discId: number) => DiscPropertiesObject;
   setPlayerDiscProperties: (playerId: number, properties: Partial<DiscPropertiesObject>) => void;
   setDiscProperties: (discId: number, properties: Partial<DiscPropertiesObject>) => void;
+  getRedBluePlayerIds: () => [number[], number[]];
   constructor(room: RoomObject) {
     this.getPlayerDiscProperties = (playerId: number) => {
       return room.getPlayerDiscProperties(playerId);
@@ -115,6 +175,15 @@ class DiscPropertiesHandler {
     this.setDiscProperties = (discId: number, properties: Partial<DiscPropertiesObject>) => {
       return room.setDiscProperties(discId, properties);
     }
+    this.getRedBluePlayerIds = () => {
+      let redTeam: number[] = [];
+      let blueTeam: number[] = [];
+      room.getPlayerList().forEach(e => {
+        if (e.team == 1) redTeam.push(e.id);
+        else if (e.team == 2) blueTeam.push(e.id);
+      })
+      return [redTeam, blueTeam];
+    };
   }
 }
 
@@ -185,6 +254,7 @@ export class RejoiceMaker {
   }
   private createRejoiceByName(rejoiceId: string, playerId: number) {
     if (rejoiceId == "getting_bigger") return new GettingBiggerRejoice(playerId, this.dpHandler);
+    if (rejoiceId == "gravity") return new GravityRejoice(playerId, this.dpHandler);
     return null;
   }
   private getOwnGoalRejoice(playerId: number) {
