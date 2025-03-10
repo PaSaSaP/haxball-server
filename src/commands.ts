@@ -419,6 +419,7 @@ class Commander {
     this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !top !discord !pasek !kebab", Colors.Help);
     if (player.admin) {
       this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !restart/r !start/stop/s !swap !swap_and_restart/sr !rand_and_restart/rr !win_stay/ws !add/a !map/m", Colors.Help);
+      this.sendMsgToPlayer(player, "Dla Admina: !kick (auth) !tkick_5m/1h/1d, !tmute_5m/1h/1d (network) !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help);
     }
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level > 0) {

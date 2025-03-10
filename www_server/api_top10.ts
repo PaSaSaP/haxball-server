@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
 import sqlite3 from 'sqlite3';
-import {TopRatingsDB} from "../src/game_state";
+import {TopRatingsDB} from "../src/db/top_ratings";
 import * as config from "../src/config";
 
 const router = express.Router();

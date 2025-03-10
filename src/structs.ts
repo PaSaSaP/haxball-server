@@ -347,3 +347,9 @@ export interface NetworksGameState {
   muted_to: number;
   kicked_to: number;
 }
+
+export interface RejoiceEntry {
+  rejoice_id: string;
+  time_from: number;
+  time_to: number;
+}

@@ -2,6 +2,7 @@
 export interface RoomServerConfig {
   playersDbFile: string;
   otherDbFile: string;
+  vipDbFile: string;
   chatLogDbFile: string;
   roomName: string;
   isPublic: boolean;
@@ -10,11 +11,13 @@ export interface RoomServerConfig {
   maxPlayers: number;
   maxPlayersOverride: number;
   noPlayer: boolean;
+  autoModeEnabled: boolean;
   token: string;
 }
 
 export const dbDir = "./db";
 const mainDbFile = `${dbDir}/main_futsal_players.db`;
+const vipDbFile = `${dbDir}/main_vip.db`;
 export const hostAuthId = 'QrInL5KJCKDFUyBjgPxMeq392ZB0XjYksePfN6cm3BY';
 export const discordLink = 'https://discord.gg/8xFctajU';
 export const webpageLink = 'https://haxball.ovh';
@@ -22,6 +25,7 @@ export const webpageLink = 'https://haxball.ovh';
 const futsal_3vs3: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFile: `${dbDir}/other_futsal_3vs3.db`,
+  vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat.mpk",
   roomName: "🍌 FUTSAL 3vs3 XxX Banana League!",
   isPublic: true,
@@ -30,20 +34,23 @@ const futsal_3vs3: RoomServerConfig = {
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
-  token: 'thr1.AAAAAGfOLLKrXRpYrQVhEw.m3nSZNiVX5Q',
+  autoModeEnabled: true,
+  token: 'thr1.AAAAAGfOwmaDvKiUfq2Wng.EVkWUbSNt4U',
 };
 
 const futsal_1vs1: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFile: `${dbDir}/other_futsal_1vs1.db`,
+  vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_1vs1.mpk",
   roomName: "🍌 FUTSAL FreeStYLe XxX",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
-  playersInTeamLimit: 1,
+  playersInTeamLimit: 3,
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
+  autoModeEnabled: false,
   token: 'thr1.AAAAAGfOEZTDz2bh8CXDCg.l28KubGfPuk',
 };
 

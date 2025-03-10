@@ -133,7 +133,7 @@ export class MatchStats {
     this.speedCoefficient = 100 / (5 * (0.99 ** 60 + 1));
     this.ballSpeed = 0;
     this.playerRadius = 15;
-    this.ballRadius = 10;
+    this.ballRadius = 6.5;
     this.triggerDistance = this.getTriggerDistance();
     this.game = new Game();
 
@@ -166,7 +166,7 @@ export class MatchStats {
     this.handleGK(players, redTeam, blueTeam);
   }
 
-  handleGameStart(anyPlayerProperties: DiscPropertiesObject, ballProperties: DiscPropertiesObject, redTeam: number[], blueTeam: number[], players: Map<number, PlayerData>) {
+  handleGameStart(anyPlayerProperties: DiscPropertiesObject|null, ballProperties: DiscPropertiesObject|null, redTeam: number[], blueTeam: number[], players: Map<number, PlayerData>) {
     this.lastWinner = 0;
     this.game.reset();
     this.goals.clear();
@@ -176,8 +176,8 @@ export class MatchStats {
     this.game.initPlayerComp(redTeam, blueTeam, players);
     this.playSituation = Situation.kickoff;
     this.resetLastTouches();
-    this.ballRadius = ballProperties.radius;
-    this.playerRadius = anyPlayerProperties.radius;
+    this.ballRadius = ballProperties?.radius ?? 6.5;
+    this.playerRadius = anyPlayerProperties?.radius ?? 15;
     this.triggerDistance = this.getTriggerDistance();
     this.speedCoefficient = this.getSpeedCoefficient(ballProperties);
   }
@@ -195,11 +195,12 @@ export class MatchStats {
     }
   }
 
-  handleTeamGoal(team: 1 | 2, ballProperties: DiscPropertiesObject, players: Map<number, PlayerData>, redTeam: number[], blueTeam: number[]) {
+  handleTeamGoal(team: 1 | 2, ballProperties: DiscPropertiesObject, players: Map<number, PlayerData>,
+      redTeam: number[], blueTeam: number[]): [string, number, number, number] {
     this.playSituation = Situation.goal;
     this.ballSpeed = this.getBallSpeed(ballProperties);
-    let goalString = this.getGoalString(team, players, redTeam, blueTeam); // here stats are updated
-    return goalString;
+    let [goalString, scorer, assister, ownGoal] = this.getGoalString(team, players, redTeam, blueTeam); // here stats are updated
+    return [goalString, scorer, assister, ownGoal];
   }
 
   handlePositionsReset() {
@@ -392,12 +393,15 @@ export class MatchStats {
     return goalAttribution;
   }
 
-  private getGoalString(team: 1 | 2, players: Map<number, PlayerData>, redTeam: number[], blueTeam: number[]) {
+  private getGoalString(team: 1 | 2, players: Map<number, PlayerData>, redTeam: number[], blueTeam: number[]): [string, number, number, number] {
     let currentGameTime = this.game.scores!.time ?? 0;
     let goalString: string = '';
     let goalAttribution = this.getGoalAttribution(team, redTeam, blueTeam);
     let scoringPlayer: PlayerData | null = null;
     let assistingPlayer: PlayerData | null = null;
+    let scoringPlayerId = -1;
+    let assistingPlayerId = -1;
+    let ownGoalPlayerId = -1;
     if (goalAttribution[0] !== -1) scoringPlayer = players.get(goalAttribution[0])!;
     if (goalAttribution[1] !== -1) assistingPlayer = players.get(goalAttribution[1])!;
 
@@ -406,23 +410,27 @@ export class MatchStats {
         if (assistingPlayer && assistingPlayer.team == team) {
           goalString = `⚽ Gol dla ${scoringPlayer.name}! Asysta dla ${assistingPlayer.name}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
           this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, assistingPlayer.id));
-          this.addGoalFor(scoringPlayer.id);
-          this.addAssistFor(assistingPlayer.id);
+          scoringPlayerId = scoringPlayer.id;
+          assistingPlayerId = assistingPlayer.id;
+          this.addGoalFor(scoringPlayerId);
+          this.addAssistFor(assistingPlayerId);
         } else {
           goalString = `⚽ Gol dla ${scoringPlayer.name}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
           this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, -1));
-          this.addGoalFor(scoringPlayer.id);
+          scoringPlayerId = scoringPlayer.id;
+          this.addGoalFor(scoringPlayerId);
         }
       } else {
         goalString = `😂 Samobój dla ${scoringPlayer.name}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
         this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, -1));
-        this.addOwnGoalFor(scoringPlayer.id);
+        ownGoalPlayerId = scoringPlayer.id;
+        this.addOwnGoalFor(ownGoalPlayerId);
       }
     } else {
       goalString = `⚽ Gol dla ${team === 1 ? 'Red' : 'Blue'}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
       this.game.goals.push(new Goal(currentGameTime, team, -1, -1));
     }
-    return goalString;
+    return [goalString, scoringPlayerId, assistingPlayerId, ownGoalPlayerId];
   }
 
   setWinner(winner: 1 | 2) {
@@ -560,8 +568,8 @@ export class MatchStats {
     return this.game.goals.length;
     // return this.game.scores.red + this.game.scores.blue;
   }
-  private getSpeedCoefficient(ballDisc: DiscPropertiesObject) {
-    return 100 / (5 * ballDisc.invMass * (ballDisc.damping ** 60 + 1));
+  private getSpeedCoefficient(ballDisc: DiscPropertiesObject|null) {
+    return 100 / (5 * (ballDisc?.invMass ?? 1.4) * ((ballDisc?.damping ?? 1) ** 60 + 1));
   }
   private getTriggerDistance() {
     return this.playerRadius + this.ballRadius + 0.01;

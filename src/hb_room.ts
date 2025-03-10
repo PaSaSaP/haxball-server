@@ -23,7 +23,7 @@ import Glicko2 from 'glicko2';
 import { PlayersGameStateManager } from './pg_manager';
 import { hb_log, hb_log_to_console } from './log';
 import { MatchStats } from './stats';
-import { resourceLimits } from 'worker_threads';
+import { RejoiceMaker } from './rejoice_maker';
 
 
 export class HaxballRoom {
@@ -82,6 +82,7 @@ export class HaxballRoom {
   player_names_by_auth: Map<string, string>;
   player_ids_by_normalized_name: Map<string, number>;
   players_game_state_manager: PlayersGameStateManager;
+  rejoice_maker: RejoiceMaker;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -126,7 +127,7 @@ export class HaxballRoom {
     this.ratings = new Ratings(this.glicko);
     this.ratings_for_all_games = false;
     this.match_stats = new MatchStats();
-    this.auto_mode = this.limit === 3; // TODO for now only for 3vs3
+    this.auto_mode = roomConfig.autoModeEnabled;
     this.auto_afk = true;
     this.room_link = '';
     this.room_data_sync_timer = null;
@@ -135,6 +136,7 @@ export class HaxballRoom {
     this.player_names_by_auth = new Map<string, string>();
     this.player_ids_by_normalized_name = new Map<string, number>();
     this.players_game_state_manager = new PlayersGameStateManager(this);
+    this.rejoice_maker = new RejoiceMaker(this);
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -369,6 +371,7 @@ export class HaxballRoom {
     if (this.auto_mode) this.auto_bot.handleGameTick(scores);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(players);
     this.match_stats.handleGameTick(scores, ball_position, this.players_ext_all, redTeam, blueTeam);
+    this.rejoice_maker.handleGameTick();
   }
 
   moveAfkMaybeToSpec(player: PlayerData) {
@@ -458,10 +461,9 @@ export class HaxballRoom {
     let anyPlayerProperties = this.getAnyPlayerDiscProperties();
     let ballProperties = this.getBallProperties();
     if (anyPlayerProperties === null || ballProperties === null) {
-      hb_log(`ST coś jest null: ${anyPlayerProperties}, ${ballProperties}`);
-    } else {
-      this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
+      hb_log(`ST coś jest null: ${anyPlayerProperties}, ${ballProperties} ${anyPlayerProperties?.radius} ${anyPlayerProperties?.damping} ${ballProperties?.radius} ${ballProperties?.damping}`);
     }
+    this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
   }
 
   getAnyPlayerDiscProperties() {
@@ -523,6 +525,7 @@ export class HaxballRoom {
         else if (this.scores.blue > this.scores.red) this.match_stats.setWinner(2);
       }
     }
+    this.rejoice_maker.handleGameStop();
     if (doUpdateState) {
       let updatedPlayerIds = this.match_stats.updatePlayerStats(this.players_ext_all, fullTimeMatchPlayed);
       this.updatePlayerStatsForIds(updatedPlayerIds);
@@ -723,6 +726,7 @@ export class HaxballRoom {
         this.updateAdmins(null);
         this.loadPlayerStat(playerExt);
         if (this.auto_mode) this.auto_bot.handlePlayerJoin(playerExt);
+        this.rejoice_maker.handlePlayerJoin(playerExt);
       }
     });
     this.anti_spam.addPlayer(player);
@@ -1018,7 +1022,8 @@ export class HaxballRoom {
     const ballProperties = this.getBallProperties();
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
     if (team) {
-      let txt = this.match_stats.handleTeamGoal(team, ballProperties, this.players_ext_all, redTeam, blueTeam);
+      let [txt, scorer, assister, ownGoal] = this.match_stats.handleTeamGoal(team, ballProperties, this.players_ext_all, redTeam, blueTeam);
+      this.rejoice_maker.handleTeamGoal(scorer, assister, ownGoal);
       this.sendMsgToAll(txt, Colors.Goal, 'italic');
     }
   }
@@ -1082,6 +1087,7 @@ export class HaxballRoom {
   async handlePositionsReset() {
     if (this.auto_mode) this.auto_bot.handlePositionsReset();
     this.match_stats.handlePositionsReset();
+    this.rejoice_maker.handlePositionsReset();
   }
 
 
@@ -1552,7 +1558,7 @@ let db_handler: DBHandler | null = null;
 let game_state: GameState | null = null;
 
 export const hb_room_main = (room: RoomObject, roomConfig: config.RoomServerConfig): HaxballRoom => {
-  db_handler = new DBHandler(roomConfig.playersDbFile, roomConfig.otherDbFile);
+  db_handler = new DBHandler(roomConfig.playersDbFile, roomConfig.otherDbFile, roomConfig.vipDbFile);
   chat_logger = new ChatLogger(roomConfig.chatLogDbFile);
   game_state = new GameState(db_handler, chat_logger);
   hb_room = new HaxballRoom(room, roomConfig, game_state);
