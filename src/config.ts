@@ -21,6 +21,7 @@ const vipDbFile = `${dbDir}/main_vip.db`;
 export const hostAuthId = 'QrInL5KJCKDFUyBjgPxMeq392ZB0XjYksePfN6cm3BY';
 export const discordLink = 'https://discord.gg/8xFctajU';
 export const webpageLink = 'https://haxball.ovh';
+export const StripeKey = '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';
 
 const futsal_3vs3: RoomServerConfig = {
   playersDbFile: mainDbFile,
@@ -51,7 +52,7 @@ const futsal_1vs1: RoomServerConfig = {
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: false,
-  token: 'thr1.AAAAAGfOEZTDz2bh8CXDCg.l28KubGfPuk',
+  token: 'thr1.AAAAAGfPYMTK3hYzu8I1cA.2x5mdLOv2_E',
 };
 
 export const getRoomConfig = (name: string): RoomServerConfig => {

@@ -11,7 +11,7 @@ import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState, MatchStatsProcessingState } from './structs';
+import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState, MatchStatsProcessingState, TransactionByPlayerInfo } from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
@@ -80,9 +80,11 @@ export class HaxballRoom {
   god_player: PlayerObject;
   top10: PlayerTopRatingData[]; // [name, rating, full games]
   player_names_by_auth: Map<string, string>;
+  player_ids_by_auth: Map<string, number>;
   player_ids_by_normalized_name: Map<string, number>;
   players_game_state_manager: PlayersGameStateManager;
   rejoice_maker: RejoiceMaker;
+  rejoice_prices: Map<string, { for_days: number, price: number }[]>;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -134,9 +136,11 @@ export class HaxballRoom {
     this.god_player = this.createGodPlayer();
     this.top10 = [];
     this.player_names_by_auth = new Map<string, string>();
+    this.player_ids_by_auth = new Map<string, number>();
     this.player_ids_by_normalized_name = new Map<string, number>();
     this.players_game_state_manager = new PlayersGameStateManager(this);
     this.rejoice_maker = new RejoiceMaker(this);
+    this.rejoice_prices = new Map<string, { for_days: number, price: number }[]>();
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -184,6 +188,29 @@ export class HaxballRoom {
         this.anti_spam.clearMute(playerId);
       });
     }
+
+    this.game_state.getRejoicePrices().then((results) => {
+      for (let result of results) {
+        if (!this.rejoice_prices.has(result.rejoice_id)) this.rejoice_prices.set(result.rejoice_id, []);
+        this.rejoice_prices.get(result.rejoice_id)!.push({for_days: result.for_days, price: result.price});
+      }
+    }).catch((error) => {hb_log(`getRejoicePrices error: ${error}`)});
+
+    this.game_state.setPaymentsLinkCallbackAndStart((authId: string, paymentTransactionId: number) => {
+      this.game_state.getPaymentLink(authId, paymentTransactionId).then((result) => {
+        let playerId = this.player_ids_by_auth.get(authId)!;
+        let player = this.Pid(playerId);
+        if (!player) return;
+        let link = result ?? 'INVALID';
+        player.pendingTransaction = new TransactionByPlayerInfo(paymentTransactionId);
+        player.pendingTransaction.link = link;
+        // let link = `${config.webpageLink}/stripe/${paymentTransactionId}`;
+        let txt = `Link ⇒  ${link}  ⇐ Zakup przez Stripe! Następnie wyjdź i wejdź!`;
+        this.sendMsgToPlayer(player, txt, Colors.OrangeTangelo, 'bold');
+        hb_log(`Gracz ${player.name} otrzymał link: ${txt}`);
+      }).catch((error) => { hb_log(`getPaymentLink error: ${error}`) });
+    });
+    hb_log("#I# InitData() done");
   }
 
   private initPlayerNames() {
@@ -191,7 +218,8 @@ export class HaxballRoom {
       this.player_names_by_auth = result;
       hb_log(`#I# initPlayerNames(${this.player_names_by_auth.size})`);
       this.updateTop10();
-    });
+      hb_log(`#I# updatedTop10()`);
+    }).catch((error) => {hb_log(`getAllPlayerNames error: ${error}`)});
   }
 
   private createGodPlayer() {
@@ -720,6 +748,7 @@ export class HaxballRoom {
         this.captcha.askCaptcha(player);
       }
       if (!kicked) {
+        this.player_ids_by_auth.set(playerExt.auth_id, playerExt.id);
         this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
         this.player_ids_by_normalized_name.set(playerExt.name_normalized, playerExt.id);
         this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name);
@@ -734,7 +763,7 @@ export class HaxballRoom {
       this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
     }
     // this.sendOnlyTo(player, `Mozesz aktywować sterowanie przyciskami (Link: https://tinyurl.com/HaxballKeyBinding): Lewy Shift = Sprint, A = Wślizg`, 0x22FF22);
-    this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb`, Colors.Help);
+    this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb !sklep`, Colors.Help);
   }
 
   loadPlayerStat(playerExt: PlayerData) {

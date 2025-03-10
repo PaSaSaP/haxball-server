@@ -12,6 +12,7 @@
     "futsal_3vs3": "npx tsc -p src/tsconfig.json && HX_ROOM_CONFIG_SELECTOR=3vs3 node dist/src/src/index.js",
     "discord_1vs1": "npx tsc -p discord_client/tsconfig.json && HX_SELECTOR=1vs1 node dist/discord_client/discord_client/index.js",
     "discord_3vs3": "npx tsc -p discord_client/tsconfig.json && HX_SELECTOR=3vs3 node dist/discord_client/discord_client/index.js",
+    "market_server": "npx tsc -p market_server/tsconfig.json && HX_SELECTOR=3vs3 node dist/market_server/market_server/index.js",
     "start": "npm run futsal_3vs3"
   },
   "keywords": [],
@@ -32,6 +33,7 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "sqlite3": "^5.1.7",
+    "stripe": "^17.7.0",
     "ts-node": "^10.9.2",
     "uninstall": "^0.0.0"
   },

@@ -85,6 +85,17 @@ export interface PPP {
   conn: string;
 }
 
+export class TransactionByPlayerInfo {
+  transactionId: number;
+  link: string;
+  status: 'started' | 'completed' | 'failed';
+  constructor(transactionId: number) {
+    this.transactionId = transactionId;
+    this.link = '';
+    this.status = 'started';
+  }
+}
+
 export class PlayerData {
   name: string;
   name_normalized: string;
@@ -108,6 +119,7 @@ export class PlayerData {
   afk_avatar: string|null;
   afk_switch_time: number;
   chosen_player_names: string[];
+  pendingTransaction: TransactionByPlayerInfo | null;
 
   constructor(player: PlayerObject|PPP) {
     // this.player = player;
@@ -133,6 +145,7 @@ export class PlayerData {
     this.afk_avatar = null;
     this.afk_switch_time = Date.now();
     this.chosen_player_names = [];
+    this.pendingTransaction = null;
   }
 
   update(player: PlayerObject) {

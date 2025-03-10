@@ -11,7 +11,9 @@ export class Colors {
   static TrustZero = 0x9c9c9c;
   static DarkRed = 0xD3212D;
   static BrightGreen = 0x95FA02;
+  static DarkGreen = 0x66AB01;
   static BrightBlue = 0x4DA6FF;
+  static OrangeTangelo = 0xF54900;
   static Stats = 0xEFDECD;
   static Goal = 0xEFEF8D;
 }

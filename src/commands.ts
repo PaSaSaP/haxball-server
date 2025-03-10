@@ -1,11 +1,12 @@
 import { BuyCoffee } from "./buy_coffee";
 import { HaxballRoom } from "./hb_room";
 import all_maps from "./maps";
-import { PlayerData } from "./structs";
+import { PlayerData, TransactionByPlayerInfo } from "./structs";
 import { sleep, getTimestampHM, toBoolean } from "./utils";
 import { generateVerificationLink } from "./verification";
 import { Colors } from "./colors";
 import * as config from './config';
+import { hb_log } from "./log";
 
 class Commander {
   hb_room: HaxballRoom;
@@ -162,11 +163,19 @@ class Commander {
       thumb_down: this.commandThumbVoteDown,
       thumbremove: this.commandThumbVoteRemove,
       thumb_remove: this.commandThumbVoteRemove,
+      cieszynki: this.commandPrintAvailableRejoices,
+      cieszynka: this.commandRejoice,
+      kup: this.commandBuyRejoice,
+      buy: this.commandBuyRejoice,
+      sklep: this.commandBuyRejoice,
+      shop: this.commandBuyRejoice,
       trust: this.commandTrust,
       verify: this.commandVerify,
       t: this.commandTrust,
       tt: this.commandAutoTrust,
 
+      check_transaction: this.commandCheckPlayerTransaction,
+      check_tr: this.commandCheckPlayerTransaction,
       u: this.commandUnlockWriting,
       sefin: this.commandSefin,
       server_restart: this.commandServerRestart,
@@ -185,7 +194,6 @@ class Commander {
       cofe: this.commandBuyCoffeeLink,
       coffe: this.commandBuyCoffeeLink,
       kawa: this.commandBuyCoffeeLink,
-      buy: this.commandBuyCoffeeLink,
       wsparcie: this.commandBuyCoffeeLink,
       piwo: this.commandBuyCoffeeLink,
 
@@ -416,7 +424,7 @@ class Commander {
   }
 
   async commandHelp(player: PlayerObject) {
-    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !top !discord !pasek !kebab", Colors.Help);
+    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !top !cieszynka !discord !pasek !kebab !sklep", Colors.Help);
     if (player.admin) {
       this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !restart/r !start/stop/s !swap !swap_and_restart/sr !rand_and_restart/rr !win_stay/ws !add/a !map/m", Colors.Help);
       this.sendMsgToPlayer(player, "Dla Admina: !kick (auth) !tkick_5m/1h/1d, !tmute_5m/1h/1d (network) !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help);
@@ -990,6 +998,73 @@ class Commander {
     if (player.id == cmdPlayerExt.id) return;
     this.hb_room.game_state.removeVote(playerExt.auth_id, cmdPlayerExt.auth_id);
     this.sendMsgToPlayer(player, `Zabrałeś ${cmdPlayerExt.name} kciuka!`);
+  }
+
+  async commandRejoice(player: PlayerObject, cmds: string[]) {
+    if (cmds.length === 0) {
+      let names = this.hb_room.rejoice_maker.getRejoiceNames(player.id);
+      let txt = names.length === 0 ? "Nie masz dostępnych cieszynek :( Sprawdź !sklep" : `Twoje cieszynki: ${names.join(", ")}, Wpisz !cieszynka <nazwa> by ją zmienić!`;
+      this.sendMsgToPlayer(player, txt, Colors.DarkGreen);
+    }
+  }
+
+  async commandPrintAvailableRejoices(player: PlayerObject, cmds: string[]) {
+    let availableRejoices = Array.from(this.hb_room.rejoice_prices.keys());
+    this.sendMsgToPlayer(player, `Cieszynki dostępne do zakupu: ${availableRejoices.join(", ")}; Wpisz !cieszynka by sprawdzić listę Twoich cieszynek!`, Colors.DarkGreen);
+  }
+
+  async commandBuyRejoice(player: PlayerObject, cmds: string[]) {
+    if (cmds.length === 0) {
+      this.sendMsgToPlayer(player, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki`, Colors.DarkGreen);
+      this.sendMsgToPlayer(player, `By sprawdzić cenę: !sklep <nazwa>, By rozpocząć proces zakupu: !kup <nazwa> <liczba dni>`, Colors.DarkGreen);
+      return;
+    }
+    let rejoiceName = cmds[0];
+    if (!this.hb_room.rejoice_prices.has(rejoiceName)) {
+      this.sendMsgToPlayer(player, `Nie ma cieszynki o nazwie ${rejoiceName}!`, Colors.DarkGreen);
+      return;
+    }
+    let prices = this.hb_room.rejoice_prices.get(rejoiceName)!;
+    if (cmds.length === 1) {
+      const formattedString = Array.from(prices).map(({ for_days, price }) => `${for_days} dni: ${price} zł`).join(', ');
+      this.sendMsgToPlayer(player, `Cieszynka ${rejoiceName} - dostępne opcje: ${formattedString}`, Colors.DarkGreen);
+      return;
+    }
+    let forDays = Number.parseInt(cmds[1]);
+    if (isNaN(forDays)) {
+      this.sendMsgToPlayer(player, `Nieprawidłowa liczba dni dla cieszynki ${rejoiceName}, ${forDays} nie jest prawidłową opcją!`, Colors.DarkGreen);
+      return;
+    }
+    if (!prices.some(e => e.for_days == forDays)) {
+      this.sendMsgToPlayer(player, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !kup <nazwa>`, Colors.DarkGreen);
+      return;
+    }
+    let playerExt = this.Pid(player.id);
+    if (playerExt.pendingTransaction && playerExt.pendingTransaction.status === 'started') {
+      this.sendMsgToPlayer(player, `Inny proces zakupu jest w trakcie, numer transakcji to ${playerExt.pendingTransaction.transactionId}, `
+        + `link: ${playerExt.pendingTransaction.link} Najpierw ją zakończ!`, Colors.DarkGreen);
+      return;
+    }
+    this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays).then((result) => {
+      this.sendMsgToPlayer(player, `Rozpoczęliśmy proces zakupu cieszynki`, Colors.DarkGreen);
+      hb_log(`Zakup cieszynki dla ${playerExt.auth_id} r:${rejoiceName} na ${forDays}, id:${result}`);
+    });
+  }
+
+  async commandCheckPlayerTransaction(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'check_transaction')) return;
+    if (cmds.length === 0) {
+      this.sendMsgToPlayer(player, `O jakiego gracza chodzi?`);
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    if (!cmdPlayer) return;
+    let transaction = cmdPlayer.pendingTransaction;
+    if (!transaction) {
+      this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} nie ma zadnej transakcji w trakcie`);
+      return;
+    }
+    this.sendMsgToPlayer(player, `Gracz ${player.name} numer transakcji: ${transaction.transactionId}, link: ${transaction.link} status: ${transaction.status}`);
   }
 
   async commandVerify(player: PlayerObject) {

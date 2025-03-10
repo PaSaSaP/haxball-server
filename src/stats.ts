@@ -569,7 +569,7 @@ export class MatchStats {
     // return this.game.scores.red + this.game.scores.blue;
   }
   private getSpeedCoefficient(ballDisc: DiscPropertiesObject|null) {
-    return 100 / (5 * (ballDisc?.invMass ?? 1.4) * ((ballDisc?.damping ?? 1) ** 60 + 1));
+    return 100 / (5 * (ballDisc?.invMass ?? 1.4) * ((ballDisc?.damping ?? 0.99) ** 60 + 1));
   }
   private getTriggerDistance() {
     return this.playerRadius + this.ballRadius + 0.01;

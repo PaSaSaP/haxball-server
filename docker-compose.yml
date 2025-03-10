@@ -88,7 +88,19 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run discord_1vs1
-
+  market-server:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run market_server
 
 networks:
   app_network:

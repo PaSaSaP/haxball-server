@@ -11,6 +11,12 @@ import { TopRatingsDB } from './db/top_ratings';
 import { PlayersStateDB } from './db/players_state';
 import { NetworksStateDB } from './db/networks_state';
 import { RejoiceDB } from './db/rejoice';
+import { RejoiceTransactionsDB } from './db/rejoice_transactions';
+import { RejoicePricesDB } from './db/rejoice_prices';
+import { PaymentsDB } from './db/payments';
+import { PaymentLinksDB } from './db/payment_links';
+import { PaymentLinksWatcher } from './db/payment_links_watcher';
+
 export class DBHandler {
   playersDb: sqlite3.Database;
   otherDb: sqlite3.Database;
@@ -24,7 +30,13 @@ export class DBHandler {
   reports: ReportsDB;
   ratings: PlayerRatingsDB;
   topRatings: TopRatingsDB;
+
   rejoice: RejoiceDB;
+  rejoiceTransactions: RejoiceTransactionsDB;
+  rejoicePrices: RejoicePricesDB;
+  payments: PaymentsDB;
+  paymentLinks: PaymentLinksDB;
+  paymentLinksWatcher: PaymentLinksWatcher;
 
   constructor(playersDbFile: string, otherDbFile: string, vipDbFile: string) {
     this.playersDb = new sqlite3.Database(playersDbFile, (err) => {
@@ -48,7 +60,13 @@ export class DBHandler {
     this.reports = new ReportsDB(this.otherDb);
     this.ratings = new PlayerRatingsDB(this.otherDb);
     this.topRatings = new TopRatingsDB(this.otherDb);
+    // and VIP table
     this.rejoice = new RejoiceDB(this.vipDb);
+    this.rejoiceTransactions = new RejoiceTransactionsDB(this.vipDb);
+    this.rejoicePrices = new RejoicePricesDB(this.vipDb);
+    this.payments = new PaymentsDB(this.vipDb);
+    this.paymentLinks = new PaymentLinksDB(this.vipDb);
+    this.paymentLinksWatcher = new PaymentLinksWatcher(this.vipDb);
 
     this.setupDatabases();
   }
@@ -57,13 +75,20 @@ export class DBHandler {
     this.players.setupDatabase();
     this.playerNames.setupDatabase();
     this.votes.setupDatabase();
+
     this.playerMatchStats.setupDatabase();
     this.playerState.setupDatabase();
     this.networksState.setupDatabase();
     this.reports.setupDatabase();
     this.ratings.setupDatabase();
     this.topRatings.setupDatabase();
+
     this.rejoice.setupDatabase();
+    this.rejoiceTransactions.setupDatabase();
+    this.rejoicePrices.setupDatabase();
+    this.payments.setupDatabase();
+    this.paymentLinks.setupDatabase();
+    this.paymentLinksWatcher.setupDatabase();
   }
 
   closeDatabases() {
@@ -179,7 +204,24 @@ export class GameState {
     return this.dbHandler.rejoice.updateOrInsertRejoice(auth_id, rejoice_id, time_from, time_to);
   }
 
+  insertRejoiceTransaction(auth_id: string, rejoice_id: string, at_time: number, for_days: number) {
+    return this.dbHandler.rejoiceTransactions.insertRejoiceTransaction(auth_id, rejoice_id, at_time, for_days);
+  }
+
+  getPaymentLink(auth_id: string, transaction_id: number) {
+    return this.dbHandler.paymentLinks.getPaymentLink(auth_id, transaction_id);
+  }
+
+  getRejoicePrices() {
+    return this.dbHandler.rejoicePrices.getRejoicePrices();
+  }
+
   logMessage(user_name: string, action: string, text: string, for_discord: boolean) {
     return this.chatLogger.logMessage(user_name, action, text, for_discord);
+  }
+
+  setPaymentsLinkCallbackAndStart(callback: (auth_id: string, transaction_id: number) => void, intervalMs: number = 5000) {
+    this.dbHandler.paymentLinksWatcher.setCallback(callback);
+    this.dbHandler.paymentLinksWatcher.startWatching(intervalMs);
   }
 }

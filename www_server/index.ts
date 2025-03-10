@@ -4,7 +4,8 @@ import verifyRouter from './verify_page';
 import mainRouter from './main';
 import apiGetServers from './api_get_servers';
 import apiTop10 from './api_top10';
-
+import apiStripeTransaction from './api_stripe_transaction';
+import stripeRedirect from './stripe_redirect';
 
 const app = express();
 const port = 3000;
@@ -17,6 +18,9 @@ app.use('/verify', verifyRouter);
 app.use("/api/servers", apiGetServers);
 
 app.use("/api/top10", apiTop10);
+
+app.use("/api/stripe", apiStripeTransaction);
+app.use("/stripe", stripeRedirect);
 
 // Serwowanie statycznych plików Reacta
 app.use(express.static(path.join(__dirname, "../../../www_frontend/build")));
