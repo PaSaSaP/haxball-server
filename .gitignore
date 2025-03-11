@@ -137,6 +137,7 @@ dist
 
 # user defined
 db/
+!src/db
 .remove_me_to_restart_container
 players.json
 logs.json
