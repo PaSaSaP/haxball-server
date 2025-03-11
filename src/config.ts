@@ -54,7 +54,7 @@ const futsal_1vs1: RoomServerConfig = {
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: false,
-  token: 'thr1.AAAAAGfP-5Ya5uoOAiJN2g.rjhiUoBbHQk',
+  token: 'thr1.AAAAAGfQPc7zQCIiSObKsg.M-GfQye3UQY',
   selector: '1vs1',
 };
 

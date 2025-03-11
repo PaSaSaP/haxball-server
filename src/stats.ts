@@ -209,12 +209,12 @@ export class MatchStats {
   }
 
   handlePlayerTeamChange(changedPlayer: PlayerData, redTeam: number[], blueTeam: number[]) {
-    STLog(`handlePlayerTeamChange ${changedPlayer.name} to ${changedPlayer.team}`);
+    // STLog(`handlePlayerTeamChange ${changedPlayer.name} to ${changedPlayer.team}`);
     this.handleLineupChangeTeamChange(changedPlayer, redTeam, blueTeam);
   }
 
   handlePlayerLeave(player: PlayerData) {
-    STLog(`handlePlayerLeave ${player.name}`);
+    // STLog(`handlePlayerLeave ${player.name}`);
     this.handleLineupChangeLeave(player);
   }
 
@@ -284,12 +284,6 @@ export class MatchStats {
         }
       }
     }
-    this.game.redCompositions.forEach(c => {
-      STLog(`change Red comp: ${c.player.name} entry=${c.timeEntry} exit=${c.timeExit}`)
-    });
-    this.game.blueCompositions.forEach(c => {
-      STLog(`change blue comp: ${c.player.name} entry=${c.timeEntry} exit=${c.timeExit}`)
-    });
   }
 
   private handleLineupChangeLeave(leavingPlayer: PlayerData) {
@@ -327,12 +321,6 @@ export class MatchStats {
         }
       }
     }
-    this.game.redCompositions.forEach(c => {
-      STLog(`leave Red comp: ${c.player.name} entry=${c.timeEntry} exit=${c.timeExit}`)
-    });
-    this.game.blueCompositions.forEach(c => {
-      STLog(`leave blue comp: ${c.player.name} entry=${c.timeEntry} exit=${c.timeExit}`)
-    });
   }
 
   private getLastTouchOfTheBall(ballPosition: Position, players: Map<number, PlayerData>, redTeam: number[], blueTeam: number[]) {

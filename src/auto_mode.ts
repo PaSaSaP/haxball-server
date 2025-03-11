@@ -391,10 +391,10 @@ export class AutoBot {
           lastWinner = this.hb_room.pressure_right >= this.hb_room.pressure_left ? 1 : 2;
           if (lastWinner == 1) {
             let red_pressure = (this.hb_room.pressure_right / this.hb_room.pressure_total) * 100;
-            this.hb_room.sendMsgToAll(`Red wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(red_pressure)}%`, Colors.GameState, 'italic');
+            this.hb_room.sendMsgToAll(`🔴Red wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(red_pressure)}%`, Colors.GameState, 'italic');
           } else {
             let blue_pressure = (this.hb_room.pressure_left / this.hb_room.pressure_total) * 100;
-            this.hb_room.sendMsgToAll(`Blue wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(blue_pressure)}%`, Colors.GameState, 'italic');
+            this.hb_room.sendMsgToAll(`🔵Blue wygrywa po przekroczeniu max czasu poprzez przewagę presji na połowie przeciwnika ${Math.trunc(blue_pressure)}%`, Colors.GameState, 'italic');
           }
         }
         this.fullTimeMatchPlayed = true;
@@ -460,7 +460,7 @@ export class AutoBot {
     this.matchHistory.push(this.currentMatch);
     this.matchState = MatchState.afterVictory;
     let lastWinner: 1|2 = scores.red > scores.blue ? 1 : 2;
-    this.hb_room.sendMsgToAll(`${lastWinner == 1 ? 'Red' : 'Blue'} wygrywa mecz! Mecz kończy się wynikiem Red🔴 ${scores.red}:${scores.blue} 🔵Blue, Gratulacje!`, Colors.GameState, 'italic');
+    this.hb_room.sendMsgToAll(`${lastWinner == 1 ? '🔴Red' : '🔵Blue'} wygrywa mecz! Mecz kończy się wynikiem Red🔴 ${scores.red}:${scores.blue} 🔵Blue, Gratulacje!`, Colors.GameState, 'italic');
     this.setLastWinner(lastWinner);
     this.lobbyAction = () => {
       this.moveSomeTeamToSpec();
@@ -525,7 +525,7 @@ export class AutoBot {
     if (this.winStreak >= this.WinStreakLimit) {
       if (this.lastWinner == 1) this.moveWinnerRedToSpec();
       else this.moveWinnerBlueToSpec();
-      this.hb_room.sendMsgToAll(`Zwycięzcy (${this.lastWinner==1? 'Red': 'Blue'}) schodzą po ${this.winStreak} meczach by dać pograć teraz innym!`, Colors.GameState, 'italic');
+      this.hb_room.sendMsgToAll(`Zwycięzcy (${this.lastWinner==1? '🔴Red': '🔵Blue'}) schodzą po ${this.winStreak} meczach by dać pograć teraz innym!`, Colors.GameState, 'italic');
       this.winStreak = 0;
     } else if (this.lastWinner == 1) this.moveLoserBlueToSpec();
     else this.moveLoserRedToSpec();
@@ -638,7 +638,7 @@ export class AutoBot {
     this.currentMatch.winStreak = this.winStreak;
     this.currentMatch.pressureRed = (this.hb_room.pressure_right / this.hb_room.pressure_total) * 100;
     this.currentMatch.pressureBlue = (this.hb_room.pressure_left / this.hb_room.pressure_total) * 100;
-    this.hb_room.sendMsgToAll(`Druzyna ${lastWinner == 1 ? "Red" : "Blue"} wygrała, jest to ich ${this.winStreak} zwycięstwo!`, Colors.GameState, 'italic');
+    this.hb_room.sendMsgToAll(`Druzyna ${lastWinner == 1 ? "🔴Red" : "🔵Blue"} wygrała, jest to ich ${this.winStreak} zwycięstwo!`, Colors.GameState, 'italic');
   }
 
   async stopAndGoToLobby() {
