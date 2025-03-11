@@ -30,4 +30,4 @@ HaxballJS.then((HBInit) => {
 });
 
 import { tokenDatabase } from './token_database';
-tokenDatabase.updateServerStatus(roomConfig.token, false);
+tokenDatabase.updateServerStatus(roomConfig.selector, false);

@@ -200,11 +200,22 @@ export interface PlayerMatchStatsData {
   left_server: number;
 }
 
+export interface PlayerTopRatingDataShort {
+  player_name: string;
+  rating: number;
+}
+
 export interface PlayerTopRatingData {
+  rank: number;
   auth_id: string;
   player_name: string;
   rating: number;
-  total_full_games: number;
+  games: number;
+  wins: number;
+  goals: number;
+  assists: number;
+  own_goals: number;
+  clean_sheets: number;
 }
 
 export class PlayerStat {

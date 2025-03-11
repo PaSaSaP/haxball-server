@@ -70,7 +70,7 @@ export class PlayersGameStateManager {
     const [now, upTo] = this.getNowAndUpTo(seconds);
     let pgState = this.getP(player.auth_id);
     pgState.muted_to = upTo;
-    this.hb_room.game_state.updateOrInsertPlayerStateMuted(player.auth_id, upTo);
+    this.hb_room.game_state.updateOrInsertPlayerStateMuted(player.auth_id, upTo).then(() => { }).catch((e) => {hb_log(`setPlayerTimeMuted error: ${e}`)});;
   }
 
   setPlayerTimeKicked(player: PlayerData, seconds: number, kick=false) {
@@ -78,14 +78,14 @@ export class PlayersGameStateManager {
     let pgState = this.getP(player.auth_id);
     pgState.kicked_to = upTo;
     if (kick) this.hb_room.room.kickPlayer(player.id, `Na ${seconds} sekund!`, false);
-    this.hb_room.game_state.updateOrInsertPlayerStateKicked(player.auth_id, upTo);
+    this.hb_room.game_state.updateOrInsertPlayerStateKicked(player.auth_id, upTo).then(() => { }).catch((e) => {hb_log(`setPlayerTimeKicked error: ${e}`)});;
   }
 
   setNetworkTimeMuted(player: PlayerData, seconds: number) {
     const [now, upTo] = this.getNowAndUpTo(seconds);
     let nState = this.getN(player.conn_id);
     nState.muted_to = upTo;
-    this.hb_room.game_state.updateOrInsertNetworkStateMuted(player.conn_id, upTo);
+    this.hb_room.game_state.updateOrInsertNetworkStateMuted(player.conn_id, upTo).then(() => { }).catch((e) => {hb_log(`setNetworkTimeMuted error: ${e}`)});;
   }
 
   setNetworkTimeKicked(player: PlayerData, seconds: number, kick=false) {
@@ -93,7 +93,7 @@ export class PlayersGameStateManager {
     let nState = this.getN(player.conn_id);
     nState.kicked_to = upTo;
     if (kick) this.hb_room.room.kickPlayer(player.id, `Na ${seconds} sekund!`, false);
-    this.hb_room.game_state.updateOrInsertNetworkStateKicked(player.conn_id, upTo);
+    this.hb_room.game_state.updateOrInsertNetworkStateKicked(player.conn_id, upTo).then(() => { }).catch((e) => {hb_log(`setNetworkTimeKicked error: ${e}`)});
   }
 
   private getP(authId: string): PlayersGameState {

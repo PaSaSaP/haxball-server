@@ -168,6 +168,10 @@ export class GameState {
     return this.dbHandler.topRatings.updateTopRatings(playerMap);
   }
 
+  getTop10PlayersShort() {
+    return this.dbHandler.topRatings.getTopNPlayersShort(10);
+  }
+
   getTop10Players() {
     return this.dbHandler.topRatings.getTopNPlayers(10);
   }

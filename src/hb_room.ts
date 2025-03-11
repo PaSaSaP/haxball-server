@@ -11,7 +11,7 @@ import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState, MatchStatsProcessingState, TransactionByPlayerInfo } from './structs';
+import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState, MatchStatsProcessingState, TransactionByPlayerInfo, PlayerTopRatingDataShort } from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
@@ -78,7 +78,7 @@ export class HaxballRoom {
   room_link: string;
   room_data_sync_timer: any | null;
   god_player: PlayerObject;
-  top10: PlayerTopRatingData[]; // [name, rating, full games]
+  top10: PlayerTopRatingDataShort[]; // [name, rating, full games]
   player_names_by_auth: Map<string, string>;
   player_ids_by_auth: Map<string, number>;
   player_ids_by_normalized_name: Map<string, number>;
@@ -194,7 +194,7 @@ export class HaxballRoom {
         if (!this.rejoice_prices.has(result.rejoice_id)) this.rejoice_prices.set(result.rejoice_id, []);
         this.rejoice_prices.get(result.rejoice_id)!.push({for_days: result.for_days, price: result.price});
       }
-    }).catch((error) => {hb_log(`getRejoicePrices error: ${error}`)});
+    }).catch((error) => {hb_log(`!! getRejoicePrices error: ${error}`)});
 
     this.game_state.setPaymentsLinkCallbackAndStart((authId: string, paymentTransactionId: number) => {
       this.game_state.getPaymentLink(authId, paymentTransactionId).then((result) => {
@@ -208,7 +208,7 @@ export class HaxballRoom {
         let txt = `Link ⇒  ${link}  ⇐ Zakup przez Stripe! Następnie wyjdź i wejdź!`;
         this.sendMsgToPlayer(player, txt, Colors.OrangeTangelo, 'bold');
         hb_log(`Gracz ${player.name} otrzymał link: ${txt}`);
-      }).catch((error) => { hb_log(`getPaymentLink error: ${error}`) });
+      }).catch((error) => { hb_log(`!! getPaymentLink error: ${error}`) });
     });
     hb_log("#I# InitData() done");
   }
@@ -218,8 +218,7 @@ export class HaxballRoom {
       this.player_names_by_auth = result;
       hb_log(`#I# initPlayerNames(${this.player_names_by_auth.size})`);
       this.updateTop10();
-      hb_log(`#I# updatedTop10()`);
-    }).catch((error) => {hb_log(`getAllPlayerNames error: ${error}`)});
+    }).catch((error) => {hb_log(`!! getAllPlayerNames error: ${error}`)});
   }
 
   private createGodPlayer() {
@@ -267,7 +266,7 @@ export class HaxballRoom {
     // TODO connectable should be updated by another thread?job? async independent from that
     let playersMax = this.room_config.maxPlayersOverride;
     let playersCur = this.players_num > playersMax ? playersMax : this.players_num;
-    let serverData = new ServerData(this.room_config.token, this.room_link, this.room_config.roomName, playersCur, playersMax, true, true);
+    let serverData = new ServerData(this.room_config.selector, this.room_config.token, this.room_link, this.room_config.roomName, playersCur, playersMax, true, true);
     tokenDatabase.saveServer(serverData);
   }
 
@@ -757,7 +756,7 @@ export class HaxballRoom {
         if (this.auto_mode) this.auto_bot.handlePlayerJoin(playerExt);
         this.rejoice_maker.handlePlayerJoin(playerExt);
       }
-    });
+    }).catch((e) => hb_log(`!! getTrustAndAdminLevel error: ${e}`));
     this.anti_spam.addPlayer(player);
     if (this.anti_spam.enabled) {
       this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
@@ -794,7 +793,7 @@ export class HaxballRoom {
         playerExt.stat.glickoPlayer!.setRating(result.rating.mu);
         playerExt.stat.glickoPlayer!.setRd(result.rating.rd);
         playerExt.stat.glickoPlayer!.setVol(result.rating.vol);
-      });
+      }).catch((e) => hb_log(`!! loadPlayerRating: ${e}`));
       this.game_state.loadPlayerMatchStats(playerExt.auth_id).then(result => {
         let stat = playerExt.stat;
         stat.games = result.games;
@@ -809,7 +808,7 @@ export class HaxballRoom {
         stat.counterAfk = result.left_afk;
         stat.counterVoteKicked = result.left_votekick;
         stat.counterLeftServer = result.left_server;
-      })
+      }).catch((e) => hb_log(`!! loadPlayerMatchStats error ${e}`));
     }
   }
 
@@ -1103,14 +1102,14 @@ export class HaxballRoom {
 
   updateTop10() {
     this.game_state.updateTopRatings(this.player_names_by_auth).then(() => {
-      this.game_state.getTop10Players().then((results) => {
+      this.game_state.getTop10PlayersShort().then((results) => {
         this.top10 = [];
         for (let result of results) {
           this.top10.push(result);
         }
         hb_log('Top 10 zaktualizowane');
-      })
-    });
+      }).catch((e) => { hb_log(`!! updateTop10 error: ${e}`) });
+    }).catch((e) => hb_log(`!! updateTopRatings error: ${e}`));
   }
 
   async handlePositionsReset() {

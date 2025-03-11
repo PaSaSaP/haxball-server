@@ -4,6 +4,7 @@ import { dbDir } from './config';
 const dbName = dbDir + '/verification.db';
 
 interface ServerRow {
+  selector: string;
   token: string;
   link: string;
   room_name: string;
@@ -14,6 +15,7 @@ interface ServerRow {
 }
 
 export class ServerData implements ServerRow {
+  selector: string;
   token: string;
   link: string;
   room_name: string;
@@ -22,7 +24,8 @@ export class ServerData implements ServerRow {
   connectable: boolean;
   active: boolean;
 
-  constructor(token: string, link: string, room_name: string, player_num: number, player_max: number, connectable: boolean, active: boolean) {
+  constructor(selector: string, token: string, link: string, room_name: string, player_num: number, player_max: number, connectable: boolean, active: boolean) {
+    this.selector = selector;
     this.token = token;
     this.link = link;
     this.room_name = room_name;
@@ -33,8 +36,8 @@ export class ServerData implements ServerRow {
   }
 
   // Metoda do konwersji do formatu dla bazy danych
-  toDbFormat(): [string, string, string, number, number, boolean, boolean] {
-    return [this.token, this.link, this.room_name, this.player_num, this.player_max, this.connectable, this.active];
+  toDbFormat(): [string, string, string, string, number, number, boolean, boolean] {
+    return [this.selector, this.token, this.link, this.room_name, this.player_num, this.player_max, this.connectable, this.active];
   }
 }
 
@@ -58,7 +61,8 @@ export class TokenDatabase {
       // Tworzenie tabeli dla serwerów
       this.db.run(
         `CREATE TABLE IF NOT EXISTS servers (
-          token TEXT PRIMARY KEY,
+          selector TEXT PRIMARY KEY,
+          token TEXT,
           link TEXT,
           room_name TEXT,
           player_num INTEGER,
@@ -97,10 +101,11 @@ export class TokenDatabase {
   // Zapis serwera
   saveServer(serverData: ServerData): void {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO servers (token, link, room_name, player_num, player_max, connectable, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO servers (selector, token, link, room_name, player_num, player_max, connectable, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(serverData.token, serverData.link, serverData.room_name, serverData.player_num, serverData.player_max, serverData.connectable, serverData.active, (err: any) => {
+    stmt.run(serverData.selector, serverData.token, serverData.link, serverData.room_name,
+        serverData.player_num, serverData.player_max, serverData.connectable, serverData.active, (err: any) => {
       if (err) {
         console.error('Błąd podczas zapisywania serwera:', err.message);
       }
@@ -108,16 +113,17 @@ export class TokenDatabase {
     stmt.finalize();
   }
 
-  // Odczyt serwera po tokenie, zwraca obiekt typu ServerData
-  getServerByToken(token: string): Promise<ServerData | null> {
+  // Odczyt serwera po selector, zwraca obiekt typu ServerData
+  getServerBySelector(selector: string): Promise<ServerData | null> {
     return new Promise((resolve, reject) => {
-      this.db.get<ServerRow>('SELECT * FROM servers WHERE token = ?', [token], (err, row) => {
+      this.db.get<ServerRow>('SELECT * FROM servers WHERE selector = ?', [selector], (err, row) => {
         if (err) {
-          console.error('Błąd podczas odczytu serwera po tokenie:', err.message);
+          console.error('Błąd podczas odczytu serwera po selector:', err.message);
           reject(err);
         }
         if (row) {
           const serverData = new ServerData(
+            row.selector,
             row.token,
             row.link,
             row.room_name,
@@ -144,6 +150,7 @@ export class TokenDatabase {
         }
         const activeServers = rows.map((row) => {
           return new ServerData(
+            row.selector,
             row.token,
             row.link,
             row.room_name,
@@ -158,13 +165,13 @@ export class TokenDatabase {
     });
   }
 
-  updateServerStatus(token: string, active: boolean): void {
+  updateServerStatus(selector: string, active: boolean): void {
     const stmt = this.db.prepare(`
       UPDATE servers
       SET active = ?
-      WHERE token = ?
+      WHERE selector = ?
     `);
-    stmt.run(active, token, (err: any) => {
+    stmt.run(active, selector, (err: any) => {
       if (err) {
         console.error('Błąd podczas aktualizacji statusu serwera:', err.message);
       }
@@ -173,9 +180,9 @@ export class TokenDatabase {
   }
 
   // Usuwanie serwera po tokenie
-  deleteServerByToken(token: string): void {
-    const stmt = this.db.prepare('DELETE FROM servers WHERE token = ?');
-    stmt.run(token, (err: any) => {
+  deleteServerBySelector(selector: string): void {
+    const stmt = this.db.prepare('DELETE FROM servers WHERE selector = ?');
+    stmt.run(selector, (err: any) => {
       if (err) {
         console.error('Błąd podczas usuwania serwera:', err.message);
       }

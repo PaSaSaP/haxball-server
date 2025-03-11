@@ -13,6 +13,7 @@ export interface RoomServerConfig {
   noPlayer: boolean;
   autoModeEnabled: boolean;
   token: string;
+  selector: string;
 }
 
 export const dbDir = "./db";
@@ -36,7 +37,8 @@ const futsal_3vs3: RoomServerConfig = {
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: true,
-  token: 'thr1.AAAAAGfOwmaDvKiUfq2Wng.EVkWUbSNt4U',
+  token: 'thr1.AAAAAGfP3jXk3PrrJUBRbA.ET8wKpTy9Yw',
+  selector: '3vs3',
 };
 
 const futsal_1vs1: RoomServerConfig = {
@@ -52,7 +54,8 @@ const futsal_1vs1: RoomServerConfig = {
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: false,
-  token: 'thr1.AAAAAGfPYMTK3hYzu8I1cA.2x5mdLOv2_E',
+  token: 'thr1.AAAAAGfP-5Ya5uoOAiJN2g.rjhiUoBbHQk',
+  selector: '1vs1',
 };
 
 export const getRoomConfig = (name: string): RoomServerConfig => {

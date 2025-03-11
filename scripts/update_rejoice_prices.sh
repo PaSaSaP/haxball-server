@@ -16,6 +16,11 @@ if [ ! -f "$CSV_FILE" ]; then
   exit 1
 fi
 
+# Czyścimy najpierw stare ceny
+sqlite3 "$DB_FILE" <<EOF
+    DELETE FROM rejoice_prices;
+EOF
+
 # Przechodzimy przez każdy wiersz w pliku CSV
 while IFS=',' read -r REJOICE_ID FOR_DAYS PRICE; do
   # Sprawdzamy, czy wiersz nie jest pusty

@@ -104,7 +104,9 @@ class RadiusMultiplierRejoice implements IRejoice {
   }
   handleTeamGoal() {
     this.startedAt = Date.now();
-    this.startingRadius = this.properties.getPlayerDiscProperties(this.playerId).radius;
+    const props = this.properties.getPlayerDiscProperties(this.playerId);
+    if (!props) return;
+    this.startingRadius = props.radius;
     this.inProgress = true;
   }
   handleGameStop() {
@@ -226,6 +228,7 @@ export class RejoiceMaker {
     this.playingRejoices.length = 0;
     if (this.playerRejoices.has(scorerPlayerId)) this.playingRejoices.push(this.playerRejoices.get(scorerPlayerId)!.get());
     if (this.playerRejoices.has(assisterPlayerId)) this.playingRejoices.push(this.playerRejoices.get(assisterPlayerId)!.get());
+    if (this.playingRejoices.length == 2) this.checkPriorityOfRejoices();
     if (ownGoalPlayerId !== -1) this.playingRejoices.push(this.getOwnGoalRejoice(ownGoalPlayerId));
     this.playingRejoices.forEach(rejoice => {
       rejoice.handleTeamGoal();
@@ -251,6 +254,14 @@ export class RejoiceMaker {
   getRejoiceNames(playerId: number) {
     if (!this.playerRejoices.has(playerId)) return [];
     return this.playerRejoices.get(playerId)!.getRejoiceNames();
+  }
+  private checkPriorityOfRejoices() {
+    let sr = this.playingRejoices[0];
+    let ar = this.playingRejoices[1];
+    // only one gravity playing rejoice and scorer has priority
+    if (ar.name == "gravity" && sr.name == "gravity") {
+      this.playingRejoices.length = 1;
+    }
   }
   private createRejoiceByName(rejoiceId: string, playerId: number) {
     if (rejoiceId == "getting_bigger") return new GettingBiggerRejoice(playerId, this.dpHandler);

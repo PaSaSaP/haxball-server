@@ -155,6 +155,7 @@ class Commander {
       stats: this.commandStat,
       top: this.commandTop10,
       top10: this.commandTop10,
+      topext: this.commandTop10Ext,
       auth: this.commandPrintAuth,
       thumb: this.commandThumbVote,
       thumbup: this.commandThumbVoteUp,
@@ -425,11 +426,11 @@ class Commander {
 
   async commandHelp(player: PlayerObject) {
     this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !top !cieszynka !discord !pasek !kebab !sklep", Colors.Help);
-    if (player.admin) {
+    let playerExt = this.Pid(player.id);
+    if (playerExt.admin_level) {
       this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !restart/r !start/stop/s !swap !swap_and_restart/sr !rand_and_restart/rr !win_stay/ws !add/a !map/m", Colors.Help);
       this.sendMsgToPlayer(player, "Dla Admina: !kick (auth) !tkick_5m/1h/1d, !tmute_5m/1h/1d (network) !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help);
     }
-    let playerExt = this.Pid(player.id);
     if (playerExt.trust_level > 0) {
       this.sendMsgToPlayer(player, ": !thumb !thumb_up !thump_down !thumb_remove !report !verify", Colors.Help);
     }
@@ -908,7 +909,7 @@ class Commander {
     if (!cmdPlayerExt) return;
     let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
-    let dateStr = getTimestampHM(playerExt.join_time);
+    let dateStr = getTimestampHM(cmdPlayerExt.join_time);
     this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr} od:${dateStr}`);
   }
 
@@ -942,6 +943,18 @@ class Commander {
       ).join("");
       this.sendMsgToPlayer(player, `🏆 ${secondHalf}`, Colors.Stats);
     }
+  }
+
+  async commandTop10Ext(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, "topext")) return;
+    this.hb_room.game_state.getTop10Players().then((results) => {
+      let n = 3;
+      for (let result of results) {
+        if (n-- <= 0) return;
+        this.sendMsgToPlayer(player, `mamy ${result.player_name} ${result.games} ${result.goals}`);
+
+      }
+    }).catch((e) => hb_log(`!! commandTop10Ext error ${e}`));
   }
 
   async commandPrintAuth(player: PlayerObject) {
@@ -1015,8 +1028,8 @@ class Commander {
 
   async commandBuyRejoice(player: PlayerObject, cmds: string[]) {
     if (cmds.length === 0) {
-      this.sendMsgToPlayer(player, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki`, Colors.DarkGreen);
       this.sendMsgToPlayer(player, `By sprawdzić cenę: !sklep <nazwa>, By rozpocząć proces zakupu: !kup <nazwa> <liczba dni>`, Colors.DarkGreen);
+      this.sendMsgToPlayer(player, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki`, Colors.DarkGreen);
       return;
     }
     let rejoiceName = cmds[0];

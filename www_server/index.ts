@@ -18,6 +18,7 @@ app.use('/verify', verifyRouter);
 app.use("/api/servers", apiGetServers);
 
 app.use("/api/top10", apiTop10);
+app.use("/api/top", apiTop10);
 
 app.use("/api/stripe", apiStripeTransaction);
 app.use("/stripe", stripeRedirect);
