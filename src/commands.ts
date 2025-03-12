@@ -1,7 +1,7 @@
 import { BuyCoffee } from "./buy_coffee";
 import { HaxballRoom } from "./hb_room";
 import all_maps from "./maps";
-import { PlayerData, TransactionByPlayerInfo } from "./structs";
+import { PlayerData, PlayerTopRatingDataShort, TransactionByPlayerInfo } from "./structs";
 import { sleep, getTimestampHM, toBoolean } from "./utils";
 import { generateVerificationLink } from "./verification";
 import { Colors } from "./colors";
@@ -153,9 +153,14 @@ class Commander {
       rank: this.commandStat,
       stat: this.commandStat,
       stats: this.commandStat,
-      top: this.commandTop10,
-      top10: this.commandTop10,
+      top: this.commandTop10Daily,
+      top10: this.commandTop10Daily,
+      ttop: this.commandTop10All,
+      ttop10: this.commandTop10All,
+      wtop: this.commandTop10Weekly,
+      wtop10: this.commandTop10Weekly,
       topext: this.commandTop10Ext,
+      update_top10: this.commandUpdateTop10,
       auth: this.commandPrintAuth,
       thumb: this.commandThumbVote,
       thumbup: this.commandThumbVoteUp,
@@ -188,6 +193,8 @@ class Commander {
       only_trusted_chat: this.commandOnlyTrustedChat,
       trust_nick: this.commandWhitelistNonTrustedNick,
       auto_debug: this.commandAutoDebug,
+      set_welcome: this.commandSetWelcomeMsg,
+      anno: this.commandSendAnnoToAllPlayers,
 
       pasek: this.commandPasek,
       kebab: this.commandBuyCoffeeLink,
@@ -425,10 +432,10 @@ class Commander {
   }
 
   async commandHelp(player: PlayerObject) {
-    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back/jj !afks !stat !top !cieszynka !discord !pasek !kebab !sklep", Colors.Help);
+    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back !afks !stat !top !ttop !wtop !pasek !discord !kebab !cieszynka !sklep", Colors.Help);
     let playerExt = this.Pid(player.id);
     if (playerExt.admin_level) {
-      this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !restart/r !start/stop/s !swap !swap_and_restart/sr !rand_and_restart/rr !win_stay/ws !add/a !map/m", Colors.Help);
+      this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !r !s !swap !sr !rr !ws !a !map/m", Colors.Help);
       this.sendMsgToPlayer(player, "Dla Admina: !kick (auth) !tkick_5m/1h/1d, !tmute_5m/1h/1d (network) !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help);
     }
     if (playerExt.trust_level > 0) {
@@ -909,8 +916,10 @@ class Commander {
     if (!cmdPlayerExt) return;
     let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
+    let stat = cmdPlayerExt.stat;
+    let shameStr = playerExt.admin_level ? ` A:${stat.counterAfk},L:${stat.counterLeftServer},V:${stat.counterVoteKicked}` : '';
     let dateStr = getTimestampHM(cmdPlayerExt.join_time);
-    this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr} od:${dateStr}`);
+    this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr}${shameStr} od:${dateStr}`);
   }
 
   async commandStat(player: PlayerObject, cmds: string[]) {
@@ -926,12 +935,18 @@ class Commander {
     this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
 
-  async commandTop10(player: PlayerObject, cmds: string[]) {
+  async commandTop10V1(player: PlayerObject, cmds: string[]) {
     let top10 = this.hb_room.top10;
     if (top10.length === 0) {
       this.sendMsgToPlayer(player, "🏆 Brak danych o najlepszych graczach.", Colors.Stats);
       return;
     }
+    let pre1 = ['TODAY',
+                ' TOP ']
+    let pre2 = ['WEEK ',
+                ' TOP ']
+    let pre3 = [' ALL ',
+                ' TOP ']
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     let firstHalf = top10.slice(0, 5).map((e, index) =>
       `${rankEmojis[index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`
@@ -945,6 +960,41 @@ class Commander {
     }
   }
 
+  commandTop10Daily(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTop10(player, cmds, 'daily');
+  }
+  commandTop10Weekly(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTop10(player, cmds, 'weekly');
+  }
+  commandTop10All(player: PlayerObject, cmds: string[]) {
+    return this.execCommandTop10(player, cmds, 'all');
+  }
+  async execCommandTop10(player: PlayerObject, cmds: string[], type: "daily" | "weekly" | "all") {
+    const rankings = {
+      daily: { data: this.hb_room.top10_daily, prefix: ["TODAY", " TOP "] },
+      weekly: { data: this.hb_room.top10_weekly, prefix: ["WEEK ", " TOP "] },
+      all: { data: this.hb_room.top10, prefix: [" ALL ", " TOP "] }
+    };
+
+    const ranking = rankings[type];
+    if (!ranking || ranking.data.length === 0) {
+      this.sendMsgToPlayer(player, "🏆 Brak danych o najlepszych graczach.", Colors.Stats);
+      return;
+    }
+
+    const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+    const formatEntry = (e: PlayerTopRatingDataShort, index: number) =>
+        `${rankEmojis[index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`;
+    
+    const firstHalf = ranking.data.slice(0, 5).map(formatEntry).join(" ");
+    this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[0]}${firstHalf}`, Colors.Stats);
+    
+    if (ranking.data.length > 5) {
+      const secondHalf = ranking.data.slice(5, 10).map(formatEntry).join(" ");
+      this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[1]}${secondHalf}`, Colors.Stats);
+    }
+  }
+
   async commandTop10Ext(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(player, "topext")) return;
     this.hb_room.game_state.getTop10Players().then((results) => {
@@ -955,6 +1005,11 @@ class Commander {
 
       }
     }).catch((e) => hb_log(`!! commandTop10Ext error ${e}`));
+  }
+
+  async commandUpdateTop10(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, "update_top10")) return;
+    this.hb_room.updateTop10();
   }
 
   async commandPrintAuth(player: PlayerObject) {
@@ -1316,6 +1371,18 @@ class Commander {
     }
     this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
     this.sendMsgToPlayer(player, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
+  }
+
+  async commandSetWelcomeMsg(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'welcome')) return;
+    if (!cmds.length) return;
+    this.hb_room.welcome_message.setMessage(cmds.join(' '));
+  }
+
+  async commandSendAnnoToAllPlayers(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'welcome')) return;
+    if (!cmds.length) return;
+    this.hb_room.sendMsgToAll(`${cmds.join(' ')}`, Colors.AzureBlue, 'bold');
   }
 
   async commandServerRestart(player: PlayerObject) {

@@ -1,5 +1,5 @@
 import { HaxballRoom } from "./hb_room";
-import { PlayerData } from "./structs";
+import { PlayerData, PlayerMatchStatsData, PlayerMatchStatsDataImpl } from "./structs";
 
 class Goal {
   time: number;
@@ -106,6 +106,7 @@ enum Team {
   RED = 1,
   BLUE = 2,
 }
+
 
 export class MatchStats {
   emptyBallTouch: BallTouch;
@@ -425,71 +426,79 @@ export class MatchStats {
     this.lastWinner = winner;
   }
 
-  updatePlayerStats(players: Map<number, PlayerData>, fullTimeMatchPlayed: boolean) {
+  updatePlayerStats(players: Map<number, PlayerData>, fullTimeMatchPlayed: boolean): Map<number, PlayerMatchStatsData> {
     const matchFullTime = this.game.scores?.time ?? 0;
     const winner = this.lastWinner;
+    let playerMatchStats: Map<number, PlayerMatchStatsData> = new Map<number, PlayerMatchStatsData>();
+    const getP = (playerId: number): PlayerMatchStatsData => {
+      let currentMatch = players.get(playerId)!.stat.currentMatch;
+      if (!playerMatchStats.has(playerId)) playerMatchStats.set(playerId, currentMatch);
+      return currentMatch;
+    }
     let redGK = this.getGKRed();
     let blueGK = this.getGKBlue();
-    let games: Set<number> = new Set<number>();
-    let fullGames: Set<number> = new Set<number>();
-    let wins: Set<number> = new Set<number>();
-    let fullWins: Set<number> = new Set<number>();
-    let playTime: Map<number, number> = new Map<number, number>();
-    let cleanSheet: Set<number> = new Set<number>();
 
     for (let composition of this.game.redCompositions.concat(this.game.blueCompositions)) {
-      if (!playTime.has(composition.player.id)) playTime.set(composition.player.id, 0);
-      let timePlayed = playTime.get(composition.player.id)!;
+      players.get(composition.player.id)!.stat.currentMatch.reset();
+    }
+
+    for (let composition of this.game.redCompositions.concat(this.game.blueCompositions)) {
+      let d = getP(composition.player.id);
       let tEntry = composition.timeEntry;
       let tExit = composition.timeExit;
       for (let i = 0; i < tEntry.length; i++) {
         if (tExit.length < i + 1) {
-          timePlayed += matchFullTime - tEntry[i];
+          d.playtime += matchFullTime - tEntry[i];
         } else {
-          timePlayed += tExit[i] - tEntry[i];
+          d.playtime += tExit[i] - tEntry[i];
         }
       }
-      playTime.set(composition.player.id, Math.floor(timePlayed));
     }
     for (let composition of this.game.redCompositions) {
-      games.add(composition.player.id);
-      if (winner === 1) wins.add(composition.player.id);
-      let timePlayed = playTime.get(composition.player.id)!;
-      if (fullTimeMatchPlayed && composition.timeEntry[0] == 0 && matchFullTime - timePlayed < 1) {
-        fullGames.add(composition.player.id);
-        if (winner === 1) fullWins.add(composition.player.id);
+      let d = getP(composition.player.id);
+      if (!d.games) d.games++;
+      if (winner === 1 && !d.wins) d.wins++;
+      if (fullTimeMatchPlayed && composition.timeEntry[0] == 0 && matchFullTime - d.playtime < 1) {
+        if (!d.full_games) d.full_games++;
+        if (winner === 1 && !d.full_wins) d.full_wins++;
       }
     }
     for (let composition of this.game.blueCompositions) {
-      games.add(composition.player.id);
-      if (winner === 2) wins.add(composition.player.id);
-      let timePlayed = playTime.get(composition.player.id)!;
-      if (fullTimeMatchPlayed && composition.timeEntry[0] == 0 && matchFullTime - timePlayed < 1) {
-        fullGames.add(composition.player.id);
-        if (winner === 2) fullWins.add(composition.player.id);
+      let d = getP(composition.player.id);
+      if (!d.games) d.games++;
+      if (winner === 2 && !d.wins) d.wins++;
+      if (fullTimeMatchPlayed && composition.timeEntry[0] == 0 && matchFullTime - d.playtime < 1) {
+        if (!d.full_games) d.full_games++;
+        if (winner === 2 && !d.full_wins) d.full_wins++;
       }
     }
     if (this.game.scores) {
-      if (this.game.scores.blue === 0 && redGK) cleanSheet.add(redGK.player.id);
-      if (this.game.scores.red === 0 && blueGK) cleanSheet.add(blueGK.player.id);
+      if (this.game.scores.blue === 0 && redGK) getP(redGK.player.id).clean_sheets++;
+      if (this.game.scores.red === 0 && blueGK) getP(blueGK.player.id).clean_sheets++;
+    }
+    for (let [playerId, goals] of this.goals) {
+      getP(playerId).goals += goals;
+    }
+    for (let [playerId, assists] of this.assists) {
+      getP(playerId).assists += assists;
+    }
+    for (let [playerId, ownGoals] of this.ownGoals) {
+      getP(playerId).own_goals += ownGoals;
     }
 
-    for (let playerId of games) {
+    for (let [playerId, p] of playerMatchStats) {
       let stat = players.get(playerId)!.stat;
-      stat.games++;
-      if (fullGames.has(playerId)) stat.fullGames++;
-      if (wins.has(playerId)) stat.wins++;
-      if (fullWins.has(playerId)) stat.fullWins++;
-      stat.playtime += playTime.get(playerId)!;
-      if (cleanSheet.has(playerId)) stat.cleanSheets++;
-      let goals = this.goals.get(playerId);
-      let assists = this.assists.get(playerId);
-      let ownGoals = this.ownGoals.get(playerId);
-      if (goals !== undefined) stat.goals += goals;
-      if (assists !== undefined) stat.assists += assists;
-      if (ownGoals !== undefined) stat.ownGoals += ownGoals;
+      stat.games += p.games;
+      stat.fullGames += p.full_games;
+      stat.wins += p.wins;
+      stat.fullWins += p.full_wins;
+      stat.goals += p.goals;
+      stat.assists += p.assists;
+      stat.ownGoals += p.own_goals;
+      stat.playtime += p.playtime;
+      stat.cleanSheets += p.clean_sheets;
     }
-    return games;
+    return playerMatchStats;
   }
 
   private getBallSpeed(ballProperties: DiscPropertiesObject) {

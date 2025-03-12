@@ -13,6 +13,8 @@
     "discord_1vs1": "npx tsc -p discord_client/tsconfig.json && HX_SELECTOR=1vs1 node dist/discord_client/discord_client/index.js",
     "discord_3vs3": "npx tsc -p discord_client/tsconfig.json && HX_SELECTOR=3vs3 node dist/discord_client/discord_client/index.js",
     "market_server": "npx tsc -p market_server/tsconfig.json && HX_SELECTOR=3vs3 node dist/market_server/market_server/index.js",
+    "accu_stats_build": "npx tsc -p accu_stats/tsconfig.json",
+    "accu_stats": "HX_SELECTOR=3vs3 node dist/accu_stats/accu_stats/index.js",
     "start": "npm run futsal_3vs3"
   },
   "keywords": [],

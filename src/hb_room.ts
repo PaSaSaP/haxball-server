@@ -11,7 +11,7 @@ import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData, PlayerStat, PlayerTopRatingData, PlayersGameState, MatchStatsProcessingState, TransactionByPlayerInfo, PlayerTopRatingDataShort } from './structs';
+import { PPP, AdminStats, PlayerData, PlayerStat, MatchStatsProcessingState, TransactionByPlayerInfo, PlayerTopRatingDataShort, PlayerMatchStatsData, Match, PlayerLeavedDueTo } from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
@@ -24,6 +24,7 @@ import { PlayersGameStateManager } from './pg_manager';
 import { hb_log, hb_log_to_console } from './log';
 import { MatchStats } from './stats';
 import { RejoiceMaker } from './rejoice_maker';
+import WelcomeMessage from './welcome_message';
 
 
 export class HaxballRoom {
@@ -78,13 +79,16 @@ export class HaxballRoom {
   room_link: string;
   room_data_sync_timer: any | null;
   god_player: PlayerObject;
-  top10: PlayerTopRatingDataShort[]; // [name, rating, full games]
+  top10: PlayerTopRatingDataShort[];
+  top10_daily: PlayerTopRatingDataShort[];
+  top10_weekly: PlayerTopRatingDataShort[];
   player_names_by_auth: Map<string, string>;
   player_ids_by_auth: Map<string, number>;
   player_ids_by_normalized_name: Map<string, number>;
   players_game_state_manager: PlayersGameStateManager;
   rejoice_maker: RejoiceMaker;
   rejoice_prices: Map<string, { for_days: number, price: number }[]>;
+  welcome_message: WelcomeMessage;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -135,12 +139,15 @@ export class HaxballRoom {
     this.room_data_sync_timer = null;
     this.god_player = this.createGodPlayer();
     this.top10 = [];
+    this.top10_daily = [];
+    this.top10_weekly = [];
     this.player_names_by_auth = new Map<string, string>();
     this.player_ids_by_auth = new Map<string, number>();
     this.player_ids_by_normalized_name = new Map<string, number>();
     this.players_game_state_manager = new PlayersGameStateManager(this);
     this.rejoice_maker = new RejoiceMaker(this);
     this.rejoice_prices = new Map<string, { for_days: number, price: number }[]>();
+    this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.OrangeTangelo) });
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -554,8 +561,9 @@ export class HaxballRoom {
     }
     this.rejoice_maker.handleGameStop();
     if (doUpdateState) {
-      let updatedPlayerIds = this.match_stats.updatePlayerStats(this.players_ext_all, fullTimeMatchPlayed);
-      this.updatePlayerStatsForIds(updatedPlayerIds);
+      let matchPlayerStats = this.match_stats.updatePlayerStats(this.players_ext_all, fullTimeMatchPlayed);
+      if (this.auto_mode) this.updatePlayerLeftState(matchPlayerStats, this.auto_bot.currentMatch);
+      this.updateAccumulatedPlayerStats(matchPlayerStats, this.auto_bot.currentMatch, fullTimeMatchPlayed);
       if (this.auto_mode) this.auto_bot.currentMatch.matchStatsState = MatchStatsProcessingState.updated;
     }
     this.scores = null;
@@ -581,17 +589,46 @@ export class HaxballRoom {
     }, 1000);
   }
 
-  async updatePlayerStatsForIds(playerIds: Set<number>) {
-    hb_log(`Aktualizujemy match stats dla ${playerIds.size}`);
+  updatePlayerLeftState(matchPlayerStats: Map<number, PlayerMatchStatsData>, currentMatch: Match) {
+    for (let [playerId, statInMatch] of currentMatch.playerStats) {
+      let stat = this.player_stats.get(playerId)!;
+      let p = matchPlayerStats.get(playerId)!;
+      if (statInMatch.leftDueTo === PlayerLeavedDueTo.afk) {
+        p.left_afk++;
+        stat.counterAfk++;
+      } else if (statInMatch.leftDueTo === PlayerLeavedDueTo.leftServer) {
+        p.left_server++;
+        stat.counterLeftServer++;
+      } else if (statInMatch.leftDueTo === PlayerLeavedDueTo.voteKicked) {
+        p.left_votekick++;
+        stat.counterVoteKicked++;
+      }
+    }
+  }
+
+  async updateAccumulatedPlayerStats(matchPlayerStats: Map<number, PlayerMatchStatsData>, currentMatch: Match, fullTimeMatchPlayed: boolean) {
+    hb_log(`Aktualizujemy accumulated match stats dla ${matchPlayerStats.size}`);
     let updatedAuthIds: Set<string> = new Set<string>();
-    for (let playerId of playerIds) {
+    for (let playerId of matchPlayerStats.keys()) {
       updatedAuthIds.add(this.players_ext_all.get(playerId)!.auth_id);
     }
     for (let authId of updatedAuthIds) {
       let sId = this.player_stats_auth.get(authId)!;
       if (sId === undefined) continue;
       let stat = this.player_stats.get(sId)!;
-      this.game_state.savePlayerMatchStats(authId, stat);
+      this.game_state.savePlayerMatchStats(authId, stat).catch((e) => e && hb_log(`!! savePlayerMatchStats error: ${e}`));
+    }
+    if (this.auto_mode) {
+      hb_log(`Aktualizujemy match player stats dla ${matchPlayerStats.size}`);
+      this.game_state.insertNewMatch(currentMatch, fullTimeMatchPlayed).then((matchId) => {
+        for (let authId of updatedAuthIds) {
+          let sId = this.player_stats_auth.get(authId)!;
+          if (sId === undefined) continue;
+          let stat = this.player_stats.get(sId)!;
+          let teamId: 1|2 = currentMatch.redTeam.includes(stat.id) ? 1 : 2;
+          this.game_state.insertNewMatchPlayerStats(matchId, authId, teamId, stat.currentMatch).catch((e) => e && hb_log(`!! insertNewMatchPlayerStats error: ${e}`));
+        }
+      }).catch((e) => e && hb_log(`!! insertNewMatch error: ${e}`));
     }
   }
 
@@ -755,6 +792,7 @@ export class HaxballRoom {
         this.loadPlayerStat(playerExt);
         if (this.auto_mode) this.auto_bot.handlePlayerJoin(playerExt);
         this.rejoice_maker.handlePlayerJoin(playerExt);
+        this.welcome_message.sendWelcomeMessage(playerExt);
       }
     }).catch((e) => hb_log(`!! getTrustAndAdminLevel error: ${e}`));
     this.anti_spam.addPlayer(player);
@@ -790,9 +828,10 @@ export class HaxballRoom {
     playerExt.stat.updatePlayer(glickoPlayer);
     if (playerExt.trust_level) {
       this.game_state.loadPlayerRating(playerExt.auth_id).then(result => { // load stats
-        playerExt.stat.glickoPlayer!.setRating(result.rating.mu);
-        playerExt.stat.glickoPlayer!.setRd(result.rating.rd);
-        playerExt.stat.glickoPlayer!.setVol(result.rating.vol);
+        let g = playerExt.stat.glickoPlayer!;
+        g.setRating(result.rating.mu);
+        g.setRd(result.rating.rd);
+        g.setVol(result.rating.vol);
       }).catch((e) => hb_log(`!! loadPlayerRating: ${e}`));
       this.game_state.loadPlayerMatchStats(playerExt.auth_id).then(result => {
         let stat = playerExt.stat;
@@ -1061,6 +1100,7 @@ export class HaxballRoom {
     else if (scores.blue > scores.red) this.last_winner_team = 2;
     else this.last_winner_team = 0;
     if (this.auto_mode) this.auto_bot.handleTeamVictory(scores);
+    // TODO add also (simplified?) ratings for disabled auto_mode
   }
 
   async updateRatingsAndTop10() {
@@ -1100,16 +1140,29 @@ export class HaxballRoom {
     }
   }
 
+  private updateTop10Array(top10: PlayerTopRatingDataShort[], results: PlayerTopRatingDataShort[]) {
+    top10.length = 0;
+    for (let result of results) {
+      top10.push(result);
+    }
+  }
+
   updateTop10() {
     this.game_state.updateTopRatings(this.player_names_by_auth).then(() => {
       this.game_state.getTop10PlayersShort().then((results) => {
-        this.top10 = [];
-        for (let result of results) {
-          this.top10.push(result);
-        }
-        hb_log('Top 10 zaktualizowane');
+        this.updateTop10Array(this.top10, results);
+        hb_log('Total Top 10 zaktualizowane');
       }).catch((e) => { hb_log(`!! updateTop10 error: ${e}`) });
     }).catch((e) => hb_log(`!! updateTopRatings error: ${e}`));
+    // here only read daily and weekly top ranking
+    this.game_state.getDailyTop10PlayersShort().then((results) => {
+      this.updateTop10Array(this.top10_daily, results);
+      hb_log('Daily Top 10 zaktualizowane');
+    }).catch((e) => e && hb_log(`!! getDailyTop10PlayersShort error: ${e}`));
+    this.game_state.getWeeklyTop10PlayersShort().then((results) => {
+      this.updateTop10Array(this.top10_weekly, results);
+      hb_log('Weekly Top 10 zaktualizowane');
+    }).catch((e) => e && hb_log(`!! getWeeklyTop10PlayersShort error: ${e}`));
   }
 
   async handlePositionsReset() {

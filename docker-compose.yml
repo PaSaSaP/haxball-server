@@ -101,6 +101,19 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run market_server
+  accu-stats:
+    image: ghcr.io/puppeteer/puppeteer
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+      - HX_ROOM_CONFIG_SELECTOR=3vs3
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run accu_stats
 
 networks:
   app_network:

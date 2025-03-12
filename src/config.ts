@@ -37,7 +37,7 @@ const futsal_3vs3: RoomServerConfig = {
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: true,
-  token: 'thr1.AAAAAGfP3jXk3PrrJUBRbA.ET8wKpTy9Yw',
+  token: 'thr1.AAAAAGfQ53-gCiJFbd5zFA.8D5fgCv7jw4',
   selector: '3vs3',
 };
 
@@ -54,7 +54,7 @@ const futsal_1vs1: RoomServerConfig = {
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: false,
-  token: 'thr1.AAAAAGfQPc7zQCIiSObKsg.M-GfQye3UQY',
+  token: 'thr1.AAAAAGfQ5jbmINBvbVyMoA.WCW0lNoCZkk',
   selector: '1vs1',
 };
 

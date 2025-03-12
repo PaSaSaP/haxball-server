@@ -1,11 +1,13 @@
 import sqlite3 from 'sqlite3';
-import { PlayerData, PlayerStat } from './structs';
+import { PlayerData, PlayerStat, Match, PlayerMatchStatsData } from './structs';
 import ChatLogger from './chat_logger';
 import { PlayersDB } from './db/players';
 import { PlayerNamesDB } from './db/player_names';
 import { VotesDB } from './db/votes';
 import { ReportsDB } from './db/reports';
 import { PlayerMatchStatsDB } from './db/player_match_stats';
+import { MatchesDB } from './db/matches';
+import { MatchStatsDB } from './db/match_stats';
 import { PlayerRatingsDB } from './db/player_ratings';
 import { TopRatingsDB } from './db/top_ratings';
 import { PlayersStateDB } from './db/players_state';
@@ -16,6 +18,7 @@ import { RejoicePricesDB } from './db/rejoice_prices';
 import { PaymentsDB } from './db/payments';
 import { PaymentLinksDB } from './db/payment_links';
 import { PaymentLinksWatcher } from './db/payment_links_watcher';
+import { TopRatingsDailyDB, TopRatingsWeeklyDB } from './db/top_day_ratings';
 
 export class DBHandler {
   playersDb: sqlite3.Database;
@@ -24,12 +27,17 @@ export class DBHandler {
   players: PlayersDB;
   playerNames: PlayerNamesDB;
   votes: VotesDB;
-  playerMatchStats: PlayerMatchStatsDB;
+  playerMatchStats: PlayerMatchStatsDB; // all accumulated player stats
+  matches: MatchesDB;
+  matchStats: MatchStatsDB;
   playerState: PlayersStateDB;
   networksState: NetworksStateDB;
   reports: ReportsDB;
   ratings: PlayerRatingsDB;
   topRatings: TopRatingsDB;
+  topRatingsDaily: TopRatingsDailyDB;
+  topRatingsWeekly: TopRatingsWeeklyDB;
+
 
   rejoice: RejoiceDB;
   rejoiceTransactions: RejoiceTransactionsDB;
@@ -55,11 +63,15 @@ export class DBHandler {
     this.votes = new VotesDB(this.playersDb);
     // and second table
     this.playerMatchStats = new PlayerMatchStatsDB(this.otherDb);
+    this.matches = new MatchesDB(this.otherDb);
+    this.matchStats = new MatchStatsDB(this.otherDb);
     this.playerState = new PlayersStateDB(this.otherDb);
     this.networksState = new NetworksStateDB(this.otherDb);
     this.reports = new ReportsDB(this.otherDb);
     this.ratings = new PlayerRatingsDB(this.otherDb);
     this.topRatings = new TopRatingsDB(this.otherDb);
+    this.topRatingsDaily = new TopRatingsDailyDB(this.otherDb);
+    this.topRatingsWeekly = new TopRatingsWeeklyDB(this.otherDb);
     // and VIP table
     this.rejoice = new RejoiceDB(this.vipDb);
     this.rejoiceTransactions = new RejoiceTransactionsDB(this.vipDb);
@@ -77,11 +89,15 @@ export class DBHandler {
     this.votes.setupDatabase();
 
     this.playerMatchStats.setupDatabase();
+    this.matches.setupDatabase();
+    this.matchStats.setupDatabase();
     this.playerState.setupDatabase();
     this.networksState.setupDatabase();
     this.reports.setupDatabase();
     this.ratings.setupDatabase();
     this.topRatings.setupDatabase();
+    this.topRatingsDaily.setupDatabase();
+    this.topRatingsWeekly.setupDatabase();
 
     this.rejoice.setupDatabase();
     this.rejoiceTransactions.setupDatabase();
@@ -156,6 +172,14 @@ export class GameState {
     return this.dbHandler.playerMatchStats.savePlayerMatchStats(auth_id, stat);
   }
 
+  insertNewMatch(match: Match, fullTimeMatchPlayed: boolean) {
+    return this.dbHandler.matches.insertNewMatch(match, fullTimeMatchPlayed);
+  }
+  
+  insertNewMatchPlayerStats(match_id: number, auth_id: string, team_id: 0 | 1 | 2, stat: PlayerMatchStatsData) {
+    return this.dbHandler.matchStats.insertNewMatchPlayerStats(match_id, auth_id, team_id, stat);
+  }
+
   loadPlayerRating(auth_id: string) {
     return this.dbHandler.ratings.loadPlayerRating(auth_id);
   }
@@ -174,6 +198,22 @@ export class GameState {
 
   getTop10Players() {
     return this.dbHandler.topRatings.getTopNPlayers(10);
+  }
+
+  getDailyTop10Players() {
+    return this.dbHandler.topRatingsDaily.getTopNPlayers(10);
+  }
+
+  getDailyTop10PlayersShort() {
+    return this.dbHandler.topRatingsDaily.getTopNPlayersShort(10);
+  }
+
+  getWeeklyTop10Players() {
+    return this.dbHandler.topRatingsWeekly.getTopNPlayers(10);
+  }
+
+  getWeeklyTop10PlayersShort() {
+    return this.dbHandler.topRatingsWeekly.getTopNPlayersShort(10);
   }
 
   getAllPlayersGameState() {

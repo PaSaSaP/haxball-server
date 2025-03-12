@@ -18,7 +18,7 @@ export class PaymentsDB {
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS payments (
         transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        price REAL DEFAULT 0,
+        price REAL NOT NULL,
         pay_status TEXT CHECK(pay_status IN ('started', 'completed', 'failed')) NOT NULL
       );
     `;

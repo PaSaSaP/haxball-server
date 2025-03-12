@@ -69,7 +69,7 @@ export class TopRatingsDB {
               SELECT p.auth_id, r.rating, p.full_games AS games, p.full_wins AS wins, p.goals, p.assists, p.own_goals, p.clean_sheets
               FROM player_match_stats p
               JOIN player_ratings r ON p.auth_id = r.auth_id
-              WHERE p.games >= ?
+              WHERE p.full_games >= ?
               ORDER BY r.rating DESC
               LIMIT ?;
             `;

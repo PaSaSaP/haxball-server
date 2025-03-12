@@ -9,6 +9,7 @@ export class VotesDB {
   }
 
   setupDatabase() {
+    // TODO change "up"/"down" to integer 1/-1
     // Nowa tabela votes
     const createVotesTableQuery = `
         CREATE TABLE IF NOT EXISTS votes (

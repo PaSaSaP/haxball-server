@@ -151,7 +151,7 @@ export class AutoBot {
   }
 
   isLobbyTime() {
-    return [MatchState.lobby, MatchState.afterVictory].includes(this.matchState); // add players only while game
+    return [MatchState.lobby, MatchState.afterVictory].includes(this.matchState) || this.currentMatch.isEnded(); // add players only while game
   }
 
   async handlePlayerJoin(playerExt: PlayerData) {

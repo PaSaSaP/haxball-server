@@ -14,15 +14,9 @@ export class PlayerRatingsDB {
     const createPlayerRatingsTableQuery = `
       CREATE TABLE IF NOT EXISTS player_ratings (
         auth_id TEXT PRIMARY KEY,
-        rating REAL NOT NULL,
-        rd REAL NOT NULL,
-        volatility REAL DEFAULT 0,
-        total_games INTEGER DEFAULT 0,
-        total_full_games INTEGER DEFAULT 0,
-        won_games INTEGER DEFAULT 0,
-        left_afk INTEGER DEFAULT 0,
-        left_votekick INTEGER DEFAULT 0,
-        left_server INTEGER DEFAULT 0
+        rating REAL DEFAULT 1500,
+        rd REAL DEFAULT 150,
+        volatility REAL DEFAULT 0.02
       );
     `;
     this.db.run(createPlayerRatingsTableQuery, (e) => e && hb_log(`!! create player_ratings error: ${e}`));
@@ -31,7 +25,7 @@ export class PlayerRatingsDB {
   async loadPlayerRating(auth_id: string): Promise<PlayerRatingData> {
     return new Promise((resolve, reject) => {
       const query = `
-        SELECT auth_id, rating, rd, volatility, total_games, total_full_games, won_games, left_afk, left_votekick, left_server
+        SELECT auth_id, rating, rd, volatility
         FROM player_ratings
         WHERE auth_id = ?;
       `;
@@ -46,12 +40,6 @@ export class PlayerRatingsDB {
               rd: PlayerStat.DefaultRd,
               vol: PlayerStat.DefaultVol,
             },
-            total_games: 0,
-            total_full_games: 0,
-            won_games: 0,
-            left_afk: 0,
-            left_votekick: 0,
-            left_server: 0,
           });
         } else {
           resolve({
@@ -60,12 +48,6 @@ export class PlayerRatingsDB {
               rd: row.rd,
               vol: row.volatility,
             },
-            total_games: row.total_games,
-            total_full_games: row.total_full_games,
-            won_games: row.won_games,
-            left_afk: row.left_afk,
-            left_votekick: row.left_votekick,
-            left_server: row.left_server,
           });
         }
       });
@@ -75,30 +57,18 @@ export class PlayerRatingsDB {
   async savePlayerRating(auth_id: string, player: PlayerStat): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO player_ratings (auth_id, rating, rd, volatility, total_games, total_full_games, won_games, left_afk, left_votekick, left_server)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO player_ratings (auth_id, rating, rd, volatility)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(auth_id) DO UPDATE SET
           rating = excluded.rating,
           rd = excluded.rd,
-          volatility = excluded.volatility,
-          total_games = excluded.total_games,
-          total_full_games = excluded.total_full_games,
-          won_games = excluded.won_games,
-          left_afk = excluded.left_afk,
-          left_votekick = excluded.left_votekick,
-          left_server = excluded.left_server;
+          volatility = excluded.volatility;
       `;
       this.db.run(query, [
         auth_id,
         player.glickoPlayer!.getRating(),
         player.glickoPlayer!.getRd(),
-        player.glickoPlayer!.getVol(), // Zakładam, że Player ma właściwość vol
-        player.games,
-        player.fullGames,
-        player.wins,
-        player.counterAfk,
-        player.counterVoteKicked,
-        player.counterLeftServer,
+        player.glickoPlayer!.getVol(),
       ], (err) => {
         if (err) {
           reject('Error saving player rating: ' + err.message);

@@ -177,12 +177,6 @@ export interface PlayerRatingData {
     rd: number;      // Glicko2 rating deviation (sigma)
     vol: number;     // Glicko2 volatility
   };
-  total_games: number;
-  total_full_games: number;
-  won_games: number;
-  left_afk: number;
-  left_votekick: number;
-  left_server: number;
 }
 
 export interface PlayerMatchStatsData {
@@ -198,6 +192,36 @@ export interface PlayerMatchStatsData {
   left_afk: number;
   left_votekick: number;
   left_server: number;
+}
+
+export class PlayerMatchStatsDataImpl implements PlayerMatchStatsData {
+  games: number = 0;
+  full_games: number = 0;
+  wins: number = 0;
+  full_wins: number = 0;
+  goals: number = 0;
+  assists: number = 0;
+  own_goals: number = 0;
+  playtime: number = 0;
+  clean_sheets: number = 0;
+  left_afk: number = 0;
+  left_votekick: number = 0;
+  left_server: number = 0;
+
+  reset() {
+    this.games = 0;
+    this.full_games = 0;
+    this.wins = 0;
+    this.full_wins = 0;
+    this.goals = 0;
+    this.assists = 0;
+    this.own_goals = 0;
+    this.playtime = 0;
+    this.clean_sheets = 0;
+    this.left_afk = 0;
+    this.left_votekick = 0;
+    this.left_server = 0;
+  }
 }
 
 export interface PlayerTopRatingDataShort {
@@ -237,6 +261,8 @@ export class PlayerStat {
   counterVoteKicked: number;
   counterLeftServer: number;
 
+  currentMatch: PlayerMatchStatsDataImpl;
+
   constructor(id: number) {
     this.id = id;
     this.glickoPlayer = null;
@@ -254,6 +280,8 @@ export class PlayerStat {
     this.counterAfk = 0;
     this.counterVoteKicked = 0;
     this.counterLeftServer = 0;
+
+    this.currentMatch = new PlayerMatchStatsDataImpl();
   }
 
   updatePlayer(glickoPlayer: Glicko2.Player) {
