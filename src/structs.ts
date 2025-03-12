@@ -229,6 +229,10 @@ export interface PlayerTopRatingDataShort {
   rating: number;
 }
 
+export interface PlayerTopRatingDataShortAuth extends PlayerTopRatingDataShort {
+  auth_id: string;
+}
+
 export interface PlayerTopRatingData {
   rank: number;
   auth_id: string;

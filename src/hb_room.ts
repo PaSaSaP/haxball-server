@@ -82,6 +82,7 @@ export class HaxballRoom {
   top10: PlayerTopRatingDataShort[];
   top10_daily: PlayerTopRatingDataShort[];
   top10_weekly: PlayerTopRatingDataShort[];
+  global_rank_by_auth: Map<string, number>;
   player_names_by_auth: Map<string, string>;
   player_ids_by_auth: Map<string, number>;
   player_ids_by_normalized_name: Map<string, number>;
@@ -141,6 +142,7 @@ export class HaxballRoom {
     this.top10 = [];
     this.top10_daily = [];
     this.top10_weekly = [];
+    this.global_rank_by_auth = new Map<string, number>();
     this.player_names_by_auth = new Map<string, string>();
     this.player_ids_by_auth = new Map<string, number>();
     this.player_ids_by_normalized_name = new Map<string, number>();
@@ -1158,15 +1160,22 @@ export class HaxballRoom {
 
   private updateTop10Array(top10: PlayerTopRatingDataShort[], results: PlayerTopRatingDataShort[]) {
     top10.length = 0;
+    let n = 1;
     for (let result of results) {
       top10.push(result);
+      if (n++ >= 10) break;
     }
   }
 
   updateTop10() {
     this.game_state.updateTopRatings(this.player_names_by_auth).then(() => {
-      this.game_state.getTop10PlayersShort().then((results) => {
+      this.game_state.getTopPlayersShortAuth().then((results) => {
         this.updateTop10Array(this.top10, results);
+        let rank = 1;
+        for (let result of results) {
+          this.global_rank_by_auth.set(result.auth_id, rank);
+          rank++;
+        }
         hb_log('Total Top 10 zaktualizowane');
       }).catch((e) => { hb_log(`!! updateTop10 error: ${e}`) });
     }).catch((e) => hb_log(`!! updateTopRatings error: ${e}`));

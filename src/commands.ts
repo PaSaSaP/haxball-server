@@ -926,11 +926,12 @@ class Commander {
     let cmdPlayerExt = this.getPlayerDataByName(cmds, player, true);
     if (!cmdPlayerExt) return;
     let stat = cmdPlayerExt.stat;
+    let rank = this.hb_room.global_rank_by_auth.get(cmdPlayerExt.auth_id) ?? 0;
     let rating = Math.round(stat.glickoPlayer!.getRating());
     let rd = Math.round(stat.glickoPlayer!.getRd());
     let playtimeMin = Math.floor(stat.playtime / 60);
     let winRate = stat.fullGames > 0 ? ((stat.fullWins / stat.fullGames) * 100).toFixed(1) : 0;
-    let msg = `${cmdPlayerExt.name} ⭐${rating} ±${rd} ⚽${stat.goals} 🤝${stat.assists} ❌${stat.ownGoals} 🧤${stat.cleanSheets} ⏱️${playtimeMin}m`
+    let msg = `${cmdPlayerExt.name}➡️ 🔝${rank} ⭐${rating} ±${rd} ⚽${stat.goals} 🤝${stat.assists} ❌${stat.ownGoals} 🧤${stat.cleanSheets} ⏱️${playtimeMin}m`
       + ` 🎮Pełne: ${stat.fullWins}/${stat.fullGames} 🔲Wszystkie: ${stat.wins}/${stat.games} (WR: ${winRate}%)`;
     this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
@@ -971,9 +972,9 @@ class Commander {
   }
   async execCommandTop10(player: PlayerObject, cmds: string[], type: "daily" | "weekly" | "all") {
     const rankings = {
-      daily: { data: this.hb_room.top10_daily,   prefix: ["TODAY",           "\u2007TOP\u2007"] },
-      weekly: { data: this.hb_room.top10_weekly, prefix: ["\u2007WEEK",      "\u2007TOP\u2007"] },
-      all: { data: this.hb_room.top10,           prefix: ["\u2007ALL\u2007", "\u2007TOP\u2007"] }
+      daily: { selector: 'top', data: this.hb_room.top10_daily,   prefix: ["TODAY",           "\u2007TOP\u2007"] },
+      weekly: { selector: 'wtop', data: this.hb_room.top10_weekly, prefix: ["\u2007WEEK",      "\u2007TOP\u2007"] },
+      all: { selector: 'ttop', data: this.hb_room.top10,           prefix: ["\u2007ALL\u2007", "\u2007TOP\u2007"] }
     };
 
     const ranking = rankings[type];
@@ -982,6 +983,8 @@ class Commander {
       return;
     }
 
+    const link = config.webpageLink + '/' + ranking.selector;
+    this.sendMsgToPlayer(player, `🏆 Pełny ranking dostępny pod linkiem: ${link}`, Colors.Stats);
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     const formatEntry = (e: PlayerTopRatingDataShort, index: number, shift: number) =>
         `${rankEmojis[shift+index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`;

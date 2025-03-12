@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { PlayerTopRatingData, PlayerTopRatingDataShort } from '../structs';
+import { PlayerTopRatingData, PlayerTopRatingDataShort, PlayerTopRatingDataShortAuth } from '../structs';
 import { hb_log } from '../log';
 
 export class TopRatingsDB {
@@ -103,6 +103,21 @@ export class TopRatingsDB {
             });
           });
         });
+      });
+    });
+  }
+
+  async getTopNPlayersShortAuth(n: number): Promise<PlayerTopRatingDataShortAuth[]> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT player_name, rating, auth_id
+        FROM top_ratings 
+        ORDER BY rank ASC 
+        LIMIT ?;
+      `;
+      this.db.all(query, [n], (err, rows) => {
+        if (err) return reject("Error fetching top players with auth: " + err.message);
+        resolve(rows as PlayerTopRatingDataShortAuth[]);
       });
     });
   }

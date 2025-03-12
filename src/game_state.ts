@@ -192,6 +192,10 @@ export class GameState {
     return this.dbHandler.topRatings.updateTopRatings(playerMap);
   }
 
+  getTopPlayersShortAuth(limit: number = 1000) {
+    return this.dbHandler.topRatings.getTopNPlayersShortAuth(limit);
+  }
+
   getTop10PlayersShort() {
     return this.dbHandler.topRatings.getTopNPlayersShort(10);
   }
