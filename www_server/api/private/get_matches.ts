@@ -94,15 +94,25 @@ router.get("/3vs3", async (req: any, res: any) => {
   let cached = await getMatches3vs3Cached();
   res.json(cached.cache);
 });
-router.get("/first_match_id_1vs1", async (req: any, res: any) => {
+router.get("/1vs1/first_match_id", async (req: any, res: any) => {
   if (!verify(req, res)) return;
   let cached = await getMatches1vs1Cached();
   res.json({match_id: cached.matches.at(0)?.match_id ?? 0});
 });
-router.get("/first_match_id_3vs3", async (req: any, res: any) => {
+router.get("/3vs3/first_match_id", async (req: any, res: any) => {
   if (!verify(req, res)) return;
   let cached = await getMatches3vs3Cached();
   res.json({match_id: cached.matches.at(0)?.match_id ?? 0});
+});
+router.get("/1vs1/last_match_id", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  let cached = await getMatches1vs1Cached();
+  res.json({match_id: cached.matches.at(cached.matches.length-1)?.match_id ?? -1});
+});
+router.get("/3vs3/last_match_id", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  let cached = await getMatches3vs3Cached();
+  res.json({match_id: cached.matches.at(cached.matches.length-1)?.match_id ?? -1});
 });
 
 export const getFirstMatchId1vs1 = () => {

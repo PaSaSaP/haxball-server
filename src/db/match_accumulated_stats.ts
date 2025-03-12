@@ -145,4 +145,17 @@ export class MatchAccumulatedStatsDB {
       });
     });
   }
+
+  async getCurrentDate(): Promise<string> {
+    const query = 'SELECT current_date';
+    return new Promise((resolve, reject) => {
+      this.db.all(query, [], (err, rows: { current_date: string }[]) => {
+        if (err) {
+          reject('Error fetching current date: ' + err.message);
+        } else {
+          resolve(rows[0].current_date);
+        }
+      });
+    });
+  }
 }

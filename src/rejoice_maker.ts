@@ -202,8 +202,9 @@ export class RejoiceMaker {
     this.dpHandler = new DiscPropertiesHandler(hbRoom.room);
   }
 
-  async handlePlayerJoin(player: PlayerData) {
+  async handlePlayerJoin(player: PlayerData): Promise<number> {
     try {
+      let numberOfRejoices = 0;
       let results = await this.gameState.getRejoicesForPlayer(player.auth_id);
       const now = Date.now();
       for (let result of results) {
@@ -216,11 +217,14 @@ export class RejoiceMaker {
             if (!this.playerRejoices.has(player.id)) this.playerRejoices.set(player.id, new PlayerRejoices(rejoice));
             else this.playerRejoices.get(player.id)!.add(rejoice);
             RMLog(`Dodałem ${result.rejoice_id} dla ${player.name}`);
+            numberOfRejoices++;
           }
         }
       }
+      return numberOfRejoices;
     } catch (err) {
       RMLog(`Błąd pobierania rejoices dla ${player.name}: ${err}`);
+      return -1;
     }
   }
   handleTeamGoal(scorerPlayerId: number, assisterPlayerId: number, ownGoalPlayerId: number) {

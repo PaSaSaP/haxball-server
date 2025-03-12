@@ -252,8 +252,8 @@ export class GameState {
     return this.dbHandler.rejoice.updateOrInsertRejoice(auth_id, rejoice_id, time_from, time_to);
   }
 
-  insertRejoiceTransaction(auth_id: string, rejoice_id: string, at_time: number, for_days: number) {
-    return this.dbHandler.rejoiceTransactions.insertRejoiceTransaction(auth_id, rejoice_id, at_time, for_days);
+  insertRejoiceTransaction(auth_id: string, rejoice_id: string, at_time: number, for_days: number, selector: string) {
+    return this.dbHandler.rejoiceTransactions.insertRejoiceTransaction(auth_id, rejoice_id, at_time, for_days, selector);
   }
 
   getPaymentLink(auth_id: string, transaction_id: number) {
@@ -268,8 +268,8 @@ export class GameState {
     return this.chatLogger.logMessage(user_name, action, text, for_discord);
   }
 
-  setPaymentsLinkCallbackAndStart(callback: (auth_id: string, transaction_id: number) => void, intervalMs: number = 5000) {
-    this.dbHandler.paymentLinksWatcher.setCallback(callback);
+  setPaymentsLinkCallbackAndStart(callback: (auth_id: string, transaction_id: number) => void, selector: string, intervalMs: number = 5000) {
+    this.dbHandler.paymentLinksWatcher.setCallback(callback, selector);
     this.dbHandler.paymentLinksWatcher.startWatching(intervalMs);
   }
 }

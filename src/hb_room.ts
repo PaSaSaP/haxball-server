@@ -214,12 +214,11 @@ export class HaxballRoom {
         let link = result ?? 'INVALID';
         player.pendingTransaction = new TransactionByPlayerInfo(paymentTransactionId);
         player.pendingTransaction.link = link;
-        // let link = `${config.webpageLink}/stripe/${paymentTransactionId}`;
         let txt = `Link ⇒  ${link}  ⇐ Zakup przez Stripe! Następnie wyjdź i wejdź!`;
         this.sendMsgToPlayer(player, txt, Colors.OrangeTangelo, 'bold');
         hb_log(`Gracz ${player.name} otrzymał link: ${txt}`);
       }).catch((error) => { hb_log(`!! getPaymentLink error: ${error}`) });
-    });
+    }, this.room_config.selector);
     hb_log("#I# InitData() done");
   }
 

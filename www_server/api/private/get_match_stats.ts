@@ -53,7 +53,8 @@ async function fetchMatchStats(cache: Cache) {
       }
     }
   } catch (e) { console.error(`Error: ${e}`) };
-  cache.lastRowId = newRowId;
+  if (newRowId != -1)
+    cache.lastRowId = newRowId;
   let data: typeof cache.cache = [];
   for (let m of cache.matchStats) {
     data.push([m.match_id, m.auth_id, m.team, m.goals, m.assists, m.own_goals, m.clean_sheet, m.playtime, m.full_time, m.left_state]);

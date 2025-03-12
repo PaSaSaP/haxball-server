@@ -38,8 +38,8 @@ paymentsDb.setupDatabase();
 paymentsWatcher.setupDatabase();
 shortLinksDb.setupDatabase();
 
-rejoiceTransactionsWatcher.setCallback(async (authId: string, rejoiceTransactionId: number) => {
-  console.log(`Nowa transakcja: auth_id=${authId}, transaction_id=${rejoiceTransactionId}`);
+rejoiceTransactionsWatcher.setCallback(async (authId: string, rejoiceTransactionId: number, selector: string) => {
+  console.log(`Nowa transakcja: auth_id=${authId}, transaction_id=${rejoiceTransactionId} selector=${selector}`);
   let transaction = await rejoiceTransactionsDb.getPendingRejoiceTransaction(rejoiceTransactionId);
   if (!transaction) {
     console.error(`Nie ma transakcji z ${rejoiceTransactionId}`);
@@ -65,7 +65,7 @@ rejoiceTransactionsWatcher.setCallback(async (authId: string, rejoiceTransaction
   const hash = generateUniqueHash(authId, paymentTransactionId);
   await shortLinksDb.insertShortLink(hash, paymentLink);
   const shortLink = `${config.webpageLink}/stripe/${hash}`; // it is redirection
-  await paymentLinksDb.insertPaymentLink(authId, paymentTransactionId, shortLink);
+  await paymentLinksDb.insertPaymentLink(authId, paymentTransactionId, shortLink, selector);
   console.log(`Nowy link: ${shortLink} dla transakcji ${paymentTransactionId} dla auth ${authId}`);
 });
 paymentsWatcher.setCallback(async (paymentTransactionId: number, oldStatus: string, newStatus: string) => {

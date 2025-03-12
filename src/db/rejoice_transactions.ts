@@ -8,6 +8,7 @@ export interface RejoiceTransactionEntry {
   at_time: number;
   for_days: number;
   payment_transaction_id: number;
+  selector: string;
 }
 
 export class RejoiceTransactionsDB {
@@ -26,6 +27,7 @@ export class RejoiceTransactionsDB {
         at_time INTEGER NOT NULL,
         for_days INTEGER NOT NULL,
         payment_transaction_id INTEGER DEFAULT 0,
+        selector TEXT NOT NULL,
         FOREIGN KEY (payment_transaction_id) REFERENCES payments(transaction_id)
       );
     `;
@@ -33,14 +35,14 @@ export class RejoiceTransactionsDB {
     this.db.run(createTableQuery, (e) => e && hb_log(`!! create reojice_transactions error: ${e}`));
   }
 
-  async insertRejoiceTransaction(auth_id: string, rejoice_id: string, at_time: number, for_days: number): Promise<number> {
+  async insertRejoiceTransaction(auth_id: string, rejoice_id: string, at_time: number, for_days: number, selector: string): Promise<number> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO rejoice_transactions (auth_id, rejoice_id, at_time, for_days, payment_transaction_id)
-        VALUES (?, ?, ?, ?, 0);
+        INSERT INTO rejoice_transactions (auth_id, rejoice_id, at_time, for_days, payment_transaction_id, selector)
+        VALUES (?, ?, ?, ?, 0, ?);
       `;
 
-      this.db.run(query, [auth_id, rejoice_id, at_time, for_days], function (err) {
+      this.db.run(query, [auth_id, rejoice_id, at_time, for_days, selector], function (err) {
         if (err) return reject('Error inserting transaction: ' + err.message);
         resolve(this.lastID); // Zwraca ID nowo utworzonej transakcji
       });

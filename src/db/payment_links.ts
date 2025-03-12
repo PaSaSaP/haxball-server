@@ -20,6 +20,7 @@ export class PaymentLinksDB {
         auth_id TEXT NOT NULL,
         transaction_id INTEGER NOT NULL,
         link TEXT NOT NULL,
+        selector TEXT NOT NULL,
         PRIMARY KEY (auth_id, transaction_id)
       );
     `;
@@ -27,14 +28,14 @@ export class PaymentLinksDB {
     this.db.run(createTableQuery, (e) => e && hb_log(`!! create payment_links error: ${e}`));
   }
 
-  async insertPaymentLink(authId: string, paymentTransactionId: number, link: string): Promise<void> {
+  async insertPaymentLink(authId: string, paymentTransactionId: number, link: string, selector: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO payment_links (auth_id, transaction_id, link)
-        VALUES (?, ?, ?);
+        INSERT INTO payment_links (auth_id, transaction_id, link, selector)
+        VALUES (?, ?, ?, ?);
       `;
 
-      this.db.run(query, [authId, paymentTransactionId, link], (err) => {
+      this.db.run(query, [authId, paymentTransactionId, link, selector], (err) => {
         if (err) return reject('Error inserting payment link: ' + err.message);
         resolve();
       });

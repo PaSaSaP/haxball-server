@@ -127,7 +127,7 @@ export class MatchStatsDB {
         if (err) {
           reject('Error fetching match stats: ' + err.message);
         } else {
-          resolve([rows, rows[rows.length-1].rowid]);
+          resolve([rows, rows.length? rows[rows.length-1].rowid: -1]);
         }
       });
     });

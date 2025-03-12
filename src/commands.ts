@@ -182,6 +182,7 @@ class Commander {
 
       check_transaction: this.commandCheckPlayerTransaction,
       check_tr: this.commandCheckPlayerTransaction,
+      update_rejoice: this.commandUpdateRejoiceForPlayer,
       u: this.commandUnlockWriting,
       sefin: this.commandSefin,
       server_restart: this.commandServerRestart,
@@ -1093,10 +1094,10 @@ class Commander {
         + `link: ${playerExt.pendingTransaction.link} Najpierw ją zakończ!`, Colors.DarkGreen);
       return;
     }
-    this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays).then((result) => {
+    this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays, this.hb_room.room_config.selector).then((result) => {
       this.sendMsgToPlayer(player, `Rozpoczęliśmy proces zakupu cieszynki`, Colors.DarkGreen);
       hb_log(`Zakup cieszynki dla ${playerExt.name} ${playerExt.auth_id} r:${rejoiceName} na ${forDays}, id:${result}`);
-    });
+    }).catch((e) => e && hb_log(`!! insertRejoiceTransaction error ${e}`));
   }
 
   async commandCheckPlayerTransaction(player: PlayerObject, cmds: string[]) {
@@ -1113,6 +1114,19 @@ class Commander {
       return;
     }
     this.sendMsgToPlayer(player, `Gracz ${player.name} numer transakcji: ${transaction.transactionId}, link: ${transaction.link} status: ${transaction.status}`);
+  }
+
+  async commandUpdateRejoiceForPlayer(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'update_rejoice')) return;
+    if (cmds.length === 0) {
+      this.sendMsgToPlayer(player, `O jakiego gracza chodzi?`);
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    if (!cmdPlayer) return;
+    this.hb_room.rejoice_maker.handlePlayerJoin(cmdPlayer).then((num) => {
+      this.sendMsgToPlayer(player, `Gracz ${player.name} Dostał ${num} cieszynek!`);
+    }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
   }
 
   async commandVerify(player: PlayerObject) {
