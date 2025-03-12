@@ -90,6 +90,24 @@ export class MatchesDB {
     });
   }
 
+  async getMatchesAfter(lastMatchId: number): Promise<MatchEntry[]> {
+    return new Promise((resolve, reject) => {
+      const query = `
+      SELECT * FROM matches
+        WHERE match_id > ?
+        ORDER BY match_id ASC;
+      `;
+    
+      this.db.all(query, [lastMatchId], (err, rows: MatchEntry[]) => {
+        if (err) {
+          reject('Error fetching new player names: ' + err.message);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+
   async getCurrentDate(): Promise<string> {
     const query = 'SELECT current_date';
     return new Promise((resolve, reject) => {

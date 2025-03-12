@@ -2,8 +2,8 @@ import express, { Request, Response } from "express";
 import Stripe from 'stripe';
 import bodyParser from 'body-parser';
 import sqlite3 from 'sqlite3';
-import { PaymentsDB } from "../src/db/payments";
-import * as config from "../src/config";
+import { PaymentsDB } from "../../src/db/payments";
+import * as config from "../../src/config";
 
 const router = express.Router();
 router.use(bodyParser.raw({ type: 'application/json' }));

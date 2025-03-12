@@ -1,10 +1,10 @@
 import express, { Request, Response } from "express";
 import sqlite3 from 'sqlite3';
-import {TopRatingsDB} from "../src/db/top_ratings";
-import { TopRatingsDailyDB, TopRatingsWeeklyDB } from "../src/db/top_day_ratings";
-import * as config from "../src/config";
-import { PlayerTopRatingData } from "../src/structs";
-import { getTimestampHM } from "../src/utils";
+import {TopRatingsDB} from "../../src/db/top_ratings";
+import { TopRatingsDailyDB, TopRatingsWeeklyDB } from "../../src/db/top_day_ratings";
+import * as config from "../../src/config";
+import { PlayerTopRatingData } from "../../src/structs";
+import { getTimestampHM } from "../../src/utils";
 
 const router = express.Router();
 

@@ -83,4 +83,31 @@ export class PlayerNamesDB {
       });
     });
   }
+
+  async getAllPlayerNamesAfter(lastRowId: number): Promise<[Map<string, string>, number]> {
+    return new Promise((resolve, reject) => {
+      const query = `
+      SELECT ROWID, auth_id, name
+        FROM player_names
+        WHERE ROWID > ?
+        ORDER BY ROWID ASC;
+      `;
+    
+      this.db.all(query, [lastRowId], (err, rows: any[]) => {
+        if (err) {
+          reject('Error fetching new player names: ' + err.message);
+        } else {
+          const result = new Map<string, string>();
+          let maxRowId = lastRowId;
+          for (const row of rows) {
+            result.set(row.auth_id, row.name);
+            if (row.rowid > maxRowId) {
+              maxRowId = row.rowid;
+            }
+          }
+          resolve([result, maxRowId]);
+        }
+      });
+    });
+  }
 }

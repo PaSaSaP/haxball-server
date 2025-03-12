@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { tokenDatabase } from '../src/token_database';
+import { tokenDatabase } from '../../src/token_database';
 
 const router = express.Router();
 

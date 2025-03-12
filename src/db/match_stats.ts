@@ -15,6 +15,10 @@ export interface MatchStatsEntry {
   left_state: number;
 }
 
+interface MatchStatsEntryRowId extends MatchStatsEntry {
+  rowid: number;
+}
+
 export class MatchStatsDB {
   db: sqlite3.Database;
 
@@ -97,8 +101,7 @@ export class MatchStatsDB {
   async getMatchStatsForRange(start_match_id: number, end_match_id: number): Promise<MatchStatsEntry[]> {
     return new Promise((resolve, reject) => {
       const query = `
-        SELECT * 
-        FROM match_stats 
+        SELECT * FROM match_stats 
         WHERE match_id BETWEEN ? AND ? 
         ORDER BY match_id ASC;
       `;
@@ -108,6 +111,23 @@ export class MatchStatsDB {
           reject('Error fetching match stats: ' + err.message);
         } else {
           resolve(rows);
+        }
+      });
+    });
+  }
+
+  async getMatchStatsAfter(lastRowId: number): Promise<[MatchStatsEntry[], number]> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT ROWID, * FROM match_stats 
+        WHERE ROWID > ?
+        ORDER BY ROWID ASC;
+      `;
+      this.db.all(query, [lastRowId], (err, rows: MatchStatsEntryRowId[]) => {
+        if (err) {
+          reject('Error fetching match stats: ' + err.message);
+        } else {
+          resolve([rows, rows[rows.length-1].rowid]);
         }
       });
     });

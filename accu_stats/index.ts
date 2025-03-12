@@ -98,7 +98,7 @@ function calculateRatingFor(playerNames: Map<string, string>, matchEntries: Matc
       console.error(`Nie moge znaleźć match dla match_id ${s.match_id}`);
       continue;
     }
-    if (s.team == m.match.winner) ptr.wins++;
+    if (m.match.full_time && s.full_time && s.team == m.match.winner) ptr.wins++;
     m.stats.push(s);
   }
   for (let [matchId, m] of matches) {

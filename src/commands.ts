@@ -936,31 +936,6 @@ class Commander {
     this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
 
-  async commandTop10V1(player: PlayerObject, cmds: string[]) {
-    let top10 = this.hb_room.top10;
-    if (top10.length === 0) {
-      this.sendMsgToPlayer(player, "🏆 Brak danych o najlepszych graczach.", Colors.Stats);
-      return;
-    }
-    let pre1 = ['TODAY',
-                ' TOP ']
-    let pre2 = ['WEEK ',
-                ' TOP ']
-    let pre3 = [' ALL ',
-                ' TOP ']
-    const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
-    let firstHalf = top10.slice(0, 5).map((e, index) =>
-      `${rankEmojis[index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`
-    ).join("");
-    this.sendMsgToPlayer(player, `🏆 ${firstHalf}`, Colors.Stats);
-    if (top10.length > 5) {
-      let secondHalf = top10.slice(5, 10).map((e, index) =>
-        `${rankEmojis[index + 5]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`
-      ).join("");
-      this.sendMsgToPlayer(player, `🏆 ${secondHalf}`, Colors.Stats);
-    }
-  }
-
   commandTop10Daily(player: PlayerObject, cmds: string[]) {
     return this.execCommandTop10(player, cmds, 'daily');
   }
@@ -984,7 +959,7 @@ class Commander {
     }
 
     const link = config.webpageLink + '/' + ranking.selector;
-    this.sendMsgToPlayer(player, `🏆 Pełny ranking dostępny pod linkiem: ${link}`, Colors.Stats);
+    this.sendMsgToPlayer(player, `🏆 Pełny ranking dostępny pod linkiem: ${link}`, Colors.BrightBlue);
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     const formatEntry = (e: PlayerTopRatingDataShort, index: number, shift: number) =>
         `${rankEmojis[shift+index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`;
@@ -1120,7 +1095,7 @@ class Commander {
     }
     this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays).then((result) => {
       this.sendMsgToPlayer(player, `Rozpoczęliśmy proces zakupu cieszynki`, Colors.DarkGreen);
-      hb_log(`Zakup cieszynki dla ${playerExt.auth_id} r:${rejoiceName} na ${forDays}, id:${result}`);
+      hb_log(`Zakup cieszynki dla ${playerExt.name} ${playerExt.auth_id} r:${rejoiceName} na ${forDays}, id:${result}`);
     });
   }
 

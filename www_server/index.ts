@@ -1,17 +1,18 @@
 import express from 'express';
 import path from 'path';
 import verifyRouter from './verify_page';
-import mainRouter from './main';
-import apiGetServers from './api_get_servers';
-import apiTop10 from './api_top10';
-import apiStripeTransaction from './api_stripe_transaction';
+import apiGetServers from './api/get_servers';
+import apiTop10 from './api/top10';
+import apiStripeTransaction from './api/stripe_transaction';
+import apiPrivateGetPlayers from './api/private/get_player_names';
+import apiPrivateGetMatches from './api/private/get_matches';
+import apiPrivateGetMatchStats from './api/private/get_match_stats';
 import stripeRedirect from './stripe_redirect';
 
 const app = express();
 const port = 3000;
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
-// app.use('/', mainRouter);
 app.use('/verify', verifyRouter);
 
 // API zwracające listę serwerów
@@ -22,6 +23,10 @@ app.use("/api/top", apiTop10);
 
 app.use("/api/stripe", apiStripeTransaction);
 app.use("/stripe", stripeRedirect);
+
+app.use("/api/private/player_names", apiPrivateGetPlayers);
+app.use("/api/private/matches", apiPrivateGetMatches);
+app.use("/api/private/match_stats", apiPrivateGetMatchStats);
 
 // Serwowanie statycznych plików Reacta
 app.use(express.static(path.join(__dirname, "../../../www_frontend/build")));
