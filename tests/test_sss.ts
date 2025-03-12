@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import * as config from "./src/config";
+import * as config from "../src/config";
 const stripe = new Stripe(config.StripeKey, {
   apiVersion: '2025-02-24.acacia',
 });
@@ -39,7 +39,7 @@ async function createCheckoutSession() {
   // await cancelCheckoutSession(session.id);
   // console.log(session.id);
 
-  let sessionId = 'cs_live_a1KoUGrbLqUjFF5eviZOEc8ZzfSpJaAk0XlXLWfwZrJ7ewTvzMiXOWx0lJ';
+  let sessionId = 'cs_live_a1uHxOlR4Y9SrpazqFXTOpvra2rAHeqJeyExvC4Gmd0QC4XWCE4BdaL7cz';
   await cancelCheckoutSession(sessionId);
 }
 

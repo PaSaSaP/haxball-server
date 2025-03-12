@@ -52,4 +52,18 @@ export class PaymentsDB {
       });
     });
   }
+
+  async getPaymentStatus(transaction_id: number): Promise<string | null> {
+    return new Promise((resolve, reject) => {
+      const query = `SELECT pay_status FROM payments WHERE transaction_id = ?;`;
+  
+      this.db.get(query, [transaction_id], (err, row: { pay_status: string }) => {
+        if (err) {
+          reject('Error fetching payment status: ' + err.message);
+        } else {
+          resolve(row ? row.pay_status : null);
+        }
+      });
+    });
+  }
 }

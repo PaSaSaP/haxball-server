@@ -28,7 +28,8 @@ export class ShortLinksDB {
     return new Promise((resolve, reject) => {
       const query = `
         INSERT INTO short_links (hash, long_link)
-        VALUES (?, ?);
+        VALUES (?, ?)
+        ON CONFLICT(hash) DO UPDATE SET long_link = excluded.long_link;
       `;
 
       this.db.run(query, [hash, long_link], (err) => {

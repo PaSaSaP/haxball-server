@@ -260,6 +260,10 @@ export class GameState {
     return this.dbHandler.paymentLinks.getPaymentLink(auth_id, transaction_id);
   }
 
+  getPaymentStatus(transaction_id: number) {
+    return this.dbHandler.payments.getPaymentStatus(transaction_id);
+  }
+
   getRejoicePrices() {
     return this.dbHandler.rejoicePrices.getRejoicePrices();
   }

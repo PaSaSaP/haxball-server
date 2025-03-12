@@ -1063,9 +1063,26 @@ class Commander {
   }
 
   async commandBuyRejoice(player: PlayerObject, cmds: string[]) {
+    let playerExt = this.Pid(player.id);
     if (cmds.length === 0) {
       this.sendMsgToPlayer(player, `By sprawdzić cenę: !sklep <nazwa>, By rozpocząć proces zakupu: !kup <nazwa> <liczba dni>`, Colors.DarkGreen);
       this.sendMsgToPlayer(player, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki`, Colors.DarkGreen);
+      if (playerExt.pendingTransaction && playerExt.pendingTransaction.status != "completed") {
+        this.hb_room.game_state.getPaymentStatus(playerExt.pendingTransaction.transactionId).then((paymentStatus) => {
+          let tr = playerExt.pendingTransaction;
+          if (tr && paymentStatus) {
+            if (paymentStatus === "completed") {
+              tr.status = paymentStatus;
+              this.sendMsgToPlayer(player, `Twoja płatność została zaksięgowana! Zakup zostanie aktywowany przy następnej wizycie. Dziękujemy!`, Colors.AzureBlue);
+            } else if (paymentStatus === "failed") {
+              tr.status = paymentStatus;
+              this.sendMsgToPlayer(player, `Wystąpił problem z Twoją ostatnią płatnością. Sprawdź szczegóły tutaj: ${tr.link}`, Colors.DarkRed);
+            } else if (paymentStatus === "started") {
+              this.sendMsgToPlayer(player, `Masz aktywną transakcję. Możesz ją dokończyć tutaj: ${tr.link}`, Colors.AzureBlue);
+            }
+          }
+        }).catch((e) => e && hb_log(`!! getPaymentStatus error: ${e}`))
+      }
       return;
     }
     let rejoiceName = cmds[0];
@@ -1088,14 +1105,12 @@ class Commander {
       this.sendMsgToPlayer(player, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !kup <nazwa>`, Colors.DarkGreen);
       return;
     }
-    let playerExt = this.Pid(player.id);
-    if (playerExt.pendingTransaction && playerExt.pendingTransaction.status === 'started') {
-      this.sendMsgToPlayer(player, `Inny proces zakupu jest w trakcie, numer transakcji to ${playerExt.pendingTransaction.transactionId}, `
-        + `link: ${playerExt.pendingTransaction.link} Najpierw ją zakończ!`, Colors.DarkGreen);
+    if (playerExt.pendingTransaction && playerExt.pendingTransaction.status !== 'completed') {
+      this.sendMsgToPlayer(player, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingTransaction.link}`, Colors.DarkGreen);
       return;
     }
     this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays, this.hb_room.room_config.selector).then((result) => {
-      this.sendMsgToPlayer(player, `Rozpoczęliśmy proces zakupu cieszynki`, Colors.DarkGreen);
+      this.sendMsgToPlayer(player, `Proces zakupu cieszynki rozpoczęty! Wkrótce otrzymasz link.`, Colors.DarkGreen);
       hb_log(`Zakup cieszynki dla ${playerExt.name} ${playerExt.auth_id} r:${rejoiceName} na ${forDays}, id:${result}`);
     }).catch((e) => e && hb_log(`!! insertRejoiceTransaction error ${e}`));
   }
