@@ -13,11 +13,13 @@ export class TopRatingsDB {
     const createSettingsQuery = `
       CREATE TABLE IF NOT EXISTS top_ratings_settings (
         min_full_games INTEGER DEFAULT 20,
-        players_limit INTEGER DEFAULT 100
+        min_full_games_daily INTEGER DEFAULT 5,
+        min_full_games_weekly INTEGER DEFAULT 10,
+        players_limit INTEGER DEFAULT 1000
       );`;
     const insertDefaultSettingsQuery = `
-      INSERT INTO top_ratings_settings (min_full_games, players_limit)
-        SELECT 20, 100
+      INSERT INTO top_ratings_settings (min_full_games, min_full_games_daily, min_full_games_weekly, players_limit)
+        SELECT 20, 5, 10, 1000
         WHERE NOT EXISTS (SELECT 1 FROM top_ratings_settings
     );`;
     const createTopRatingsQuery = `

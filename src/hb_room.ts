@@ -130,7 +130,7 @@ export class HaxballRoom {
     // this.glicko_settings = null;
     this.glicko = new Glicko2.Glicko2();
     this.glicko_players = new Map<string, Glicko2.Player>();
-    this.ratings = new Ratings(this.glicko);
+    this.ratings = new Ratings(this.glicko, {scoreLimit: roomConfig.scoreLimit, timeLimit: roomConfig.timeLimit});
     this.ratings_for_all_games = false;
     this.match_stats = new MatchStats();
     this.auto_mode = roomConfig.autoModeEnabled;
@@ -148,6 +148,7 @@ export class HaxballRoom {
     this.rejoice_maker = new RejoiceMaker(this);
     this.rejoice_prices = new Map<string, { for_days: number, price: number }[]>();
     this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.OrangeTangelo) });
+    this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop');
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -233,7 +234,7 @@ export class HaxballRoom {
     let team: TeamID = 0;
     const ppp: PPP = {
       name: "God",
-      id: -1,
+      id: -100,
       team: team,
       admin: true,
       position: { "x": 0.0, "y": 0.0 },
@@ -246,6 +247,10 @@ export class HaxballRoom {
     p.trust_level = 40;
     this.players_ext_all.set(p.id, p);
     return ppp;
+  }
+
+  private getGodPlayer() {
+    return this.Pid(this.god_player.id);
   }
 
   anyPlayer(): PlayerData|null {
@@ -591,8 +596,10 @@ export class HaxballRoom {
 
   updatePlayerLeftState(matchPlayerStats: Map<number, PlayerMatchStatsData>, currentMatch: Match) {
     for (let [playerId, statInMatch] of currentMatch.playerStats) {
-      let stat = this.player_stats.get(playerId)!;
-      let p = matchPlayerStats.get(playerId)!;
+      let stat = this.player_stats.get(playerId);
+      if (!stat) continue;
+      let p = matchPlayerStats.get(playerId);
+      if (!p) continue;
       if (statInMatch.leftDueTo === PlayerLeavedDueTo.afk) {
         p.left_afk++;
         stat.counterAfk++;
@@ -615,7 +622,8 @@ export class HaxballRoom {
     for (let authId of updatedAuthIds) {
       let sId = this.player_stats_auth.get(authId)!;
       if (sId === undefined) continue;
-      let stat = this.player_stats.get(sId)!;
+      let stat = this.player_stats.get(sId);
+      if (!stat) continue;
       this.game_state.savePlayerMatchStats(authId, stat).catch((e) => e && hb_log(`!! savePlayerMatchStats error: ${e}`));
     }
     if (this.auto_mode) {
@@ -1124,7 +1132,15 @@ export class HaxballRoom {
             blueTeamStr += (blueTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
 
           let playerExt = this.players_ext_all.get(playerId)!;
-          if (!playerExt.trust_level) continue;
+          let stat = this.player_stats.get(playerExt.id)!;
+          if (!playerExt.trust_level) {
+            if (stat.fullGames >= 5 && stat.fullWins) {
+              this.game_state.setTrustLevel(playerExt, 1, this.getGodPlayer()).then((result) => {
+                playerExt.trust_level = 1;
+              }).catch((e) => e && hb_log(`!! setTrustLevel by God error: ${e}`));
+            }
+            continue;
+          }
           this.game_state.savePlayerRating(playerExt.auth_id, this.player_stats.get(playerExt.id)!);
           saved++;
         }

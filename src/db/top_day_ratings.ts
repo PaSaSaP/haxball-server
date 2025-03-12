@@ -2,6 +2,12 @@ import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
 import { PlayerTopRatingData, PlayerTopRatingDataShort } from '../structs';
 
+export interface TopRatingDaySetings {
+  min_full_games_daily: number;
+  min_full_games_weekly: number;
+  players_limit: number;
+}
+
 class BaseTopRatingsDB {
   db: sqlite3.Database;
   tableName: string;
@@ -80,50 +86,6 @@ class BaseTopRatingsDB {
     });
   }
   
-
-  async updateTopRatingsFromV1(playerTopRatings: PlayerTopRatingData[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.serialize(() => {
-        // Rozpoczynamy transakcję
-        this.db.run("BEGIN TRANSACTION");
-  
-        const insertQuery = `
-          INSERT INTO ${this.tableName} (rank, auth_id, player_name, rating, games, wins, goals, assists, own_goals, clean_sheets)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-  
-        // Przygotowujemy zapytanie wstawiające dane
-        const stmt = this.db.prepare(insertQuery);
-  
-        // Wstawiamy dane w pętli
-        playerTopRatings.forEach((row) => {
-          stmt.run(row.rank, row.auth_id, row.player_name, Math.round(row.rating), row.games,
-            row.wins, row.goals, row.assists, row.own_goals, row.clean_sheets);
-        });
-  
-        // Finalizujemy zapytanie przygotowane
-        stmt.finalize((err) => {
-          if (err) {
-            // Jeśli wystąpił błąd, anulujemy transakcję
-            this.db.run("ROLLBACK");
-            return reject(`Error finalizing statement for ${this.tableName}: ${err.message}`);
-          }
-  
-          // Zatwierdzamy transakcję
-          this.db.run("COMMIT", (err) => {
-            if (err) {
-              // Jeśli wystąpił błąd przy zatwierdzaniu transakcji, anulujemy
-              this.db.run("ROLLBACK");
-              return reject(`Error committing transaction for ${this.tableName}: ${err.message}`);
-            } else {
-              resolve();
-            }
-          });
-        });
-      });
-    });
-  }
-
   async getTopNPlayers(n: number): Promise<PlayerTopRatingData[]> {
     return new Promise((resolve, reject) => {
       const query = `
@@ -150,6 +112,21 @@ class BaseTopRatingsDB {
       this.db.all(query, [n], (err, rows) => {
         if (err) return reject("Error fetching top players: " + err.message);
         resolve(rows as PlayerTopRatingDataShort[]);
+      });
+    });
+  }
+
+  async getTopRatingDaySettings(): Promise<TopRatingDaySetings> {
+    const query = 'SELECT min_full_games_daily, min_full_games_weekly, players_limit FROM top_ratings_settings LIMIT 1';
+    return new Promise((resolve, reject) => {
+      this.db.all(query, [], (err, rows: TopRatingDaySetings[]) => {
+        if (err) {
+          reject('Error fetching top rating day settings: ' + err.message);
+        } else if (rows.length === 0) {
+          reject('No settings found in top_ratings_settings table.');
+        } else {
+          resolve(rows[0]);
+        }
       });
     });
   }

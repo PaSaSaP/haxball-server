@@ -399,7 +399,7 @@ export class AutoBot {
         }
         this.fullTimeMatchPlayed = true;
         this.setLastWinner(lastWinner);
-        this.currentMatch.setEnd(this.ranked);
+        this.currentMatch.setEnd(this.ranked, true);
         this.lobbyAction = () => {
           this.moveSomeTeamToSpec();
           return true;
@@ -456,7 +456,7 @@ export class AutoBot {
     this.currentMatch.redScore = scores.red;
     this.currentMatch.blueScore = scores.blue;
     this.currentMatch.matchEndTime = scores.time;
-    this.currentMatch.setEnd(this.ranked);
+    this.currentMatch.setEnd(this.ranked, true);
     this.matchHistory.push(this.currentMatch);
     this.matchState = MatchState.afterVictory;
     let lastWinner: 1|2 = scores.red > scores.blue ? 1 : 2;

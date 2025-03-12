@@ -971,9 +971,9 @@ class Commander {
   }
   async execCommandTop10(player: PlayerObject, cmds: string[], type: "daily" | "weekly" | "all") {
     const rankings = {
-      daily: { data: this.hb_room.top10_daily, prefix: ["TODAY", " TOP "] },
-      weekly: { data: this.hb_room.top10_weekly, prefix: ["WEEK ", " TOP "] },
-      all: { data: this.hb_room.top10, prefix: [" ALL ", " TOP "] }
+      daily: { data: this.hb_room.top10_daily,   prefix: ["TODAY",           "\u2007TOP\u2007"] },
+      weekly: { data: this.hb_room.top10_weekly, prefix: ["\u2007WEEK",      "\u2007TOP\u2007"] },
+      all: { data: this.hb_room.top10,           prefix: ["\u2007ALL\u2007", "\u2007TOP\u2007"] }
     };
 
     const ranking = rankings[type];
@@ -983,14 +983,16 @@ class Commander {
     }
 
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
-    const formatEntry = (e: PlayerTopRatingDataShort, index: number) =>
-        `${rankEmojis[index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`;
+    const formatEntry = (e: PlayerTopRatingDataShort, index: number, shift: number) =>
+        `${rankEmojis[shift+index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`;
+    const formatEntry1 = (e: PlayerTopRatingDataShort, index: number) => formatEntry(e, index, 0);
+    const formatEntry2 = (e: PlayerTopRatingDataShort, index: number) => formatEntry(e, index, 5);
     
-    const firstHalf = ranking.data.slice(0, 5).map(formatEntry).join(" ");
+    const firstHalf = ranking.data.slice(0, 5).map(formatEntry1).join(" ");
     this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[0]}${firstHalf}`, Colors.Stats);
     
     if (ranking.data.length > 5) {
-      const secondHalf = ranking.data.slice(5, 10).map(formatEntry).join(" ");
+      const secondHalf = ranking.data.slice(5, 10).map(formatEntry2).join(" ");
       this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[1]}${secondHalf}`, Colors.Stats);
     }
   }

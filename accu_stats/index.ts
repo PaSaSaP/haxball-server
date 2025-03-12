@@ -3,25 +3,26 @@
 import sqlite3 from 'sqlite3';
 import * as config from "../src/config";
 import { MatchAccumulatedStatsDB } from '../src/db/match_accumulated_stats';
-import { TopRatingsDailyDB, TopRatingsWeeklyDB } from '../src/db/top_day_ratings';
+import { TopRatingDaySetings, TopRatingsDailyDB, TopRatingsWeeklyDB } from '../src/db/top_day_ratings';
 import { MatchEntry, MatchesDB } from '../src/db/matches';
 import { MatchStatsDB, MatchStatsEntry } from '../src/db/match_stats';
 import { PlayerNamesDB } from '../src/db/player_names';
 import { Match, PlayerStat, PlayerLeavedDueTo, PlayerTopRatingData } from '../src/structs';
 import { Ratings } from '../src/rating';
 import Glicko2 from 'glicko2';
+import { getTimestampHM } from '../src/utils';
 
 if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
 const selector = process.env.HX_SELECTOR;
 
 console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
 if (selector == '1vs1') {
-  // throw new Error(`Currently not supported selector ${selector}`);
+  // OK, do nothing
 } else if (selector == '3vs3') {
   // OK, do nothing
 } else throw new Error(`Invalid HX_SELECTOR: ${selector}`);
 
-console.log("Zaczynamy akumulowanie!");
+console.log(`${getTimestampHM()} Zaczynamy akumulowanie!`);
 let roomConfig = config.getRoomConfig(selector);
 let playersDb = new sqlite3.Database(roomConfig.playersDbFile, (err) => {
   if (err) console.error('Error opening database:', err.message);
@@ -49,7 +50,7 @@ function createPlayerStat(id: number, glicko: Glicko2.Glicko2, rating: number = 
 }
 
 function calculateRatingFor(playerNames: Map<string, string>, matchEntries: MatchEntry[],
-    matchStatEntries: MatchStatsEntry[]): PlayerTopRatingData[] {
+    matchStatEntries: MatchStatsEntry[], minGames: number, playersLimit: number): PlayerTopRatingData[] {
   let glicko = new Glicko2.Glicko2();
   let ratings = new Ratings(glicko);
   let playerStats = new Map<number, PlayerStat>();
@@ -84,7 +85,7 @@ function calculateRatingFor(playerNames: Map<string, string>, matchEntries: Matc
         own_goals: 0,
         clean_sheets: 0
       });
-      console.log(`new ptr for ${playerId} ${s.auth_id} => ${playerName}`);
+      // console.log(`new ptr for ${playerId} ${s.auth_id} => ${playerName}`);
     }
     let ptr = playerTopRatings.get(playerId)!;
     if (s.full_time) ptr.games++;
@@ -125,21 +126,36 @@ function calculateRatingFor(playerNames: Map<string, string>, matchEntries: Matc
     match.blueScore = m.match.blue_score;
     match.pressureRed = m.match.pressure;
     match.pressureBlue = 100 - match.pressureRed;
-    match.setEnd(true);
+    match.setEnd(true, m.match.full_time);
     ratings.updatePlayerStats(match, playerStats);
   }
-  console.log(`player IDs: ${Array.from(playerStats.keys())}`);
+  console.log(`player ID count: ${playerStats.size}`);
   for (let [playerId, stat] of playerStats) {
-    console.log(`${playerId} => ${stat.id} ${stat.games} ${stat.glickoPlayer}`)
     let ptr = playerTopRatings.get(playerId)!;
     ptr.rating = stat.glickoPlayer!.getRating();
+    // console.log(`${playerId} => ${stat.id} games:${stat.games}/${ptr.games} goals:${stat.goals}/${ptr.goals}`)
   }
   let playerTopRatingsArray = Array.from(playerTopRatings.values());
   playerTopRatingsArray = playerTopRatingsArray.sort((lhs: PlayerTopRatingData, rhs: PlayerTopRatingData) => rhs.rating - lhs.rating);
+  const nAll = playerTopRatingsArray.length;
+  playerTopRatingsArray = playerTopRatingsArray.filter(e => e.games >= minGames);
+  const nGames = playerTopRatingsArray.length;
+  playerTopRatingsArray = playerTopRatingsArray.slice(0, playersLimit);
+  const nLimit = playerTopRatingsArray.length;
   for (let i = 0; i < playerTopRatingsArray.length; i++) {
     playerTopRatingsArray[i].rank = i + 1;
   }
+  console.log(`Done, all:${nAll} games:${nGames} limit:${nLimit}, settings.min=${minGames} settings.limit=${playersLimit}`);
   return playerTopRatingsArray;
+}
+
+async function getSettings(): Promise<TopRatingDaySetings> {
+  let settings: TopRatingDaySetings = { min_full_games_daily: 5, min_full_games_weekly: 10, players_limit: 1000 };
+  await topRatingsDaily.getTopRatingDaySettings().then((result) => {
+    console.log("settings z tabeli");
+    settings = result;
+  }).catch((e) => e && console.error(`getTopRatingDaySettings error: ${e}`))
+  return settings;
 }
 
 async function updateAccuStats(playerNames: Map<string, string>) {
@@ -154,10 +170,11 @@ async function updateAccuStats(playerNames: Map<string, string>) {
   let maxMatchIdFromLastWeek = matchIdsFromLastWeek.reduce((max, current) => current > max ? current : max, -Infinity);
   let matchStatsFromLastWeek = await matchStatsDb.getMatchStatsForRange(minMatchIdFromLasWeek, maxMatchIdFromLastWeek);
   let matchStatsFromLastDay = matchStatsFromLastWeek.filter(e => matchIdsFromLastDay.includes(e.match_id));
+  let settings = await getSettings();
   console.log("calculating weekly ratings");
-  let ratingsFromLastWeek = calculateRatingFor(playerNames, matchesFromLastWeek, matchStatsFromLastWeek);
+  let ratingsFromLastWeek = calculateRatingFor(playerNames, matchesFromLastWeek, matchStatsFromLastWeek, settings.min_full_games_weekly, settings.players_limit);
   console.log("calculating daily ratings");
-  let ratingsFromLastDay = calculateRatingFor(playerNames, matchesFromLastDay, matchStatsFromLastDay);
+  let ratingsFromLastDay = calculateRatingFor(playerNames, matchesFromLastDay, matchStatsFromLastDay, settings.min_full_games_daily, settings.players_limit);
   await topRatingsWeekly.updateTopRatingsFrom(ratingsFromLastWeek).catch((e) => e && console.error(`weekly updateTopRatingsFrom error: ${e}`));
   await topRatingsDaily.updateTopRatingsFrom(ratingsFromLastDay).catch((e) => e && console.error(`daily updateTopRatingsFrom error: ${e}`));
 }

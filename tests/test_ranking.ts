@@ -805,3 +805,35 @@ runTest("Player with 4 wins and 1 loss reaching rating milestones", () => {
   ratings.debug = true;
   ratings.LogTop();
 });
+
+runTest("Check interrupted weights", () => {
+  function assertEqual(actual: number, expected: number, message: string) {
+    const epsilon = 0.01;
+    if (Math.abs(actual - expected) > epsilon) {
+      console.error(`FAILED: ${message} (expected ${expected}, got ${actual})`);
+    } else {
+      console.log(`PASSED: ${message}`);
+    }
+  }
+
+  const cases = [
+    { redScore: 0, blueScore: 0, playedSeconds: 10, expected: 0.1 },
+    { redScore: 1, blueScore: 0, playedSeconds: 30, expected: 0.15 },
+    { redScore: 2, blueScore: 1, playedSeconds: 60, expected: 0.30 },
+    { redScore: 2, blueScore: 2, playedSeconds: 90, expected: 0.38 },
+    { redScore: 2, blueScore: 1, playedSeconds: 150, expected: 0.65 },
+    { redScore: 1, blueScore: 1, playedSeconds: 10, expected: 0.12 }, // Wysoki wynik, niski czas
+    { redScore: 2, blueScore: 2, playedSeconds: 20, expected: 0.25 }, // Wysoki wynik, niski czas
+    { redScore: 2, blueScore: 1, playedSeconds: 40, expected: 0.28 }, // Średni wynik, średni czas
+    { redScore: 2, blueScore: 2, playedSeconds: 80, expected: 0.36 }, // Zbalansowany przypadek
+    { redScore: 1, blueScore: 0, playedSeconds: 5, expected: 0.05 },  // Minimalny czas
+    { redScore: 1, blueScore: 1, playedSeconds: 15, expected: 0.1 }   // Niski czas, wyrównany wynik
+  ];
+
+  cases.forEach(({ redScore, blueScore, playedSeconds, expected }) => {
+    const weight = Ratings.calculateInterruptedMatchWeight(
+      redScore, blueScore, 3, playedSeconds, 3
+    );
+    assertEqual(weight, expected, `Weight for (${redScore}-${blueScore}, ${playedSeconds}s)`);
+  });
+});

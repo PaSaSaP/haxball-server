@@ -333,6 +333,7 @@ export class Match {
   redScore: number; // goals scored by red
   blueScore: number; // goals scored by blue
   matchEndTime: number; // total [seconds]
+  fullTimeMatchPlayed: boolean; // match played to resultative result or by pressure
   startedAt: number; // Date time, not for statistics
   endedAt: number;  // Date time, not for statistics
   redTeam: number[]; // player ids
@@ -351,6 +352,7 @@ export class Match {
     this.redScore = 0;
     this.blueScore = 0;
     this.matchEndTime = 0;
+    this.fullTimeMatchPlayed = false;
     this.startedAt = Date.now();
     this.endedAt = 0;
     this.redTeam = [];
@@ -364,12 +366,13 @@ export class Match {
     this.pressureRed = 0;
     this.pressureBlue = 0;
   }
-  setEnd(ranked: boolean) {
+  setEnd(ranked: boolean, fullTimeMatchPlayed: boolean = false) {
     this.endedAt = Date.now();
     if (ranked) {
       this.ratingState = RatingProcessingState.ranked;
       this.matchStatsState = MatchStatsProcessingState.ranked;
     }
+    this.fullTimeMatchPlayed = fullTimeMatchPlayed;
   }
   isEnded() { return this.endedAt > 0; }
   stat(id: number): PlayerStatInMatch {

@@ -7,6 +7,8 @@ export interface RoomServerConfig {
   roomName: string;
   isPublic: boolean;
   geo: { code: string; lat: number; lon: number };
+  scoreLimit: number;
+  timeLimit: number; // minutes
   playersInTeamLimit: number;
   maxPlayers: number;
   maxPlayersOverride: number;
@@ -32,12 +34,14 @@ const futsal_3vs3: RoomServerConfig = {
   roomName: "🍌 FUTSAL 3vs3 XxX Banana League!",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
+  scoreLimit: 3,
+  timeLimit: 3,
   playersInTeamLimit: 3,
   maxPlayers: 16,
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: true,
-  token: 'thr1.AAAAAGfQ53-gCiJFbd5zFA.8D5fgCv7jw4',
+  token: 'thr1.AAAAAGfRV5OMEg6KgJmd3w.2ECIZJz7Mho',
   selector: '3vs3',
 };
 
@@ -49,6 +53,8 @@ const futsal_1vs1: RoomServerConfig = {
   roomName: "🍌 FUTSAL FreeStYLe XxX",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
+  scoreLimit: 3,
+  timeLimit: 2 * 60,
   playersInTeamLimit: 3,
   maxPlayers: 16,
   maxPlayersOverride: 11,

@@ -1,15 +1,30 @@
 import { PlayerStat, PlayerStatInMatch, Match, PlayerLeavedDueTo } from "./structs";
 import Glicko2 from 'glicko2';
 
+interface RatingsOptions {
+  scoreLimit: number;
+  timeLimit: number; // [minutes]
+  interruptedMatchBeta: number; // rescale by time
+  interruptedMatchGamma: number; // rescale by goals
+}
+
 export class Ratings {
+  static options: RatingsOptions;
   private glicko: Glicko2.Glicko2;
   expectedScoreRed: number;
   results: [number, number, number, number][];
 
-  constructor(glicko: Glicko2.Glicko2) {
+  constructor(glicko: Glicko2.Glicko2, options: Partial<RatingsOptions> = {}) {
     this.glicko = glicko;
     this.expectedScoreRed = 0;
     this.results = [];
+    Ratings.options = { 
+      scoreLimit: 3,
+      timeLimit: 3,
+      interruptedMatchBeta: 0.8,
+      interruptedMatchGamma: 0.15,
+      ...options,
+    };
   }
 
   private calculateWeightedExpectedScore(
@@ -82,9 +97,31 @@ export class Ratings {
     this.glicko.updateRatings(matches);
   }
 
+  static calculateInterruptedMatchWeight(
+    redScore: number,
+    blueScore: number,
+    limitScore: number,
+    playedSeconds: number,
+    limitMinutes: number
+  ): number {
+    const limitSeconds = 60 * limitMinutes;
+    if (limitSeconds <= 0 || limitScore <= 0) return 1.0;  // Zabezpieczenie
+    // Skalowanie po czasie - im krócej grano, tym niższa waga
+    const beta = Ratings.options.interruptedMatchBeta;
+    const timeWeight = Math.pow(playedSeconds / limitSeconds, beta);
+    // Skalowanie po wyniku - liczymy proporcję strzelonych bramek względem możliwych
+    const goalFactor = (redScore + blueScore) / (2 * limitScore);
+    const gamma = Ratings.options.interruptedMatchGamma;  // Jak bardzo bramki wpływają na wagę
+    let weight = timeWeight + gamma * goalFactor;
+    // Ograniczenie do sensownego zakresu [0.01, 1.0]
+    return Math.min(1.0, Math.max(0.01, weight));
+  }
+
   updatePlayerStats(match: Match, playerStats: Map<number, PlayerStat>) {
     const matchDuration = match.matchEndTime;
+    const fullTimeMatchPlayed = match.fullTimeMatchPlayed;
     const weights: Map<number, number> = new Map();
+    let rescaler = 1.0;
     const oldRatings: Map<number, number> = new Map();
     // if player left at the beginning or player played less than 10 seconds
     const shouldNotRatePlayer = (stat: PlayerStatInMatch) => { return stat.leftAt === 0 || (stat.joinedAt > 0 && matchDuration - stat.joinedAt < 10) };
@@ -93,25 +130,21 @@ export class Ratings {
     const playerIdsInMatch: number[] = theOnlyRedTeam.concat(theOnlyBlueTeam).filter(id => match.stat(id).id == id);
     this.results = [];
 
+    if (!fullTimeMatchPlayed) {
+      rescaler = Ratings.calculateInterruptedMatchWeight(match.redScore, match.blueScore, Ratings.options.scoreLimit, matchDuration, Ratings.options.timeLimit);
+      this.Log(`Rescaler = ${rescaler} because of ${match.redScore}:${match.blueScore}/${Ratings.options.scoreLimit} t:${matchDuration}/${Ratings.options.timeLimit}`);
+    }
     for (const playerId of playerIdsInMatch) {
       const stat = match.stat(playerId);
       let player = playerStats.get(playerId);
       if (!player || !player.glickoPlayer) {
-        throw new Error(`Player ${playerId} has null stat or glickoPlayer during update`);
+        throw new Error(`Player ${playerId} has null stat or glickoPlayer during update`); // there HAVE TO be set valid one
       }
 
       const timePlayed = stat.leftAt === -1 ? matchDuration - stat.joinedAt : stat.leftAt - stat.joinedAt;
-      const weight = this.calculatePlayerWeight(stat, match, timePlayed, matchDuration);
+      const weight = rescaler * this.calculatePlayerWeight(stat, match, timePlayed, matchDuration);
       weights.set(playerId, weight);
-
       oldRatings.set(playerId, player.glickoPlayer.getRating());
-
-      // player.games++;
-      // if (stat.joinedAt === 0 && stat.leftAt === -1) player.fullGames++;
-      // if ((match.winnerTeam === 1 && match.redTeam.includes(playerId)) ||
-      //   (match.winnerTeam === 2 && match.blueTeam.includes(playerId))) {
-      //   player.wins++;
-      // }
     }
 
     this.calculateWeightedExpectedScore(theOnlyRedTeam, theOnlyBlueTeam, weights, oldRatings);
