@@ -1054,6 +1054,14 @@ class Commander {
       let names = this.hb_room.rejoice_maker.getRejoiceNames(player.id);
       let txt = names.length === 0 ? "Nie masz dostępnych cieszynek :( Sprawdź !sklep" : `Twoje cieszynki: ${names.join(", ")}, Wpisz !cieszynka <nazwa> by ją zmienić!`;
       this.sendMsgToPlayer(player, txt, Colors.DarkGreen);
+      return;
+    }
+    let newSelected = cmds[0];
+    if (this.hb_room.rejoice_maker.changeSelected(player.id, newSelected)) {
+      this.sendMsgToPlayer(player, `Twoja aktualna cieszynka to ${newSelected}`, Colors.DarkGreen);
+    } else {
+      let names = this.hb_room.rejoice_maker.getRejoiceNames(player.id);
+      this.sendMsgToPlayer(player, `Nie udało się zmienić cieszynki na ${newSelected}, Twoje cieszynki: ${names.join(", ")}`, Colors.DarkGreen);
     }
   }
 
@@ -1145,7 +1153,7 @@ class Commander {
     let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
     if (!cmdPlayer) return;
     this.hb_room.rejoice_maker.handlePlayerJoin(cmdPlayer).then((num) => {
-      this.sendMsgToPlayer(player, `Gracz ${player.name} Dostał ${num} cieszynek!`);
+      this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
     }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
   }
 

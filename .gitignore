@@ -136,6 +136,7 @@ dist
 .pnp.*
 
 # user defined
+dynamic/
 db/
 !src/db
 .remove_me_to_restart_container

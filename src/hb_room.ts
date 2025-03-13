@@ -25,6 +25,7 @@ import { hb_log, hb_log_to_console } from './log';
 import { MatchStats } from './stats';
 import { RejoiceMaker } from './rejoice_maker';
 import WelcomeMessage from './welcome_message';
+import Pinger from './pinger';
 
 
 export class HaxballRoom {
@@ -90,6 +91,7 @@ export class HaxballRoom {
   rejoice_maker: RejoiceMaker;
   rejoice_prices: Map<string, { for_days: number, price: number }[]>;
   welcome_message: WelcomeMessage;
+  pinger: Pinger;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -150,7 +152,8 @@ export class HaxballRoom {
     this.rejoice_maker = new RejoiceMaker(this);
     this.rejoice_prices = new Map<string, { for_days: number, price: number }[]>();
     this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.OrangeTangelo) });
-    this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop');
+    this.pinger = new Pinger(roomConfig.selector);
+    this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -262,6 +265,7 @@ export class HaxballRoom {
   }
 
   async handleRoomLink(link: string) {
+    this.pinger.start();
     if (link != this.room_link) {
       hb_log(`New link: ${link}`, true);
       if (this.room_link == '') this.game_state.logMessage('God', 'server', `Serwer juz działa: ${link}`, true);
@@ -306,6 +310,7 @@ export class HaxballRoom {
   }
 
   async handleGameTick() {
+    this.pinger.sendKeepAlive();
     // Current time in ms
     let scores = this.room.getScores();
     this.scores = scores;
@@ -484,6 +489,7 @@ export class HaxballRoom {
   }
 
   async handleGameStart(byPlayer: PlayerObject | null) {
+    this.pinger.stop();
     this.last_winner_team = 0;
     this.last_discs_update_time = 0;
     this.time_limit_reached = false;
@@ -542,6 +548,7 @@ export class HaxballRoom {
   }
 
   async handleGameStop(byPlayer: PlayerObject | null) {
+    this.pinger.start();
     if (byPlayer) this.Pid(byPlayer.id).admin_stat_start_stop();
     const MaxAllowedGameStopTime = 20.0 * 1000; // [ms]
     const now = Date.now();

@@ -60,12 +60,12 @@ const futsal_1vs1: RoomServerConfig = {
   maxPlayersOverride: 11,
   noPlayer: true,
   autoModeEnabled: false,
-  token: 'thr1.AAAAAGfSAblBKSo8OCtUqQ.SisKp3mywFk',
+  token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
   selector: '1vs1',
 };
 
-export const getRoomConfig = (name: string): RoomServerConfig => {
-  if (name == '3vs3') return futsal_3vs3;
-  if (name == '1vs1') return futsal_1vs1;
-  throw new Error(`There is no config with name ${name}`);
+export const getRoomConfig = (selector: string): RoomServerConfig => {
+  if (selector == '3vs3') return futsal_3vs3;
+  if (selector == '1vs1') return futsal_1vs1;
+  throw new Error(`There is no config with name ${selector}`);
 }

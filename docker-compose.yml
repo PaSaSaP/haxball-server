@@ -2,7 +2,7 @@ version: '3'
 services:
   futsal-3vs3:
     image: hx-puppeteer:1.0
-    container_name: haxball-server-3vs3
+    container_name: haxball-server-futsal-3vs3
     restart: unless-stopped
     ports:
       - "0.0.0.0:50000-50100:50000-50100/udp"
@@ -23,6 +23,13 @@ services:
       - net.ipv4.ip_local_port_range=50000 50100
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/1$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: ["futsal_3vs3"]
   futsal-1vs1:
     image: hx-puppeteer:1.0
     container_name: haxball-server-futsal-1vs1
@@ -46,6 +53,12 @@ services:
       - net.ipv4.ip_local_port_range=51000 51100
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/1$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     command: ["futsal_1vs1"]
   www-server:
     image: ghcr.io/puppeteer/puppeteer
@@ -88,6 +101,19 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run discord_1vs1
+  monitoring:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run monitoring
   market-server:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped

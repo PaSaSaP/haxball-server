@@ -132,6 +132,264 @@ class GettingSmallerRejoice extends RadiusMultiplierRejoice {
   }
 }
 
+class ExplosionRejoice {
+  name: string = 'explosion';
+  inProgress: boolean;
+  playerId: number;
+  affectedPlayers: number[];
+  startingRadius: number;
+  properties: DiscPropertiesHandler
+  multiplier: number;
+  duration: number;
+  startTime: number;
+  constructor(playerId: number, properties: DiscPropertiesHandler) {
+    this.inProgress = false;
+    this.playerId = playerId;
+    let [redTeam, blueTeam] = properties.getRedBluePlayerIds();
+    this.affectedPlayers = redTeam.concat(blueTeam).filter(e => e != playerId);
+    this.startingRadius = 0;
+    this.properties = properties;
+    this.multiplier = 0.001; // Siła odrzutu
+    this.duration = 2500; // Czas trwania w ms
+    this.startTime = 0;
+  }
+
+  isInProgress() {
+    return this.inProgress;
+  }
+
+  async handleGameTick() {
+    if (!this.isInProgress()) return;
+    const elapsed = Date.now() - this.startTime;
+
+    const centerPlayer = this.properties.getPlayerDiscProperties(this.playerId);
+    if (!centerPlayer) return;
+    const cx = centerPlayer.x;
+    const cy = centerPlayer.y;
+    let radiusFactor = elapsed < 1000 ? 1 + (elapsed / 1000) : 2 - ((elapsed - 1000) / 1000);
+
+    this.properties.setPlayerDiscProperties(this.playerId, { "radius": Math.max(this.startingRadius * radiusFactor, this.startingRadius) });
+
+    this.affectedPlayers.forEach(playerId => {
+      const props = this.properties.getPlayerDiscProperties(playerId);
+      if (props) {
+        if (elapsed > 1000) {
+          if (props.xgravity != 0 || props.ygravity != 0) {
+            this.properties.setPlayerDiscProperties(playerId, { "xgravity": 0, "ygravity": 0 });
+          }
+        } else {
+          const { x, y } = props;
+          let dx = x - cx;
+          let dy = y - cy;
+          let distance = Math.sqrt(dx * dx + dy * dy) || 1;
+          let force = (this.multiplier ** (elapsed / 1000) / distance);
+          dx *= force;
+          dy *= force;
+          this.properties.setPlayerDiscProperties(playerId, { "xgravity": dx, "ygravity": dy });
+        }
+      }
+    });
+  }
+
+  async handlePositionsReset() {
+    this.reset();
+  }
+
+  async handleTeamGoal() {
+    const props = this.properties.getPlayerDiscProperties(this.playerId);
+    if (!props) return;
+    this.startingRadius = props.radius;
+    let [redTeam, blueTeam] = this.properties.getRedBluePlayerIds();
+    this.affectedPlayers = redTeam.concat(blueTeam).filter(e => e != this.playerId);
+    this.startTime = Date.now();
+    this.inProgress = true;
+  }
+
+  async handleGameStop() {
+    this.reset();
+  }
+
+  reset() {
+    this.affectedPlayers.forEach(playerId => {
+      this.properties.setPlayerDiscProperties(playerId, { "xgravity": 0, "ygravity": 0 });
+    });
+    this.properties.setPlayerDiscProperties(this.playerId, { "radius": this.startingRadius });
+    this.inProgress = false;
+  }
+}
+
+class SlowMotionRejoice {
+  name: string = 'slowmo';
+  inProgress: boolean;
+  playerId: number;
+  affectedPlayers: number[];
+  properties: DiscPropertiesHandler
+  multiplier: number;
+  startTime: number;
+  constructor(playerId: number, properties: DiscPropertiesHandler) {
+    this.inProgress = false;
+    this.playerId = playerId;
+    let [redTeam, blueTeam] = properties.getRedBluePlayerIds();
+    this.affectedPlayers = redTeam.concat(blueTeam).filter(e => e != playerId);
+    this.properties = properties;
+    this.multiplier = 0.09;
+    this.startTime = 0;
+  }
+
+  isInProgress() {
+    return this.inProgress;
+  }
+
+  async handleGameTick() {
+    if (!this.isInProgress()) return;
+    const elapsed = Date.now() - this.startTime;
+    this.affectedPlayers.forEach(playerId => {
+      const props = this.properties.getPlayerDiscProperties(playerId);
+      if (props) {
+        const newXGravity = -props.xspeed * this.multiplier;
+        const newYGravity = -props.yspeed * this.multiplier;
+        this.properties.setPlayerDiscProperties(playerId, {
+          xgravity: newXGravity,
+          ygravity: newYGravity
+        });
+      }
+    });
+  }
+
+  async handlePositionsReset() {
+    this.reset();
+  }
+
+  async handleTeamGoal() {
+    const props = this.properties.getPlayerDiscProperties(this.playerId);
+    if (!props) return;
+    let [redTeam, blueTeam] = this.properties.getRedBluePlayerIds();
+    this.affectedPlayers = redTeam.concat(blueTeam).filter(e => e != this.playerId);
+    this.startTime = Date.now();
+    this.inProgress = true;
+  }
+
+  async handleGameStop() {
+    this.reset();
+  }
+
+  reset() {
+    this.affectedPlayers.forEach(playerId => {
+      this.properties.setPlayerDiscProperties(playerId, { xgravity: 0, ygravity: 0 });
+    });
+    this.inProgress = false;
+  }
+}
+
+class SmileRejoice {
+  name: string = 'smile';
+  inProgress: boolean;
+  playerId: number;
+  startingRadius: number;
+  cMaskMyTeam: number;
+  cMaskOpponentTeam: number;
+  duration: number;
+  startTime: number;
+  radius: number;
+  myTeam: number[];
+  opponentTeam: number[];
+  eyesPositions: { x: number, y: number }[];
+  mouthPositions: { x: number, y: number }[];
+  properties: DiscPropertiesHandler
+  constructor(playerId: number, properties: DiscPropertiesHandler) {
+    this.inProgress = false;
+    this.playerId = playerId;
+    this.properties = properties;
+    this.startingRadius = 0;
+    this.cMaskMyTeam = 0;
+    this.cMaskOpponentTeam = 0;
+    this.duration = 2000;
+    this.startTime = 0;
+    this.radius = 100;
+  
+    this.myTeam = [];
+    this.opponentTeam = [];
+  
+    this.eyesPositions = [
+      { x: -30, y: -40 }, // Lewe oko
+      { x: 30, y: -40 }  // Prawe oko
+    ];
+  
+    this.mouthPositions = [
+      { x: -35, y: 40 },
+      { x: 0, y: 45 },
+      { x: 35, y: 40 }
+    ];
+  }
+
+  isInProgress() {
+    return this.inProgress;
+  }
+
+  handleGameTick() {
+    if (!this.isInProgress()) return;
+    if (Date.now() - this.startTime > this.duration) {
+      this.reset();
+      return;
+    }
+  
+    this.properties.setPlayerDiscProperties(this.playerId, { x: 0, y: 0 });
+    this.myTeam.forEach((playerId, index) => {
+      if (index < this.myTeam.length && index < this.eyesPositions.length) {
+        this.properties.setPlayerDiscProperties(playerId, this.eyesPositions[index]);
+      }
+    });
+  
+    this.opponentTeam.forEach((playerId, index) => {
+      if (index < this.opponentTeam.length && index < this.mouthPositions.length) {
+        this.properties.setPlayerDiscProperties(playerId, this.mouthPositions[index]);
+      }
+    });
+    this.properties.setDiscProperties(0, { x: 0, y: 0 });
+  }
+
+  handlePositionsReset() {
+    this.reset();
+  }
+
+  handleTeamGoal() {
+    const props = this.properties.getPlayerDiscProperties(this.playerId);
+    if (!props) return;
+    this.startingRadius = props.radius;
+    this.cMaskMyTeam = props.cMask;
+    let [redTeam, blueTeam] = this.properties.getRedBluePlayerIds();
+    [this.myTeam, this.opponentTeam] = redTeam.includes(this.playerId) ? [redTeam, blueTeam] : [blueTeam, redTeam];
+    if (this.opponentTeam.length) {
+      const props = this.properties.getPlayerDiscProperties(this.opponentTeam[0]);
+      if (!props) return;
+      this.cMaskOpponentTeam = props.cMask;
+    }
+    this.myTeam.concat(this.opponentTeam).forEach(playerId => {
+      this.properties.setPlayerDiscProperties(playerId, { cMask: 0 });
+    });
+    this.properties.setPlayerDiscProperties(this.playerId, { radius: this.radius });
+    this.myTeam = this.myTeam.filter(e => e !== this.playerId);
+    this.startTime = Date.now();
+    this.inProgress = true;
+  }
+
+  handleGameStop() {
+    this.reset();
+  }
+
+  reset() {
+    // if (!this.inProgress) return;
+    this.properties.setPlayerDiscProperties(this.playerId, { radius: this.startingRadius, cMask: this.cMaskMyTeam });
+    this.myTeam.forEach(playerId => {
+      this.properties.setPlayerDiscProperties(playerId, { cMask: this.cMaskMyTeam });
+    });
+    this.opponentTeam.forEach(playerId => {
+      this.properties.setPlayerDiscProperties(playerId, { cMask: this.cMaskOpponentTeam });
+    });
+    this.inProgress = false;
+  }
+}
+
 class PlayerRejoices {
   selected: string;
   rejoices: Map<string, IRejoice>;
@@ -259,17 +517,30 @@ export class RejoiceMaker {
     if (!this.playerRejoices.has(playerId)) return [];
     return this.playerRejoices.get(playerId)!.getRejoiceNames();
   }
+  changeSelected(playerId: number, newSelected: string): boolean {
+    if (!this.playerRejoices.has(playerId)) return false;
+    return this.playerRejoices.get(playerId)!.changeSelected(newSelected);
+  }
   private checkPriorityOfRejoices() {
-    let sr = this.playingRejoices[0];
-    let ar = this.playingRejoices[1];
-    // only one gravity playing rejoice and scorer has priority
-    if (ar.name == "gravity" && sr.name == "gravity") {
-      this.playingRejoices.length = 1;
+    let sr = this.playingRejoices[0]; // scorer
+    let ar = this.playingRejoices[1]; // assister
+    // only getting bigger allowed for both players
+    if (ar.name === sr.name) {
+      if (ar.name !== "getting_bigger") this.playingRejoices.length = 1;
+      return;
     }
+    if (ar.name === 'getting_bigger' || sr.name === 'getting_bigger') {
+      return; // allow that combination so one player has getting_bigger, the second one has another
+    }
+    // in any other case prefer scorer, not assister
+    this.playingRejoices.length = 1;
   }
   private createRejoiceByName(rejoiceId: string, playerId: number) {
-    if (rejoiceId == "getting_bigger") return new GettingBiggerRejoice(playerId, this.dpHandler);
-    if (rejoiceId == "gravity") return new GravityRejoice(playerId, this.dpHandler);
+    if (rejoiceId === "getting_bigger") return new GettingBiggerRejoice(playerId, this.dpHandler);
+    if (rejoiceId === "gravity") return new GravityRejoice(playerId, this.dpHandler);
+    if (rejoiceId === "explosion") return new ExplosionRejoice(playerId, this.dpHandler);
+    if (rejoiceId === "slowmo") return new SlowMotionRejoice(playerId, this.dpHandler);
+    if (rejoiceId === "smile") return new SmileRejoice(playerId, this.dpHandler);
     return null;
   }
   private getOwnGoalRejoice(playerId: number) {

@@ -8,6 +8,8 @@ import apiPrivateGetPlayers from './api/private/get_player_names';
 import apiPrivateGetMatches from './api/private/get_matches';
 import apiPrivateGetMatchStats from './api/private/get_match_stats';
 import stripeRedirect from './stripe_redirect';
+import apiLogin from './login';
+import apiSaveToken from './save_token';
 
 const app = express();
 const port = 3000;
@@ -27,6 +29,9 @@ app.use("/stripe", stripeRedirect);
 app.use("/api/private/player_names", apiPrivateGetPlayers);
 app.use("/api/private/matches", apiPrivateGetMatches);
 app.use("/api/private/match_stats", apiPrivateGetMatchStats);
+
+app.use("/api/login", apiLogin);
+app.use("/api/save_token", apiSaveToken);
 
 // Serwowanie statycznych plików Reacta
 app.use(express.static(path.join(__dirname, "../../../www_frontend/build")));

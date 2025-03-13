@@ -1,14 +1,13 @@
 import { Client, GatewayIntentBits, TextChannel } from "discord.js";
 import * as fs from "fs";
 import { UnpackrStream, decode, encode } from "msgpackr";
+import * as secrets from "../src/secrets";
 
 if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
 const selector = process.env.HX_SELECTOR;
 
-const token = "MTM0NTQzNzY3NDEzMDkwMzA3MA.Gzmsfo.oiOb2fYSXdtnbuVimL7-V6F_8CzFX9RIV_Jj0E";
 let channelId = '';
 let logFile = '';
-
 
 console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
 if (selector == '1vs1') {
@@ -83,4 +82,4 @@ client.once("ready", async () => {
   await monitorLogs(channel);
 });
 
-client.login(token);
+client.login(secrets.DiscordToken);
