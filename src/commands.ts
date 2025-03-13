@@ -1072,6 +1072,11 @@ class Commander {
           let tr = playerExt.pendingTransaction;
           if (tr && paymentStatus) {
             if (paymentStatus === "completed") {
+              if (tr.status !== "completed") {
+                this.hb_room.rejoice_maker.handlePlayerJoin(playerExt).then((num) => {
+                  if (num > 0) this.sendMsgToPlayer(player, `Nowa cieszynka aktywowana! Możesz ją już teraz wykorzystać!`, Colors.AzureBlue);
+                }).catch((e) => e && hb_log(`!! rejoice_maker after payment error: ${e}`));
+              }
               tr.status = paymentStatus;
               this.sendMsgToPlayer(player, `Twoja płatność została zaksięgowana! Zakup zostanie aktywowany przy następnej wizycie. Dziękujemy!`, Colors.AzureBlue);
             } else if (paymentStatus === "failed") {
