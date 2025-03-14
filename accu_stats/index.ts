@@ -120,7 +120,7 @@ function calculateRatingFor(playerNames: Map<string, string>, matchEntries: Matc
     match.blueScore = m.match.blue_score;
     match.pressureRed = m.match.pressure;
     match.pressureBlue = 100 - match.pressureRed;
-    match.setEnd(true, m.match.full_time);
+    match.setEnd(matchDuration, true, m.match.full_time);
     ratings.updatePlayerStats(match, playerStats);
   }
   console.log(`player ID count: ${playerStats.size}`);

@@ -172,19 +172,20 @@ export class Ratings {
       }
 
       // Kara dla wychodzących w trakcie
-      if (stat.leftDueTo !== PlayerLeavedDueTo.none && stat.leftAt !== -1) {
+      if (stat.leftDueTo !== PlayerLeavedDueTo.none && stat.leftAt > 0 && stat.leftAt -3 < matchDuration) {
         const timeFraction = stat.leftAt / matchDuration;
         let penaltyPercent = 0;
         if (timeFraction < 0.95) {
           switch (stat.leftDueTo) {
             case PlayerLeavedDueTo.afk:
-              penaltyPercent = 0.08 * (1 - timeFraction); // Max 8%
+              // value below presents max percentage penalty
+              penaltyPercent = 0.04 * (1 - timeFraction);
               break;
             case PlayerLeavedDueTo.voteKicked:
-              penaltyPercent = 0.04 * (1 - timeFraction); // Max 4%
+              penaltyPercent = 0.02 * (1 - timeFraction);
               break;
             case PlayerLeavedDueTo.leftServer:
-              penaltyPercent = 0.10 * (1 - timeFraction); // Max 10%
+              penaltyPercent = 0.05 * (1 - timeFraction);
               break;
           }
           if (!isLoser) penaltyPercent /= 2;

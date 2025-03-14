@@ -81,16 +81,22 @@ async function fetchAggregated(cache: Cache, matchId: number): Promise<Aggregate
 
   let aggPlayerStats: AggregatedPlayerStat[] = [];
   for (let m of matchStats) {
-    let r = rankChanges.find(e => e.auth_id == m.auth_id);
-    if (!r) {
-      console.error(`No matching rank for match stat by auth_id: ${m.auth_id}`);
-      continue;
+    let r = rankChanges.find(e => e.auth_id === m.auth_id);
+    let oldRd = 0;
+    let oldMu = 0;
+    let newMu = 0
+    let penalty = 0;
+    if (r) {
+      oldRd = r.old_rd;
+      oldMu = r.old_mu;
+      newMu = r.new_mu;
+      penalty = r.penalty;
     }
     let playerName = playerNames.get(m.auth_id) ?? 'GOD';
     aggPlayerStats.push({
       name: playerName, team: m.team, goals: m.goals, assists: m.assists, own_goals: m.own_goals, 
       clean_sheet: m.clean_sheet, playtime: m.playtime, full_time: m.full_time, left_state: m.left_state,
-      old_rd: r.old_rd, old_mu: r.old_mu, new_mu: r.new_mu, penalty: r.penalty
+      old_rd: oldRd, old_mu: oldMu, new_mu: newMu, penalty: penalty
     });
   }
 

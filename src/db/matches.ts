@@ -50,7 +50,7 @@ export class MatchesDB {
         match.redScore, 
         match.blueScore, 
         Math.round(match.pressureRed),
-        0 // possession, TODO
+        Math.round(match.possessionRed)
       ], function (err) {
         if (err) {
           reject('Error saving match: ' + err.message);

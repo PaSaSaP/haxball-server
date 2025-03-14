@@ -352,6 +352,7 @@ export class Match {
   winStreak: number; // streak is for team so if player is in team then he "has" streak
   pressureRed: number; // pressure by red, 0-100 [%]
   pressureBlue: number; // pressure by blue, 0-100 [%], (it is of course: 100 - pressureRed)
+  possessionRed: number;
 
   constructor() {
     this.matchId = -1;
@@ -371,6 +372,7 @@ export class Match {
     this.winStreak = 0;
     this.pressureRed = 0;
     this.pressureBlue = 0;
+    this.possessionRed = 0;
   }
   setEnd(matchEndTime: number, ranked: boolean, fullTimeMatchPlayed: boolean = false) {
     this.matchEndTime = matchEndTime;

@@ -637,6 +637,7 @@ export class AutoBot {
     this.currentMatch.winStreak = this.winStreak;
     this.currentMatch.pressureRed = (this.hb_room.pressure_right / this.hb_room.pressure_total) * 100;
     this.currentMatch.pressureBlue = (this.hb_room.pressure_left / this.hb_room.pressure_total) * 100;
+    this.currentMatch.possessionRed = (this.hb_room.ball_possesion_tracker.getPossessionTime(1) / this.hb_room.ball_possesion_tracker.getTotalPossessionTime()) * 100;
     this.hb_room.sendMsgToAll(`Druzyna ${lastWinner == 1 ? "🔴Red" : "🔵Blue"} wygrała, jest to ich ${this.winStreak} zwycięstwo!`, Colors.GameState, 'italic');
   }
 
