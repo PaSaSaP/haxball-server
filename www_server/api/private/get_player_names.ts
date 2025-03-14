@@ -35,7 +35,7 @@ async function fetchPlayerNames(cache: Cache) {
       }
       console.log(`Got ${results.size} new names, now there is ${cache.playerNames.size} names, lastRowId=${cache.lastRowId}, rowId=${rowId}`);
       newRowId = rowId;
-    } catch (e) { console.error(`Error: ${e}`) };
+    } catch (e) { console.error(`Error for player names: ${e}`) };
   }
   cache.lastRowId = newRowId;
   cache.cache = Object.fromEntries(cache.playerNames);

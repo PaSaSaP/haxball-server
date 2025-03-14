@@ -147,7 +147,7 @@ export class MatchAccumulatedStatsDB {
   }
 
   async getCurrentDate(): Promise<string> {
-    const query = `SELECT datetime('now', 'localtime');`;
+    const query = 'SELECT current_date';
     return new Promise((resolve, reject) => {
       this.db.all(query, [], (err, rows: { current_date: string }[]) => {
         if (err) {

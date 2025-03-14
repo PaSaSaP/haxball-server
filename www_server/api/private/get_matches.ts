@@ -53,7 +53,7 @@ async function fetchMatches(cache: Cache) {
         console.log(`Truncating first ${foundIdx} matches`);
       cache.matches = cache.matches.slice(foundIdx + 1);
     }
-  } catch (e) { console.error(`Error: ${e}`) };
+  } catch (e) { console.error(`Error for matches: ${e}`) };
   cache.lastMatchId = newLastMatchId;
   let data: typeof cache.cache = [];
   for (let m of cache.matches) {

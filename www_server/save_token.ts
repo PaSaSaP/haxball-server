@@ -40,7 +40,8 @@ router.post('/:selector', authenticateToken, (req: any, res: any) => {
 
   const safeSelector = selector.replace(/[^a-zA-Z0-9_]/g, '_');
   const filePath = path.join('/src', 'dynamic', `token_${safeSelector}.txt`);
-  fs.appendFile(filePath, data + '\n', (err: any) => {
+
+  fs.writeFile(filePath, data + '\n', (err: any) => {
     if (err) {
       console.error('Błąd zapisu:', err);
       return res.status(500).json({ message: 'Błąd zapisu danych' });

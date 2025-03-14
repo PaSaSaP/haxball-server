@@ -52,7 +52,7 @@ async function fetchMatchStats(cache: Cache) {
         cache.matchStats = cache.matchStats.slice(foundIdx + 1);
       }
     }
-  } catch (e) { console.error(`Error: ${e}`) };
+  } catch (e) { console.error(`Error for match stats: ${e}`) };
   if (newRowId != -1)
     cache.lastRowId = newRowId;
   let data: typeof cache.cache = [];

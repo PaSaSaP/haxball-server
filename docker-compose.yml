@@ -24,7 +24,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/1$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
+      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,7 +54,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/1$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
+      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
