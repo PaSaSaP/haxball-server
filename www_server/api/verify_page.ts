@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
 import { createCanvas } from 'canvas';
-import { tokenDatabase } from '../src/token_database';
+import { tokenDatabase } from '../../src/token_database';
 
 const router = express.Router();
 

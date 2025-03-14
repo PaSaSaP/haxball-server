@@ -1,4 +1,4 @@
-import { BackendLoginSecretKey } from "../src/secrets";
+import { BackendLoginSecretKey } from "../../src/secrets";
 
 const express = require('express');
 const bodyParser = require('body-parser');

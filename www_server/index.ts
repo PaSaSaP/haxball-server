@@ -1,15 +1,16 @@
 import express from 'express';
 import path from 'path';
-import verifyRouter from './verify_page';
+import verifyRouter from './api/verify_page';
 import apiGetServers from './api/get_servers';
 import apiTop10 from './api/top10';
 import apiStripeTransaction from './api/stripe_transaction';
 import apiPrivateGetPlayers from './api/private/get_player_names';
 import apiPrivateGetMatches from './api/private/get_matches';
 import apiPrivateGetMatchStats from './api/private/get_match_stats';
-import stripeRedirect from './stripe_redirect';
-import apiLogin from './login';
-import apiSaveToken from './save_token';
+import apiGetAggStats from './api/get_agg_match_stats';
+import stripeRedirect from './api/stripe_redirect';
+import apiLogin from './api/login';
+import apiSaveToken from './api/save_token';
 
 const app = express();
 const port = 3000;
@@ -29,6 +30,7 @@ app.use("/stripe", stripeRedirect);
 app.use("/api/private/player_names", apiPrivateGetPlayers);
 app.use("/api/private/matches", apiPrivateGetMatches);
 app.use("/api/private/match_stats", apiPrivateGetMatchStats);
+app.use("/api/agg_stats", apiGetAggStats);
 
 app.use("/api/login", apiLogin);
 app.use("/api/save_token", apiSaveToken);

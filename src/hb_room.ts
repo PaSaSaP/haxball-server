@@ -26,6 +26,7 @@ import { MatchStats } from './stats';
 import { RejoiceMaker } from './rejoice_maker';
 import WelcomeMessage from './welcome_message';
 import Pinger from './pinger';
+import { MatchRankChangesEntry } from './db/match_rank_changes';
 
 
 export class HaxballRoom {
@@ -637,6 +638,7 @@ export class HaxballRoom {
     if (this.auto_mode) {
       hb_log(`Aktualizujemy match player stats dla ${matchPlayerStats.size}`);
       this.game_state.insertNewMatch(currentMatch, fullTimeMatchPlayed).then((matchId) => {
+        if (matchId >= -1) currentMatch.matchId = matchId;
         for (let authId of updatedAuthIds) {
           let sId = this.player_stats_auth.get(authId)!;
           if (sId === undefined) continue;
@@ -780,9 +782,9 @@ export class HaxballRoom {
     if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
     if (this.checkIfDotPlayerIsHost(player)) return;
     if (this.checkForPlayerDuplicate(player)) return;
-    let playerExt = this.P(player);
-    this.game_state.getTrustAndAdminLevel(playerExt).then(result => {
-      let kicked = false;
+    try {
+      let playerExt = this.P(player);
+      let result = await this.game_state.getTrustAndAdminLevel(playerExt);
       playerExt.trust_level = result.trust_level;
       playerExt.admin_level = result.admin_level;
       if (this.checkForPlayerNameDuplicate(playerExt)) return; // check here to check also trust level
@@ -793,30 +795,31 @@ export class HaxballRoom {
         });
         if (!whitelisted) {
           this.room.kickPlayer(player.id, "I don't trust in You!", false);
-          kicked = true;
+          return;
         }
       }
       if (playerExt.auth_id && playerExt.trust_level == 0) {
         this.captcha.askCaptcha(player);
       }
-      if (!kicked) {
-        this.player_ids_by_auth.set(playerExt.auth_id, playerExt.id);
-        this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
-        this.player_ids_by_normalized_name.set(playerExt.name_normalized, playerExt.id);
-        this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name);
-        this.updateAdmins(null);
-        this.loadPlayerStat(playerExt);
-        if (this.auto_mode) this.auto_bot.handlePlayerJoin(playerExt);
-        this.rejoice_maker.handlePlayerJoin(playerExt);
-        this.welcome_message.sendWelcomeMessage(playerExt);
+      this.player_ids_by_auth.set(playerExt.auth_id, playerExt.id);
+      this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
+      this.player_ids_by_normalized_name.set(playerExt.name_normalized, playerExt.id);
+      this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name);
+      this.updateAdmins(null);
+      this.loadPlayerStat(playerExt);
+      if (this.auto_mode) this.auto_bot.handlePlayerJoin(playerExt);
+      this.rejoice_maker.handlePlayerJoin(playerExt);
+      this.welcome_message.sendWelcomeMessage(playerExt);
+      const initialMute = playerExt.trust_level < 2;
+      this.anti_spam.addPlayer(player, initialMute);
+      if (this.anti_spam.enabled && initialMute) {
+        this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
       }
-    }).catch((e) => hb_log(`!! getTrustAndAdminLevel error: ${e}`));
-    this.anti_spam.addPlayer(player);
-    if (this.anti_spam.enabled) {
-      this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
+      // this.sendOnlyTo(player, `Mozesz aktywować sterowanie przyciskami (Link: https://tinyurl.com/HaxballKeyBinding): Lewy Shift = Sprint, A = Wślizg`, 0x22FF22);
+      this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb !sklep`, Colors.Help);
+    } catch (e) {
+      hb_log(`!! getTrustAndAdminLevel error: ${e}`);
     }
-    // this.sendOnlyTo(player, `Mozesz aktywować sterowanie przyciskami (Link: https://tinyurl.com/HaxballKeyBinding): Lewy Shift = Sprint, A = Wślizg`, 0x22FF22);
-    this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb !sklep`, Colors.Help);
   }
 
   loadPlayerStat(playerExt: PlayerData) {
@@ -1119,11 +1122,11 @@ export class HaxballRoom {
     // TODO add also (simplified?) ratings for disabled auto_mode
   }
 
-  async updateRatingsAndTop10() {
+  async updateRatingsAndTop10(inMatch: Match) {
     if (this.auto_mode) {
       if (this.auto_bot.ranked || this.ratings_for_all_games) {
         hb_log("Aktualizujemy teraz dane w bazie");
-        this.ratings.updatePlayerStats(this.auto_bot.currentMatch, this.player_stats);
+        this.ratings.updatePlayerStats(inMatch, this.player_stats);
         let saved = 0;
         let redTeamStr = '';
         let blueTeamStr = '';
@@ -1133,13 +1136,15 @@ export class HaxballRoom {
           if (penalty) str += `-${penalty}`;
           return str;
         }
-        for (const [playerId, oldMu, newMu, penalty] of this.ratings.results) {
-          if (this.auto_bot.currentMatch.redTeam.includes(playerId))
+        let rankChanges: MatchRankChangesEntry[] = [];
+        for (const [playerId, oldRd, oldMu, newMu, penalty] of this.ratings.results) {
+          let playerExt = this.players_ext_all.get(playerId)!;
+          rankChanges.push({ match_id: -1, auth_id: playerExt.auth_id, old_rd: oldRd, old_mu: oldMu, new_mu: newMu, penalty: penalty });
+          if (inMatch.redTeam.includes(playerId))
             redTeamStr += (redTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
-          else if (this.auto_bot.currentMatch.blueTeam.includes(playerId))
+          else if (inMatch.blueTeam.includes(playerId))
             blueTeamStr += (blueTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
 
-          let playerExt = this.players_ext_all.get(playerId)!;
           let stat = this.player_stats.get(playerExt.id)!;
           if (!playerExt.trust_level) {
             if (stat.fullGames >= 5 && stat.fullWins) {
@@ -1152,6 +1157,7 @@ export class HaxballRoom {
           this.game_state.savePlayerRating(playerExt.auth_id, this.player_stats.get(playerExt.id)!);
           saved++;
         }
+        this.updateRankChanges(inMatch, rankChanges);
         let predictedWinner = this.ratings.expectedScoreRed >= 50 ? '🔴' : '🔵';
         let predictedP = Math.round(this.ratings.expectedScoreRed);
         if (predictedP < 50) predictedP = 100 - predictedP;
@@ -1162,6 +1168,21 @@ export class HaxballRoom {
         hb_log(`Aktualizujemy - zrobione (${saved}/${this.ratings.results.length})!`);
       }
     }
+  }
+
+  private async updateRankChanges(inMatch: Match, rankChanges: MatchRankChangesEntry[]): Promise<void> {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (inMatch.matchId !== -1) {
+          clearInterval(checkInterval);
+          hb_log(`updateRankChanges(${inMatch.matchId})`);
+          rankChanges.forEach(m => m.match_id = inMatch.matchId);
+          rankChanges.forEach(m => this.game_state.insertNewMatchRankChanges(m));
+          this.sendMsgToAll(`Statystyki z ostatniego meczu znajdziesz tutaj: ${config.webpageLink}/mecz/${inMatch.matchId}`, Colors.Stats, 'italic');
+          resolve();
+        }
+      }, 1000);
+    });
   }
 
   private updateTop10Array(top10: PlayerTopRatingDataShort[], results: PlayerTopRatingDataShort[]) {

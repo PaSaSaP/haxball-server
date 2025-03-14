@@ -4,6 +4,7 @@ import { MatchEntry, MatchesDB } from "../../../src/db/matches";
 import * as config from "../../../src/config";
 import * as secrets from "../../../src/secrets";
 import { getTimestampHM } from "../../../src/utils";
+import { match } from "assert";
 
 const router = express.Router();
 
@@ -14,14 +15,25 @@ interface Cache {
   which: "1vs1"|"3vs3";
   dbFile: string;
   matches: MatchEntry[];
+  matchByMatchId: Map<number, MatchEntry>;
   cache: [number, string, number, boolean, number, number, number, number, number][];
   lastMatchId: number;
   lastFetchTime: number;
 }
-let matches1vs1Cache: Cache = { which: "1vs1", dbFile: roomConfig1vs1.otherDbFile, matches: [], cache: [], lastMatchId: -1, lastFetchTime: 0 };
-let matches3vs3Cache: Cache = { which: "3vs3", dbFile: roomConfig3vs3.otherDbFile, matches: [], cache: [], lastMatchId: -1, lastFetchTime: 0 };
+let matches1vs1Cache: Cache = {
+  which: "1vs1", dbFile: roomConfig1vs1.otherDbFile, matches: [],
+  matchByMatchId: new Map<number, MatchEntry>(), cache: [], lastMatchId: -1, lastFetchTime: 0
+};
+let matches3vs3Cache: Cache = {
+  which: "3vs3", dbFile: roomConfig3vs3.otherDbFile, matches: [],
+  matchByMatchId: new Map<number, MatchEntry>(), cache: [], lastMatchId: -1, lastFetchTime: 0
+};
 
 const CACHE_DURATION = 1 * 60 * 1000; // 1 minute
+
+function matchToArray(m: MatchEntry): [number, string, number, boolean, number, number, number, number, number] {
+  return [m.match_id, m.date, m.duration, m.full_time, m.winner, m.red_score, m.blue_score, m.pressure, m.possession];
+}
 
 async function fetchMatches(cache: Cache) {
   console.log(`${getTimestampHM()} fetching matches ${cache.which}`);
@@ -33,6 +45,7 @@ async function fetchMatches(cache: Cache) {
     let matchesDb = new MatchesDB(otherDb);
     let results = await matchesDb.getMatchesAfter(cache.lastMatchId);
     for (let result of results) {
+      cache.matchByMatchId.set(result.match_id, result);
       cache.matches.push(result);
     }
     newLastMatchId = cache.matches.at(cache.matches.length-1)?.match_id ?? -1;
@@ -50,14 +63,15 @@ async function fetchMatches(cache: Cache) {
       else break;
     }
     if (foundIdx !== -1) {
-        console.log(`Truncating first ${foundIdx} matches`);
+      console.log(`Truncating first ${foundIdx} matches`);
+      for (let idx = 0; idx <= foundIdx; ++idx) cache.matchByMatchId.delete(cache.matches[idx].match_id);
       cache.matches = cache.matches.slice(foundIdx + 1);
     }
   } catch (e) { console.error(`Error for matches: ${e}`) };
   cache.lastMatchId = newLastMatchId;
   let data: typeof cache.cache = [];
   for (let m of cache.matches) {
-    data.push([m.match_id, m.date, m.duration, m.full_time, m.winner, m.red_score, m.blue_score, m.pressure, m.possession]);
+    data.push(matchToArray(m));
   }
   cache.cache = data;
   cache.lastFetchTime = Date.now();
@@ -74,6 +88,18 @@ async function getMatches1vs1Cached() {
 }
 async function getMatches3vs3Cached() {
   return await getMatchesCached(matches3vs3Cache);
+}
+
+function getCacheBySelector(selector: string) {
+  if (selector === '1vs1') return getMatches1vs1Cached();
+  if (selector === '3vs3') return getMatches3vs3Cached();
+  throw new Error(`getCacheBySelecor() matches invalid selector: ${selector}`);
+}
+
+export async function getMatchBySelectorAndMatchId(selector: string, matchId: number): Promise<MatchEntry|null> {
+  let cache = await getCacheBySelector(selector);
+  let match = cache.matchByMatchId.get(matchId);
+  return match ?? null;
 }
 
 function verify(req: Request, res: Response) {
@@ -93,6 +119,22 @@ router.get("/3vs3", async (req: any, res: any) => {
   if (!verify(req, res)) return;
   let cached = await getMatches3vs3Cached();
   res.json(cached.cache);
+});
+router.get("/1vs1/id/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatches1vs1Cached();
+  let m = cached.matchByMatchId.get(matchId as number);
+  if (!m) return res.json([]);
+  res.json(matchToArray(m));
+});
+router.get("/3vs3/id/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatches3vs3Cached();
+  let m = cached.matchByMatchId.get(matchId as number);
+  if (!m) return res.json([]);
+  res.json(matchToArray(m));
 });
 router.get("/1vs1/first_match_id", async (req: any, res: any) => {
   if (!verify(req, res)) return;

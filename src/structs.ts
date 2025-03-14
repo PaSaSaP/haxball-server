@@ -334,6 +334,7 @@ export enum MatchStatsProcessingState {
 }
 
 export class Match {
+  matchId: number; // relates to match_id from DB, changed after insertion into DB
   redScore: number; // goals scored by red
   blueScore: number; // goals scored by blue
   matchEndTime: number; // total [seconds]
@@ -353,6 +354,7 @@ export class Match {
   pressureBlue: number; // pressure by blue, 0-100 [%], (it is of course: 100 - pressureRed)
 
   constructor() {
+    this.matchId = -1;
     this.redScore = 0;
     this.blueScore = 0;
     this.matchEndTime = 0;
@@ -370,7 +372,8 @@ export class Match {
     this.pressureRed = 0;
     this.pressureBlue = 0;
   }
-  setEnd(ranked: boolean, fullTimeMatchPlayed: boolean = false) {
+  setEnd(matchEndTime: number, ranked: boolean, fullTimeMatchPlayed: boolean = false) {
+    this.matchEndTime = matchEndTime;
     this.endedAt = Date.now();
     if (ranked) {
       this.ratingState = RatingProcessingState.ranked;

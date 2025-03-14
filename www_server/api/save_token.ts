@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { BackendLoginSecretKey } from "../src/secrets";
+import { BackendLoginSecretKey } from "../../src/secrets";
 
 const express = require('express');
 const fs = require('fs');

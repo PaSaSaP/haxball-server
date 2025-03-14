@@ -8,6 +8,7 @@ import { ReportsDB } from './db/reports';
 import { PlayerMatchStatsDB } from './db/player_match_stats';
 import { MatchesDB } from './db/matches';
 import { MatchStatsDB } from './db/match_stats';
+import { MatchRankChangesDB, MatchRankChangesEntry } from './db/match_rank_changes';
 import { PlayerRatingsDB } from './db/player_ratings';
 import { TopRatingsDB } from './db/top_ratings';
 import { PlayersStateDB } from './db/players_state';
@@ -30,6 +31,7 @@ export class DBHandler {
   playerMatchStats: PlayerMatchStatsDB; // all accumulated player stats
   matches: MatchesDB;
   matchStats: MatchStatsDB;
+  matchRankChanges: MatchRankChangesDB;
   playerState: PlayersStateDB;
   networksState: NetworksStateDB;
   reports: ReportsDB;
@@ -65,6 +67,7 @@ export class DBHandler {
     this.playerMatchStats = new PlayerMatchStatsDB(this.otherDb);
     this.matches = new MatchesDB(this.otherDb);
     this.matchStats = new MatchStatsDB(this.otherDb);
+    this.matchRankChanges = new MatchRankChangesDB(this.otherDb);
     this.playerState = new PlayersStateDB(this.otherDb);
     this.networksState = new NetworksStateDB(this.otherDb);
     this.reports = new ReportsDB(this.otherDb);
@@ -91,6 +94,7 @@ export class DBHandler {
     this.playerMatchStats.setupDatabase();
     this.matches.setupDatabase();
     this.matchStats.setupDatabase();
+    this.matchRankChanges.setupDatabase();
     this.playerState.setupDatabase();
     this.networksState.setupDatabase();
     this.reports.setupDatabase();
@@ -178,6 +182,10 @@ export class GameState {
   
   insertNewMatchPlayerStats(match_id: number, auth_id: string, team_id: 0 | 1 | 2, stat: PlayerMatchStatsData) {
     return this.dbHandler.matchStats.insertNewMatchPlayerStats(match_id, auth_id, team_id, stat);
+  }
+
+  insertNewMatchRankChanges(m: MatchRankChangesEntry) {
+    return this.dbHandler.matchRankChanges.insertNewMatchRankChanges(m);
   }
 
   loadPlayerRating(auth_id: string) {

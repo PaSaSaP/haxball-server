@@ -12,7 +12,7 @@ export class Ratings {
   static options: RatingsOptions;
   private glicko: Glicko2.Glicko2;
   expectedScoreRed: number;
-  results: [number, number, number, number][];
+  results: [number, number, number, number, number][];
 
   constructor(glicko: Glicko2.Glicko2, options: Partial<RatingsOptions> = {}) {
     this.glicko = glicko;
@@ -155,6 +155,7 @@ export class Ratings {
       const stat = match.stat(playerId);
       const oldMu = oldRatings.get(playerId)!;
       const newMu = player.glickoPlayer!.getRating();
+      const oldRd = player.glickoPlayer!.getRd();
       const weight = weights.get(playerId)!;
       let penalty = 0;
       let adjustedRating = newMu;
@@ -195,7 +196,7 @@ export class Ratings {
 
       this.Log(`id=${player.id} o=${oldMu} n=${newMu} w=${weight} final=${adjustedRating}`);
       player.glickoPlayer!.setRating(adjustedRating);
-      this.results.push([playerId, Math.round(oldMu), Math.round(adjustedRating), Math.round(penalty)]);
+      this.results.push([playerId, Math.round(oldRd), Math.round(oldMu), Math.round(adjustedRating), Math.round(penalty)]);
     }
   }
 

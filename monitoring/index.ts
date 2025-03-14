@@ -30,8 +30,7 @@ const handleServerTimeout = (selector: string) => {
 };
 
 const serverStatus: Record<string, number> = {};
-// TODO
-// serverStatus['3vs3'] = Date.now();
+serverStatus['3vs3'] = Date.now();
 serverStatus['1vs1'] = Date.now();
 
 const checkServerTimeouts = () => {

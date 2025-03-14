@@ -48,7 +48,7 @@ async function getPlayerNamesCached(cache: Cache) {
   }
   return cache;
 }
-async function getAllPlayerNamesCached() {
+export async function getAllPlayerNamesCached() {
   return await getPlayerNamesCached(globalCache);
 }
 

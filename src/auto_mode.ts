@@ -288,7 +288,7 @@ export class AutoBot {
           else if (this.currentScores.blue > this.currentScores.red) this.setLastWinner(2);
           else this.setLastWinner(this.hb_room.pressure_right >= this.hb_room.pressure_left ? 1 : 2);
         }
-        this.currentMatch.setEnd(this.ranked);
+        this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked);
       }
       this.hb_room.sendMsgToAll("Zmiana na mniejszą mapę", Colors.GameState, "italic");
       await this.justStopGame(); // 2v2, 3v1, 2v1...
@@ -345,7 +345,7 @@ export class AutoBot {
     this.clearMissingPlayersInTeamsTimer();
     this.clearMatchStartedTimer();
     if (this.currentMatch.ratingState == RatingProcessingState.ranked) {
-      this.hb_room.updateRatingsAndTop10();
+      this.hb_room.updateRatingsAndTop10(this.currentMatch);
       this.currentMatch.ratingState = RatingProcessingState.updated;
     }
     this.stopAndGoToLobby();
@@ -399,7 +399,7 @@ export class AutoBot {
         }
         this.fullTimeMatchPlayed = true;
         this.setLastWinner(lastWinner);
-        this.currentMatch.setEnd(this.ranked, true);
+        this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked, true);
         this.lobbyAction = () => {
           this.moveSomeTeamToSpec();
           return true;
@@ -455,8 +455,7 @@ export class AutoBot {
     this.fullTimeMatchPlayed = true;
     this.currentMatch.redScore = scores.red;
     this.currentMatch.blueScore = scores.blue;
-    this.currentMatch.matchEndTime = scores.time;
-    this.currentMatch.setEnd(this.ranked, true);
+    this.currentMatch.setEnd(scores.time, this.ranked, true);
     this.matchHistory.push(this.currentMatch);
     this.matchState = MatchState.afterVictory;
     let lastWinner: 1|2 = scores.red > scores.blue ? 1 : 2;
@@ -545,7 +544,7 @@ export class AutoBot {
       if (this.matchState == MatchState.started) {
         // AMLog(`Red don't play, why?`);
         this.hb_room.sendMsgToAll(`Druzyna Red nie rozpoczęła meczu w przeciągu ${this.MatchStartedTimeout / 1000} sekund...`, Colors.GameState, 'italic');
-        this.currentMatch.setEnd(false); // if they don't want to play then... just let them
+        this.currentMatch.setEnd(this.currentScores?.time ?? 0, false); // if they don't want to play then... just let them
         this.setLastWinner(2);
         this.lobbyAction = () => {
           this.moveLoserRedToSpec();
@@ -616,7 +615,7 @@ export class AutoBot {
             return true;
           }
         }
-        this.currentMatch.setEnd(this.ranked);
+        this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked);
         this.justStopGame();
       }
     }, this.AfterPositionsResetTimeout);

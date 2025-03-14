@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import sqlite3 from 'sqlite3';
-import { ShortLinksDB } from "../src/db/short_links";
-import * as config from "../src/config";
+import { ShortLinksDB } from "../../src/db/short_links";
+import * as config from "../../src/config";
 
 const router = express.Router();
 

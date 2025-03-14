@@ -37,9 +37,10 @@ export class AntiSpam {
     this.check_spam_disabled.add(player.id);
   }
 
-  addPlayer(player: PlayerObject) {
+  addPlayer(player: PlayerObject, initialMute: boolean = false) {
     const now: number = Date.now();
-    this.muted_players.set(player.id, now + this.initial_mute_ms); // Blokada na start
+    if (initialMute)
+      this.muted_players.set(player.id, now + this.initial_mute_ms); // Blokada na start
     this.message_logs.set(player.id, []);
     this.player_messages.set(player.id, []);
   }
