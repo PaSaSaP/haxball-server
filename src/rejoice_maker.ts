@@ -284,42 +284,41 @@ class SlowMotionRejoice {
 class SmileRejoice {
   name: string = 'smile';
   inProgress: boolean;
-  playerId: number;
   startingRadius: number;
-  cMaskMyTeam: number;
-  cMaskOpponentTeam: number;
+  cMasks: Map<number, number>;
   duration: number;
   startTime: number;
   radius: number;
-  myTeam: number[];
-  opponentTeam: number[];
-  eyesPositions: { x: number, y: number }[];
-  mouthPositions: { x: number, y: number }[];
-  properties: DiscPropertiesHandler
+  centerPlayer: number;
+  players: number[];
+  playerPositions: { x: number, y: number }[];
+  properties: DiscPropertiesHandler;
   constructor(playerId: number, properties: DiscPropertiesHandler) {
+    this.name = 'smile';
     this.inProgress = false;
-    this.playerId = playerId;
     this.properties = properties;
     this.startingRadius = 0;
-    this.cMaskMyTeam = 0;
-    this.cMaskOpponentTeam = 0;
-    this.duration = 2000;
+    this.cMasks = new Map();
+    this.duration = 2250;
     this.startTime = 0;
-    this.radius = 100;
+    this.radius = 200;
   
-    this.myTeam = [];
-    this.opponentTeam = [];
-  
-    this.eyesPositions = [
-      { x: -30, y: -40 }, // Lewe oko
-      { x: 30, y: -40 }  // Prawe oko
-    ];
-  
-    this.mouthPositions = [
-      { x: -35, y: 40 },
-      { x: 0, y: 45 },
-      { x: 35, y: 40 }
-    ];
+    this.centerPlayer = -1;
+    this.players = [];
+
+    this.playerPositions = [
+      { x: -50, y: -80 }, // Left Eye
+      { x: 50, y: -80 },  // Right Eye
+      { x: 0, y: 90 },
+      { x: -35, y: 80 },
+      { x: 35, y: 80 },
+      { x: -60, y: 70 },
+      { x: 60, y: 70 },
+      { x: -80, y: 60 },
+      { x: 80, y: 60 },
+      { x: -100, y: 50 },
+      { x: 100, y: 50 },
+    ]
   }
 
   isInProgress() {
@@ -333,18 +332,10 @@ class SmileRejoice {
       return;
     }
   
-    this.properties.setPlayerDiscProperties(this.playerId, { x: 0, y: 0 });
-    this.myTeam.forEach((playerId, index) => {
-      if (index < this.myTeam.length && index < this.eyesPositions.length) {
-        this.properties.setPlayerDiscProperties(playerId, this.eyesPositions[index]);
-      }
-    });
-  
-    this.opponentTeam.forEach((playerId, index) => {
-      if (index < this.opponentTeam.length && index < this.mouthPositions.length) {
-        this.properties.setPlayerDiscProperties(playerId, this.mouthPositions[index]);
-      }
-    });
+    this.properties.setPlayerDiscProperties(this.centerPlayer, { x: 0, y: 0 });
+    for (let i = 0; i < this.players.length && i < this.playerPositions.length; i++) {
+      this.properties.setPlayerDiscProperties(this.players[i], this.playerPositions[i]);
+    }
     this.properties.setDiscProperties(0, { x: 0, y: 0 });
   }
 
@@ -353,22 +344,23 @@ class SmileRejoice {
   }
 
   handleTeamGoal() {
-    const props = this.properties.getPlayerDiscProperties(this.playerId);
-    if (!props) return;
-    this.startingRadius = props.radius;
-    this.cMaskMyTeam = props.cMask;
+    this.startingRadius = 0;
     let [redTeam, blueTeam] = this.properties.getRedBluePlayerIds();
-    [this.myTeam, this.opponentTeam] = redTeam.includes(this.playerId) ? [redTeam, blueTeam] : [blueTeam, redTeam];
-    if (this.opponentTeam.length) {
-      const props = this.properties.getPlayerDiscProperties(this.opponentTeam[0]);
-      if (!props) return;
-      this.cMaskOpponentTeam = props.cMask;
-    }
-    this.myTeam.concat(this.opponentTeam).forEach(playerId => {
+    this.players = redTeam.concat(blueTeam).sort((lhs, rhs) => lhs - rhs);
+    if (this.players.length < 3) return;
+    let validPlayers = [];
+    for (let playerId of this.players) {
+      const props = this.properties.getPlayerDiscProperties(playerId);
+      if (!props) continue;
+      this.cMasks.set(playerId, props.cMask);
+      if (this.startingRadius === 0) this.startingRadius = props.radius;
       this.properties.setPlayerDiscProperties(playerId, { cMask: 0 });
-    });
-    this.properties.setPlayerDiscProperties(this.playerId, { radius: this.radius });
-    this.myTeam = this.myTeam.filter(e => e !== this.playerId);
+      validPlayers.push(playerId);
+    }
+    if (validPlayers.length < 3) return;
+    this.players = validPlayers;
+    this.centerPlayer = this.players.shift()!;
+    this.properties.setPlayerDiscProperties(this.centerPlayer, { radius: this.radius });
     this.startTime = Date.now();
     this.inProgress = true;
   }
@@ -378,14 +370,11 @@ class SmileRejoice {
   }
 
   reset() {
-    // if (!this.inProgress) return;
-    this.properties.setPlayerDiscProperties(this.playerId, { radius: this.startingRadius, cMask: this.cMaskMyTeam });
-    this.myTeam.forEach(playerId => {
-      this.properties.setPlayerDiscProperties(playerId, { cMask: this.cMaskMyTeam });
+    this.properties.setPlayerDiscProperties(this.centerPlayer, { radius: this.startingRadius, cMask: this.cMasks.get(this.centerPlayer) });
+    this.players.forEach(playerId => {
+      this.properties.setPlayerDiscProperties(playerId, { cMask: this.cMasks.get(playerId) });
     });
-    this.opponentTeam.forEach(playerId => {
-      this.properties.setPlayerDiscProperties(playerId, { cMask: this.cMaskOpponentTeam });
-    });
+    this.cMasks.clear();
     this.inProgress = false;
   }
 }
@@ -422,6 +411,7 @@ class DiscPropertiesHandler {
   setPlayerDiscProperties: (playerId: number, properties: Partial<DiscPropertiesObject>) => void;
   setDiscProperties: (discId: number, properties: Partial<DiscPropertiesObject>) => void;
   getRedBluePlayerIds: () => [number[], number[]];
+  getAllPlayerIds: () => number[];
   constructor(room: RoomObject) {
     this.getPlayerDiscProperties = (playerId: number) => {
       return room.getPlayerDiscProperties(playerId);
@@ -443,6 +433,9 @@ class DiscPropertiesHandler {
         else if (e.team == 2) blueTeam.push(e.id);
       })
       return [redTeam, blueTeam];
+    };
+    this.getAllPlayerIds = (): number[] => {
+      return room.getPlayerList().map(e => e.id);
     };
   }
 }
@@ -522,8 +515,18 @@ export class RejoiceMaker {
     return this.playerRejoices.get(playerId)!.changeSelected(newSelected);
   }
   private checkPriorityOfRejoices() {
+    let playersNum = this.dpHandler.getAllPlayerIds().length;
     let sr = this.playingRejoices[0]; // scorer
     let ar = this.playingRejoices[1]; // assister
+    if (playersNum < 3 && ar.name === 'smile') {
+      // if both have smile but there are only 2 players, do nothing...
+      if (sr.name === 'smile') this.playingRejoices.length = 0;
+      else this.playingRejoices.length = 1; // or scorer rejoice
+      return;
+    } else if (playersNum < 3 && sr.name === 'smile') {
+      this.playingRejoices.shift(); // assister have another rejoice, so leave it!
+      return;
+    }
     // only getting bigger allowed for both players
     if (ar.name === sr.name) {
       if (ar.name !== "getting_bigger") this.playingRejoices.length = 1;

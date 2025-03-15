@@ -1,13 +1,13 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
-export class PaymentsWatcher {
-  db: sqlite3.Database;
+export class PaymentsWatcher extends BaseDB {
   callback: ((transaction_id: number, old_status: string, new_status: string) => void) | null = null;
   intervalId: NodeJS.Timeout | null = null;
 
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {

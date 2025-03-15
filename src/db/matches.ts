@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { Match } from '../structs';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
 export interface MatchEntry {
   match_id: number;
@@ -14,11 +15,9 @@ export interface MatchEntry {
   possession: number;
 }
 
-export class MatchesDB {
-  db: sqlite3.Database;
-
+export class MatchesDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {
@@ -103,19 +102,6 @@ export class MatchesDB {
           reject('Error fetching new player names: ' + err.message);
         } else {
           resolve(rows);
-        }
-      });
-    });
-  }
-
-  async getCurrentDate(): Promise<string> {
-    const query = 'SELECT current_date';
-    return new Promise((resolve, reject) => {
-      this.db.all(query, [], (err, rows: { current_date: string }[]) => {
-        if (err) {
-          reject('Error fetching current date: ' + err.message);
-        } else {
-          resolve(rows[0].current_date);
         }
       });
     });

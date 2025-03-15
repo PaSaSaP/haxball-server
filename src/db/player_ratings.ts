@@ -1,12 +1,11 @@
 import sqlite3 from 'sqlite3';
 import { PlayerRatingData, PlayerStat } from '../structs';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
-export class PlayerRatingsDB {
-  db: sqlite3.Database;
-
+export class PlayerRatingsDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {
@@ -64,12 +63,33 @@ export class PlayerRatingsDB {
           rd = excluded.rd,
           volatility = excluded.volatility;
       `;
+      let g = player.glickoPlayer!;
       this.db.run(query, [
         auth_id,
-        player.glickoPlayer!.getRating(),
-        player.glickoPlayer!.getRd(),
-        player.glickoPlayer!.getVol(),
+        g.getRating(),
+        g.getRd(),
+        g.getVol(),
       ], (err) => {
+        if (err) {
+          reject('Error saving player rating: ' + err.message);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  async updatePlayerRating(auth_id: string, new_rating: number, rating_diff: number, rd: number, vol: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO player_ratings (auth_id, rating, rd, volatility)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(auth_id) DO UPDATE SET
+          rating = player_ratings.rating + ?,
+          rd = EXCLUDED.rd,
+          volatility = EXCLUDED.volatility;
+      `;
+      this.db.run(query, [auth_id, new_rating, rd, vol, rating_diff], (err) => {
         if (err) {
           reject('Error saving player rating: ' + err.message);
         } else {

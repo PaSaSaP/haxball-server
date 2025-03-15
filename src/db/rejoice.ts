@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { RejoiceEntry } from '../structs';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
 /*
 To add new rejoice:
@@ -9,11 +10,9 @@ To add new rejoice:
 - then call scripts/update_rejoice_prices.sh
 */
 
-export class RejoiceDB {
-  db: sqlite3.Database;
-
+export class RejoiceDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {

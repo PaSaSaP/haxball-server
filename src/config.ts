@@ -16,6 +16,7 @@ export interface RoomServerConfig {
   autoModeEnabled: boolean;
   token: string;
   selector: string;
+  subselector: string;
 }
 
 export const dbDir = "./db";
@@ -43,6 +44,7 @@ const futsal_3vs3: RoomServerConfig = {
   autoModeEnabled: true,
   token: 'thr1.AAAAAGfSC6jERkIwkXt2Iw.4kIK2P1gTUc',
   selector: '3vs3',
+  subselector: '1',
 };
 
 const futsal_1vs1: RoomServerConfig = {
@@ -55,17 +57,29 @@ const futsal_1vs1: RoomServerConfig = {
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   scoreLimit: 3,
   timeLimit: 2 * 60,
-  playersInTeamLimit: 3,
-  maxPlayers: 16,
-  maxPlayersOverride: 11,
+  playersInTeamLimit: 6,
+  maxPlayers: 24,
+  maxPlayersOverride: 17,
   noPlayer: true,
   autoModeEnabled: false,
   token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
   selector: '1vs1',
+  subselector: '1',
 };
 
-export const getRoomConfig = (selector: string): RoomServerConfig => {
-  if (selector == '3vs3') return futsal_3vs3;
-  if (selector == '1vs1') return futsal_1vs1;
-  throw new Error(`There is no config with name ${selector}`);
+function getChatLogDbFile(selector: string, subselector: string) {
+  return `./haxball_player_chat_${selector}_${subselector}.mpk`;
+}
+
+export const getRoomConfig = (selector: string, subselector: string = '1'): RoomServerConfig => {
+  let config: RoomServerConfig;
+  if (selector == '3vs3') config = futsal_3vs3;
+  else if (selector == '1vs1') config = futsal_1vs1;
+  else throw new Error(`There is no config with name ${selector}`);
+  config.chatLogDbFile = getChatLogDbFile(selector, subselector);
+  config.subselector = subselector;
+  if (selector === '3vs3' && subselector !== '1') {
+    config.roomName += ` #${subselector}`;
+  }
+  return config;
 }

@@ -118,7 +118,7 @@ export class AutoBot {
   }
 
   async reset() {
-    AMLog("reset");
+    // AMLog("reset");
     this.clearAllTimers();
     this.redTeam = [];
     this.blueTeam = [];
@@ -155,7 +155,7 @@ export class AutoBot {
   }
 
   async handlePlayerJoin(playerExt: PlayerData) {
-    AMLog(`${playerExt.name} joined`);
+    // AMLog(`${playerExt.name} joined`);
     this.addPlayerToSpec(playerExt);
     if (this.isLobbyTime()) return; // add to spec becaues no game in progress
     const limit = this.limit();
@@ -183,7 +183,7 @@ export class AutoBot {
   }
 
   async handlePlayerLeave(playerExt: PlayerData) {
-    AMLog(`${this.matchState} ${playerExt.name} ${playerExt.id} leaved`);
+    // AMLog(`${this.matchState} ${playerExt.name} ${playerExt.id} leaved`);
     // AMLog(`r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
     this.autoVoter.handleChangeAssignment(playerExt);
     if (this.removePlayerInSpec(playerExt)) return; // don't care about him
@@ -210,7 +210,7 @@ export class AutoBot {
   }
 
   async handlePlayerTeamChange(changedPlayer: PlayerData) {
-    AMLog(`${this.matchState} handle player team change ${changedPlayer.name} to team ${changedPlayer.team}`);
+    // AMLog(`${this.matchState} handle player team change ${changedPlayer.name} to team ${changedPlayer.team}`);
     let redLeft = false;
     let blueLeft = false;
     this.autoVoter.handleChangeAssignment(changedPlayer);
@@ -232,7 +232,7 @@ export class AutoBot {
   }
 
   async handlePlayerBackFromAfk(playerExt: PlayerData) {
-    AMLog(`${this.matchState} handler player returning from AFK ${playerExt.name}`);
+    // AMLog(`${this.matchState} handler player returning from AFK ${playerExt.name}`);
     if (this.isLobbyTime()) return; // add players only while game
     const limit = this.limit();
     if (limit == 3) {
@@ -295,7 +295,7 @@ export class AutoBot {
       return;
     } // below is "futsal" map so try to fix balance
     if (Math.abs(rl - bl) > 1) {
-      AMLog("Przesuwamy podczas meczu bo 3vs1 albo 2vs0");
+      // AMLog("Przesuwamy podczas meczu bo 3vs1 albo 2vs0");
       if (rl > bl) this.movePlayerToBlue(this.redTeam[this.redTeam.length - 1], this.redTeam);
       else this.movePlayerToRed(this.blueTeam[this.blueTeam.length - 1], this.blueTeam);
       return;
@@ -310,7 +310,7 @@ export class AutoBot {
   }
 
   async handleGameStart(byPlayer: PlayerData | null) {
-    AMLog("handling game started");
+    // AMLog("handling game started");
     if (this.ranked) {
       const limit = this.limit();
       if (this.redTeam.length < limit || this.blueTeam.length < limit) {
@@ -341,7 +341,7 @@ export class AutoBot {
   }
 
   async handleGameStop(byPlayer: PlayerData | null) {
-    AMLog("handling game stopped");
+    // AMLog("handling game stopped");
     this.clearMissingPlayersInTeamsTimer();
     this.clearMatchStartedTimer();
     if (this.currentMatch.ratingState == RatingProcessingState.ranked) {
@@ -676,12 +676,12 @@ export class AutoBot {
       if (added) return; // handle next player in next iteration
       if (rl == 0 && bl == 0) return;
       if (rl == 0 && bl == 1) {
-        AMLog("Przesuwamy jedynego blue do red");
+        // AMLog("Przesuwamy jedynego blue do red");
         this.movePlayerToRed(this.blueTeam[0], this.blueTeam);
         return;
       }
       if (Math.abs(rl - bl) > 1) {
-        AMLog("Przesuwamy bo 3vs1 albo 2vs0");
+        // AMLog("Przesuwamy bo 3vs1 albo 2vs0");
         if (rl > bl) this.movePlayerToBlue(this.redTeam[this.redTeam.length - 1], this.redTeam);
         else this.movePlayerToRed(this.blueTeam[this.blueTeam.length - 1], this.blueTeam);
         return;
@@ -689,12 +689,12 @@ export class AutoBot {
       
       // if no more players then go below
       if (limit == 3) {
-        AMLog("NO I ZACZYNAMY GRE");
+        // AMLog("NO I ZACZYNAMY GRE");
         AMLog(`ZACZYNAMY: r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
         this.clearMatchStartedTimer();
         this.stopLobbyMonitoringTimer();
         this.room.reorderPlayers(this.specTeam.map(e => e.id), true);
-        AMLog(`REORDERED: s:${this.specTeam.map(e=>e.name).join(",")}`);
+        // AMLog(`REORDERED: s:${this.specTeam.map(e=>e.name).join(",")}`);
         if (rl == 3 && bl == 3) {
           this.hb_room.setMapByName("futsal_big");
           await sleep(500);
@@ -724,7 +724,7 @@ export class AutoBot {
     let redTeam = rl == 0;
     if (redTeam) this.movePlayerToRed(spec, this.specTeam);
     else this.movePlayerToBlue(spec, this.specTeam);
-    AMLog(`${spec.name} CZY WYBRAŁ SOBIE DO SKŁADU KOGOŚ: ${spec.chosen_player_names.join(" ")}`);
+    // AMLog(`${spec.name} CZY WYBRAŁ SOBIE DO SKŁADU KOGOŚ: ${spec.chosen_player_names.join(" ")}`);
     if (!spec.chosen_player_names.length) {
       this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} nikogo nie wybrał, dostał pierwszych dostępnych z oczekujących! ${AutoBot.ShortMatchHelp}`, Colors.GameState, 'italic');
       return;
@@ -744,7 +744,7 @@ export class AutoBot {
   }
 
   fillByPreparedSelection() {
-    AMLog("fillByPreparedSelection");
+    // AMLog("fillByPreparedSelection");
     let limit = this.limit();
     if (this.redTeam.length < limit) {
       this.fillByPreparedSelectionTeam(this.redTeam, 1);
@@ -753,7 +753,7 @@ export class AutoBot {
       this.fillByPreparedSelectionTeam(this.blueTeam, 2);
     }
     if (this.redTeam.length == limit && this.blueTeam.length == limit) return;
-    AMLog("fillByPreparedSelection było z listy, teraz z góry");
+    // AMLog("fillByPreparedSelection było z listy, teraz z góry");
     let spec = this.topNonAfkSpecAutoSelect();
     while (spec && (this.redTeam.length < limit || this.blueTeam.length < limit)) {
       if (this.lastWinner == 1 && this.blueTeam.length < limit) this.movePlayerToBlue(spec, this.specTeam);
@@ -764,7 +764,7 @@ export class AutoBot {
 
       spec = this.topNonAfkSpecAutoSelect();
     }
-    AMLog("fillByPreparedSelection done");
+    // AMLog("fillByPreparedSelection done");
   }
 
   fillByPreparedSelectionTeam(inTeam: PlayerData[], teamNum: 1|2) {
@@ -796,7 +796,7 @@ export class AutoBot {
         }
       }
       this.hb_room.shuffleAllPlayers(rb);
-      AMLog(`MIESZAM REZULTAT: ${rb.map(e=>e.name).join(",")}`);
+      // AMLog(`MIESZAM REZULTAT: ${rb.map(e=>e.name).join(",")}`);
       rb.forEach(p => {
         this.specTeam.unshift(p);
         p.team = 0;
@@ -811,7 +811,7 @@ export class AutoBot {
         let rb = [...this.redTeam, ...this.blueTeam, ...this.specTeam];
         // AMLog(`MIESZAM RANKEDA: ${rb.map(e=>e.name).join(',')}`);
         this.hb_room.shuffleAllPlayers(rb);
-        AMLog(`MIESZAM RANKEDA REZULTAT: ${rb.map(e=>e.name).join(',')}`);
+        // AMLog(`MIESZAM RANKEDA REZULTAT: ${rb.map(e=>e.name).join(',')}`);
         rb.forEach(p => {
           p.team = 0;
           this.room.setPlayerTeam(p.id, p.team);
@@ -874,19 +874,19 @@ export class AutoBot {
       }
       let inFavor = [playerIds[1], playerIds[2]]; // first, second and third original player
       inFavor = inFavor.filter(playerId => this.lastAutoSelectedPlayerIds.includes(playerId));
-      AMLog(`Przesuwam wybierającego id:${choserIdx} na dół, inFavor=${inFavor}`);
+      // AMLog(`Przesuwam wybierającego id:${choserIdx} na dół, inFavor=${inFavor}`);
       return [choserIdx, inFavor];
     }
     return [-1, []];
   }
   moveLoserRedToSpec() {
-    AMLog("Red przegrało, idą do spec");
+    // AMLog("Red przegrało, idą do spec");
     this.shiftChoserToBottom(this.currentMatch.getLoserTeamIds(), this.redTeam);
     // red has at least one win, no in favor
     this.moveAllRedToSpec([]);
   }
   moveWinnerRedToSpec() {
-    AMLog("Red wygrało, ale! idą do spec");
+    // AMLog("Red wygrało, ale! idą do spec");
     this.shiftChoserToBottom(this.currentMatch.getWinnerTeamIds(), this.redTeam);
     this.moveAllRedToSpec([]);
   }
@@ -895,7 +895,7 @@ export class AutoBot {
     this.redTeam = [];
   }
   moveLoserBlueToSpec() {
-    AMLog("Blue przegrało, idą do spec");
+    // AMLog("Blue przegrało, idą do spec");
     let [choserIdx, inFavor] = this.shiftChoserToBottom(this.currentMatch.getLoserTeamIds(), this.blueTeam);
     // blue plays always first match so keep them in favor
     if (!this.ranked) inFavor = [];
@@ -903,7 +903,7 @@ export class AutoBot {
     this.moveAllBlueToSpec(inFavor);
   }
   moveWinnerBlueToSpec() {
-    AMLog("Blue wygrało, ale! idą do spec");
+    // AMLog("Blue wygrało, ale! idą do spec");
     this.shiftChoserToBottom(this.currentMatch.getWinnerTeamIds(), this.blueTeam);
     this.moveAllBlueToSpec([]);
   }
@@ -970,7 +970,7 @@ export class AutoBot {
   }
 
   movePlayer(playerId: number, fromTeam: PlayerData[], toTeam: PlayerData[], toTeamNumbered: number, onTop = false): void {
-    AMLog(`Moving id ${playerId} to ${toTeamNumbered} top:${onTop}`);
+    // AMLog(`Moving id ${playerId} to ${toTeamNumbered} top:${onTop}`);
     this.changeAssignment(playerId, fromTeam, toTeam, onTop);
     this.room.setPlayerTeam(playerId, toTeamNumbered);
   }
@@ -981,7 +981,7 @@ export class AutoBot {
       const [player] = fromTeam.splice(index, 1);
       if (onTop) toTeam.unshift(player);
       else toTeam.push(player);
-      AMLog(`change assignment ${player.name}`);
+      // AMLog(`change assignment ${player.name}`);
     } else {
       AMLog(`Cannot change assignment ${playerId}`);
     }

@@ -30,17 +30,26 @@ const handleServerTimeout = (selector: string) => {
 };
 
 const serverStatus: Record<string, number> = {};
-serverStatus['3vs3'] = Date.now();
-serverStatus['1vs1'] = Date.now();
+serverStatus['3vs3_1'] = Date.now();
+serverStatus['3vs3_2'] = Date.now();
+serverStatus['3vs3_3'] = Date.now();
+serverStatus['1vs1_1'] = Date.now();
+
+function shouldBeServerEnabled(selector: string): boolean {
+  const fpath = `./dynamic/server_active_${selector}.txt`;
+  return fs.existsSync(fpath);
+}
 
 const checkServerTimeouts = () => {
   const currentTime = Date.now();
 
   Object.keys(serverStatus).forEach((selector: string) => {
-    const lastRequestTime = serverStatus[selector];
+    if (shouldBeServerEnabled(selector)) {
+      const lastRequestTime = serverStatus[selector];
 
-    if (currentTime - lastRequestTime > 30000) {
-      handleServerTimeout(selector);
+      if (currentTime - lastRequestTime > 30000) {
+        handleServerTimeout(selector);
+      }
     }
   });
 };

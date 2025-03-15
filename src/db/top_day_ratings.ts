@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
 import { PlayerTopRatingData, PlayerTopRatingDataShort } from '../structs';
+import { BaseDB } from './base_db';
 
 export interface TopRatingDaySetings {
   min_full_games_daily: number;
@@ -8,12 +9,11 @@ export interface TopRatingDaySetings {
   players_limit: number;
 }
 
-class BaseTopRatingsDB {
-  db: sqlite3.Database;
+class BaseTopRatingsDB extends BaseDB {
   tableName: string;
 
   constructor(db: sqlite3.Database, tableName: string) {
-    this.db = db;
+    super(db);
     this.tableName = tableName;
   }
 

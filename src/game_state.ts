@@ -176,6 +176,10 @@ export class GameState {
     return this.dbHandler.playerMatchStats.savePlayerMatchStats(auth_id, stat);
   }
 
+  updatePlayerMatchStats(auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData) {
+    return this.dbHandler.playerMatchStats.updatePlayerMatchStats(auth_id, stat, playerMatchStats);
+  }
+
   insertNewMatch(match: Match, fullTimeMatchPlayed: boolean) {
     return this.dbHandler.matches.insertNewMatch(match, fullTimeMatchPlayed);
   }
@@ -194,6 +198,10 @@ export class GameState {
 
   savePlayerRating(auth_id: string, player: PlayerStat) {
     return this.dbHandler.ratings.savePlayerRating(auth_id, player);
+  }
+
+  updatePlayerRating(auth_id: string, new_rating: number, rating_diff: number, rd: number, vol: number) {
+    return this.dbHandler.ratings.updatePlayerRating(auth_id, new_rating, rating_diff, rd, vol);
   }
 
   updateTopRatings(playerMap: Map<string, string>) {

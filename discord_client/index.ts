@@ -2,21 +2,27 @@ import { Client, GatewayIntentBits, TextChannel } from "discord.js";
 import * as fs from "fs";
 import { UnpackrStream, decode, encode } from "msgpackr";
 import * as secrets from "../src/secrets";
+import * as config from "../src/config";
 
 if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
-const selector = process.env.HX_SELECTOR;
-
-let channelId = '';
-let logFile = '';
 
 console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
+console.log('HX_SUBSELECTOR:', process.env.HX_SUBSELECTOR);
+
+const selector = process.env.HX_SELECTOR;
+const subselector = process.env.HX_SUBSELECTOR;
+const roomConfig = config.getRoomConfig(selector, subselector);
+let channelId = '';
 if (selector == '1vs1') {
+  if (subselector === '1') {
     channelId = '1345442311684751491';
-    logFile = './logs/haxball_player_chat_1vs1.mpk';
+  } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
 } else if (selector == '3vs3') {
+  if (subselector === '1') {
     channelId = '1345435928625156177';
-    logFile = './logs/haxball_player_chat.mpk';
+  } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
 } else throw new Error(`Invalid HX_SELECTOR: ${selector}`);
+let logFile = `./logs/${roomConfig.chatLogDbFile}`;
 
 // Inicjalizacja klienta Discord
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });

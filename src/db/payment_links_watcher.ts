@@ -1,14 +1,14 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
-export class PaymentLinksWatcher {
-  db: sqlite3.Database;
+export class PaymentLinksWatcher extends BaseDB {
   callback: ((auth_id: string, transaction_id: number) => void) | null = null;
   selector: string;
   intervalId: NodeJS.Timeout | null = null;
 
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
     this.selector = '';
   }
 

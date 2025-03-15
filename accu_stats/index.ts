@@ -5,6 +5,7 @@ import * as config from "../src/config";
 import * as secrets from "../src/secrets";
 import { MatchAccumulatedStatsDB } from '../src/db/match_accumulated_stats';
 import { TopRatingDaySetings, TopRatingsDailyDB, TopRatingsWeeklyDB } from '../src/db/top_day_ratings';
+import { TopRatingsDB } from '../src/db/top_ratings';
 import { MatchEntry } from '../src/db/matches';
 import { MatchStatsEntry } from '../src/db/match_stats';
 import { Match, PlayerStat, PlayerLeavedDueTo, PlayerTopRatingData } from '../src/structs';
@@ -32,8 +33,10 @@ let otherDb = new sqlite3.Database(roomConfig.otherDbFile, (err) => {
 let matchAccuStatsDb = new MatchAccumulatedStatsDB(otherDb);
 let topRatingsDaily = new TopRatingsDailyDB(otherDb);
 let topRatingsWeekly = new TopRatingsWeeklyDB(otherDb);
+let topRatingsTotal = new TopRatingsDB(otherDb);
 topRatingsDaily.setupDatabase();
 topRatingsWeekly.setupDatabase();
+topRatingsTotal.setupDatabase();
 
 function createPlayerStat(id: number, glicko: Glicko2.Glicko2, rating: number = PlayerStat.DefaultRating,
     rd: number = PlayerStat.DefaultRd, vol: number = PlayerStat.DefaultVol) {
@@ -121,7 +124,7 @@ function calculateRatingFor(playerNames: Map<string, string>, matchEntries: Matc
     match.pressureRed = m.match.pressure;
     match.pressureBlue = 100 - match.pressureRed;
     match.setEnd(matchDuration, true, m.match.full_time);
-    ratings.updatePlayerStats(match, playerStats);
+    ratings.calculateNewPlayersRating(match, playerStats);
   }
   console.log(`player ID count: ${playerStats.size}`);
   for (let [playerId, stat] of playerStats) {
@@ -269,8 +272,11 @@ function areNewMatchesToProcess(savedMatchId: number, lastMatchId: number) {
   return true;
 }
 
-async function updateAccuStats() {
-  let playerNames = await getPlayerNames();
+async function updateTotalRanking(playerNames: Map<string, string>) {
+  await topRatingsTotal.updateTopRatings(playerNames);
+}
+
+async function updateAccuStats(playerNames: Map<string, string>) {
   let currentDate = await matchAccuStatsDb.getCurrentDate();
   console.log(`Current DB date: ${currentDate}`);
   await matchAccuStatsDb.updateStatsForToday();
@@ -291,9 +297,11 @@ async function updateAccuStats() {
 (async () => {
   let savedMatchId = await getSavedMatchId();
   let lastMatchId = await getLastMatchId();
+  let playerNames = await getPlayerNames();
+  await updateTotalRanking(playerNames);
   if (areNewMatchesToProcess(savedMatchId, lastMatchId)) {
-    console.log(`THere is new data to process, saved:${savedMatchId} last:${lastMatchId}`);
-    await updateAccuStats();
+    console.log(`There is new data to process, saved:${savedMatchId} last:${lastMatchId}`);
+    await updateAccuStats(playerNames);
     await updateSavedMatchId(lastMatchId);
   } else {
     console.log(`No new data to process, saved:${savedMatchId} last:${lastMatchId}`);

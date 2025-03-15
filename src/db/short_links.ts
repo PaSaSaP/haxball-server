@@ -1,16 +1,15 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
 export interface ShortLinkEntry {
   hash: string;
   long_link: string;
 }
 
-export class ShortLinksDB {
-  db: sqlite3.Database;
-
+export class ShortLinksDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {

@@ -117,7 +117,7 @@ export class Ratings {
     return Math.min(1.0, Math.max(0.01, weight));
   }
 
-  updatePlayerStats(match: Match, playerStats: Map<number, PlayerStat>) {
+  calculateNewPlayersRating(match: Match, playerStats: Map<number, PlayerStat>) {
     const matchDuration = match.matchEndTime;
     const fullTimeMatchPlayed = match.fullTimeMatchPlayed;
     const weights: Map<number, number> = new Map();

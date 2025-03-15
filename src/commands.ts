@@ -183,6 +183,7 @@ class Commander {
       check_transaction: this.commandCheckPlayerTransaction,
       check_tr: this.commandCheckPlayerTransaction,
       update_rejoice: this.commandUpdateRejoiceForPlayer,
+      set_rejoice: this.commandSetRejoiceForPlayer,
       u: this.commandUnlockWriting,
       sefin: this.commandSefin,
       server_restart: this.commandServerRestart,
@@ -1122,7 +1123,7 @@ class Commander {
       this.sendMsgToPlayer(player, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingTransaction.link}`, Colors.DarkGreen);
       return;
     }
-    this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays, this.hb_room.room_config.selector).then((result) => {
+    this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays, this.hb_room.getSselector()).then((result) => {
       this.sendMsgToPlayer(player, `Proces zakupu cieszynki rozpoczęty! Wkrótce otrzymasz link.`, Colors.DarkGreen);
       hb_log(`Zakup cieszynki dla ${playerExt.name} ${playerExt.auth_id} r:${rejoiceName} na ${forDays}, id:${result}`);
     }).catch((e) => e && hb_log(`!! insertRejoiceTransaction error ${e}`));
@@ -1155,6 +1156,22 @@ class Commander {
     this.hb_room.rejoice_maker.handlePlayerJoin(cmdPlayer).then((num) => {
       this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
     }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
+  }
+
+  async commandSetRejoiceForPlayer(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'update_rejoice')) return;
+    if (cmds.length < 2) {
+      this.sendMsgToPlayer(player, `O jakiego gracza chodzi? I jaka cieszynka?`);
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    if (!cmdPlayer) return;
+    let rejoiceId = cmds[1];
+    this.hb_room.game_state.updateOrInsertRejoice(cmdPlayer.auth_id, rejoiceId, 42, Date.now() + 60_000).then(((result) => {
+      this.hb_room.rejoice_maker.handlePlayerJoin(cmdPlayer).then((num) => {
+        this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
+      }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
+    })).catch((e) => hb_log(`updateOrInsertRejoice error: ${e}`));
   }
 
   async commandVerify(player: PlayerObject) {

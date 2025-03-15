@@ -1,5 +1,6 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
 export interface MatchAccumulatedEntry {
   date: string;
@@ -18,11 +19,11 @@ export interface MatchAccumulatedEntry {
   left_server: number;
 }
 
-export class MatchAccumulatedStatsDB {
-  db: sqlite3.Database;
 
+
+export class MatchAccumulatedStatsDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {
@@ -141,19 +142,6 @@ export class MatchAccumulatedStatsDB {
           reject('Error fetching stats for last day: ' + err.message);
         } else {
           resolve(rows);
-        }
-      });
-    });
-  }
-
-  async getCurrentDate(): Promise<string> {
-    const query = 'SELECT current_date';
-    return new Promise((resolve, reject) => {
-      this.db.all(query, [], (err, rows: { current_date: string }[]) => {
-        if (err) {
-          reject('Error fetching current date: ' + err.message);
-        } else {
-          resolve(rows[0].current_date);
         }
       });
     });

@@ -1,8 +1,8 @@
 version: '3'
 services:
-  futsal-3vs3:
+  futsal-3vs3-1:
     image: hx-puppeteer:1.0
-    container_name: haxball-server-futsal-3vs3
+    container_name: haxball-server-futsal-3vs3-1
     restart: unless-stopped
     ports:
       - "0.0.0.0:50000-50100:50000-50100/udp"
@@ -11,6 +11,7 @@ services:
       - HTTPS_PROXY=http://mitmproxy:8080
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - HX_ROOM_CONFIG_SELECTOR=3vs3
+      - HX_ROOM_CONFIG_SUBSELECTOR=1
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
     volumes:
@@ -24,12 +25,12 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
+      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 60s
-    command: ["futsal_3vs3"]
+    command: ["futsal_3vs3_1"]
   futsal-1vs1:
     image: hx-puppeteer:1.0
     container_name: haxball-server-futsal-1vs1
@@ -41,6 +42,7 @@ services:
       - HTTPS_PROXY=http://proxy-futsal-1vs1:8080
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - HX_ROOM_CONFIG_SELECTOR=1vs1
+      - HX_ROOM_CONFIG_SUBSELECTOR=1
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
     volumes:
@@ -54,7 +56,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}\" || exit 1"]
+      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -127,7 +129,7 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run market_server
-  accu-stats:
+  accu-stats-3vs3:
     image: ghcr.io/puppeteer/puppeteer
     volumes:
       - .:/src
@@ -139,7 +141,20 @@ services:
       - app_network
     user: node
     working_dir: /src
-    entrypoint: npm run accu_stats
+    entrypoint: npm run accu_stats_3vs3
+  accu-stats-1vs1:
+    image: ghcr.io/puppeteer/puppeteer
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+      - HX_ROOM_CONFIG_SELECTOR=1vs1
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run accu_stats_1vs1
 
 networks:
   app_network:

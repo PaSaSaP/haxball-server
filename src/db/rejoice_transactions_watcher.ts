@@ -1,14 +1,14 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
-export class RejoiceTransactionsWatcher {
+export class RejoiceTransactionsWatcher extends BaseDB {
   // TODO remove auth_id from here?
-  db: sqlite3.Database;
   callback: ((auth_id: string, transaction_id: number, selector: string) => void) | null = null;
   intervalId: NodeJS.Timeout | null = null;
 
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {

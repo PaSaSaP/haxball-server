@@ -574,5 +574,5 @@ export class MatchStats {
 }
 
 function STLog(txt: string) {
-  console.log('#ST#' + txt);
+  // console.log('#ST#' + txt);
 }

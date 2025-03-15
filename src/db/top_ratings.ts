@@ -1,12 +1,11 @@
 import sqlite3 from 'sqlite3';
 import { PlayerTopRatingData, PlayerTopRatingDataShort, PlayerTopRatingDataShortAuth } from '../structs';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
-export class TopRatingsDB {
-  db: sqlite3.Database;
-
+export class TopRatingsDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {

@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { PlayerMatchStatsData } from '../structs';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
 export interface MatchStatsEntry {
   match_id: number;
@@ -19,11 +20,9 @@ interface MatchStatsEntryRowId extends MatchStatsEntry {
   rowid: number;
 }
 
-export class MatchStatsDB {
-  db: sqlite3.Database;
-
+export class MatchStatsDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {

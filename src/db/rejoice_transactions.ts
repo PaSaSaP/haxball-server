@@ -1,5 +1,6 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
+import { BaseDB } from './base_db';
 
 export interface RejoiceTransactionEntry {
   transaction_id: number;
@@ -11,11 +12,9 @@ export interface RejoiceTransactionEntry {
   selector: string;
 }
 
-export class RejoiceTransactionsDB {
-  db: sqlite3.Database;
-
+export class RejoiceTransactionsDB extends BaseDB {
   constructor(db: sqlite3.Database) {
-    this.db = db;
+    super(db);
   }
 
   setupDatabase(): void {
