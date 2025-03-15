@@ -1,32 +1,30 @@
-import fetch from 'node-fetch';
-import { HttpProxyAgent } from 'http-proxy-agent';
+import { hb_log } from "./log";
 
 class Pinger {
   private selector: string;
-  private proxy: string;
   private lastPingTime: number = 0;
   private intervalId: NodeJS.Timeout | null = null;
+  private playerNumGetter: () => number;
 
-  constructor(selector: string) {
+  constructor(selector: string, playerNumGetter: () => number) {
     this.selector = selector;
-    this.proxy = process.env.GLOBAL_AGENT_HTTPS_PROXY as string;
+    this.playerNumGetter = playerNumGetter;
   }
 
   private async sendRequest() {
-    const url = `http://monitoring/ping/${this.selector}`;
-    const agent = new HttpProxyAgent(this.proxy);
-
+    const playerNum = this.playerNumGetter();
+    const url = `http://monitoring/ping/${this.selector}/${playerNum}`;
+  
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        agent,
-      });
-
-      this.lastPingTime = Date.now();
-      // console.log(`Zapytanie wysłane do ${this.selector}: Status - ${response.status}`);
-    } catch (error) {
-      console.error(`Błąd połączenia z serwerem ${this.selector}:`, error);
+      const response = await fetch(url);
+      // Sprawdzanie statusu odpowiedzi
+      if (response.ok) {
+        this.lastPingTime = Date.now();
+      } else {
+        hb_log(`Błąd odpowiedzi z serwera ${this.selector}: Status - ${response.status}`);
+      }
+    } catch (e) {
+      hb_log(`Błąd połączenia z serwerem ${url} dla ${this.selector}`);
     }
   }
 
@@ -43,7 +41,6 @@ class Pinger {
       this.intervalId = setInterval(() => {
         this.sendRequest();
       }, 5000);
-      // console.log(`Monitorowanie serwera ${this.selector} rozpoczęte.`);
     }
   }
 
@@ -51,7 +48,6 @@ class Pinger {
     if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      // console.log(`Monitorowanie serwera ${this.selector} zatrzymane.`);
     }
   }
 }

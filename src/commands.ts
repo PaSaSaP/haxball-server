@@ -1159,7 +1159,7 @@ class Commander {
   }
 
   async commandSetRejoiceForPlayer(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'update_rejoice')) return;
+    if (this.warnIfPlayerIsNotHost(player, 'set_rejoice')) return;
     if (cmds.length < 2) {
       this.sendMsgToPlayer(player, `O jakiego gracza chodzi? I jaka cieszynka?`);
       return;
@@ -1167,7 +1167,7 @@ class Commander {
     let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
     if (!cmdPlayer) return;
     let rejoiceId = cmds[1];
-    this.hb_room.game_state.updateOrInsertRejoice(cmdPlayer.auth_id, rejoiceId, 42, Date.now() + 60_000).then(((result) => {
+    this.hb_room.game_state.updateOrInsertRejoice(cmdPlayer.auth_id, rejoiceId, 0, Date.now() + 60_000).then(((result) => {
       this.hb_room.rejoice_maker.handlePlayerJoin(cmdPlayer).then((num) => {
         this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
       }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
@@ -1473,7 +1473,7 @@ class Commander {
   }
 
   warnIfPlayerIsNotHost(player: PlayerObject, cmd_name: string) {
-    if (!this.hb_room.isPlayerHost(player)) {
+    if (!this.hb_room.isPlayerHost(player) && !this.hb_room.isGodPlayer(player)) {
       this.sendMsgToPlayer(player, `Nieznana komenda:${cmd_name} `);
       return true;
     }

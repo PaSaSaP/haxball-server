@@ -20,7 +20,7 @@ import * as config from './config';
 
 async function getTokenFromFile(selector: string, subselector: string): Promise<string> {
   try {
-    const filePath = `dynamic/token_${selector}_${subselector}.txt`;
+    const filePath = `./dynamic/token_${selector}_${subselector}.txt`;
     const data = (await fs.readFile(filePath, "utf8")).trim();
     return data;
   } catch (error: any) {

@@ -29,7 +29,7 @@ export class PlayerMatchStatsDB extends BaseDB {
     this.db.run(createTableQuery, (e) => e && hb_log(`!! create player_match_stats error: ${e}`));
   }
 
-  async loadPlayerMatchStats(auth_id: string): Promise<PlayerMatchStatsData> {
+  async loadTotalPlayerMatchStats(auth_id: string): Promise<PlayerMatchStatsData> {
     return new Promise((resolve, reject) => {
       const query = `
         SELECT games, full_games, wins, full_wins, goals, assists, own_goals, playtime, clean_sheets, left_afk, left_votekick, left_server
@@ -46,7 +46,7 @@ export class PlayerMatchStatsDB extends BaseDB {
     });
   }
 
-  async savePlayerMatchStats(auth_id: string, stat: PlayerStat): Promise<void> {
+  async saveTotalPlayerMatchStats(auth_id: string, stat: PlayerStat): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
         INSERT INTO player_match_stats (auth_id, games, full_games, wins, full_wins, goals, assists, own_goals, playtime, clean_sheets, left_afk, left_votekick, left_server)
@@ -79,7 +79,7 @@ export class PlayerMatchStatsDB extends BaseDB {
     });
   }
 
-  async updatePlayerMatchStats(auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData): Promise<void> {
+  async updateTotalPlayerMatchStats(auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
         INSERT INTO player_match_stats (

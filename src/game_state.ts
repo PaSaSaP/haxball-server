@@ -28,7 +28,7 @@ export class DBHandler {
   players: PlayersDB;
   playerNames: PlayerNamesDB;
   votes: VotesDB;
-  playerMatchStats: PlayerMatchStatsDB; // all accumulated player stats
+  totalPlayerMatchStats: PlayerMatchStatsDB; // all accumulated player stats
   matches: MatchesDB;
   matchStats: MatchStatsDB;
   matchRankChanges: MatchRankChangesDB;
@@ -64,7 +64,7 @@ export class DBHandler {
     this.playerNames = new PlayerNamesDB(this.playersDb);
     this.votes = new VotesDB(this.playersDb);
     // and second table
-    this.playerMatchStats = new PlayerMatchStatsDB(this.otherDb);
+    this.totalPlayerMatchStats = new PlayerMatchStatsDB(this.otherDb);
     this.matches = new MatchesDB(this.otherDb);
     this.matchStats = new MatchStatsDB(this.otherDb);
     this.matchRankChanges = new MatchRankChangesDB(this.otherDb);
@@ -91,7 +91,7 @@ export class DBHandler {
     this.playerNames.setupDatabase();
     this.votes.setupDatabase();
 
-    this.playerMatchStats.setupDatabase();
+    this.totalPlayerMatchStats.setupDatabase();
     this.matches.setupDatabase();
     this.matchStats.setupDatabase();
     this.matchRankChanges.setupDatabase();
@@ -168,16 +168,16 @@ export class GameState {
     return this.dbHandler.votes.getPlayerReputation(auth_id);
   }
 
-  loadPlayerMatchStats(auth_id: string) {
-    return this.dbHandler.playerMatchStats.loadPlayerMatchStats(auth_id);
+  loadTotalPlayerMatchStats(auth_id: string) {
+    return this.dbHandler.totalPlayerMatchStats.loadTotalPlayerMatchStats(auth_id);
   }
 
-  savePlayerMatchStats(auth_id: string, stat: PlayerStat) {
-    return this.dbHandler.playerMatchStats.savePlayerMatchStats(auth_id, stat);
+  saveTotalPlayerMatchStats(auth_id: string, stat: PlayerStat) {
+    return this.dbHandler.totalPlayerMatchStats.saveTotalPlayerMatchStats(auth_id, stat);
   }
 
-  updatePlayerMatchStats(auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData) {
-    return this.dbHandler.playerMatchStats.updatePlayerMatchStats(auth_id, stat, playerMatchStats);
+  updateTotalPlayerMatchStats(auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData) {
+    return this.dbHandler.totalPlayerMatchStats.updateTotalPlayerMatchStats(auth_id, stat, playerMatchStats);
   }
 
   insertNewMatch(match: Match, fullTimeMatchPlayed: boolean) {

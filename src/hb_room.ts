@@ -27,6 +27,7 @@ import { RejoiceMaker } from './rejoice_maker';
 import WelcomeMessage from './welcome_message';
 import Pinger from './pinger';
 import { MatchRankChangesEntry } from './db/match_rank_changes';
+import GodCommander from './god_commander';
 
 
 export class HaxballRoom {
@@ -93,6 +94,7 @@ export class HaxballRoom {
   rejoice_prices: Map<string, { for_days: number, price: number }[]>;
   welcome_message: WelcomeMessage;
   pinger: Pinger;
+  god_commander: GodCommander;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -134,7 +136,7 @@ export class HaxballRoom {
     // this.glicko_settings = null;
     this.glicko = new Glicko2.Glicko2();
     this.glicko_players = new Map<string, Glicko2.Player>();
-    this.ratings = new Ratings(this.glicko, {scoreLimit: roomConfig.scoreLimit, timeLimit: roomConfig.timeLimit});
+    this.ratings = new Ratings(this.glicko, { scoreLimit: roomConfig.scoreLimit, timeLimit: roomConfig.timeLimit });
     this.ratings_for_all_games = false;
     this.match_stats = new MatchStats();
     this.auto_mode = roomConfig.autoModeEnabled;
@@ -153,7 +155,9 @@ export class HaxballRoom {
     this.rejoice_maker = new RejoiceMaker(this);
     this.rejoice_prices = new Map<string, { for_days: number, price: number }[]>();
     this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.OrangeTangelo) });
-    this.pinger = new Pinger(this.getSselector());
+    this.pinger = new Pinger(this.getSselector(), () => this.players_ext.size);
+    this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
+      roomConfig.selector, roomConfig.subselector);
     this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
@@ -577,9 +581,11 @@ export class HaxballRoom {
     }
     if (doUpdateState) {
       let matchPlayerStats = this.match_stats.updatePlayerStats(this.players_ext_all, fullTimeMatchPlayed);
-      if (this.auto_mode) this.updatePlayerLeftState(matchPlayerStats, this.auto_bot.currentMatch);
-      this.updateAccumulatedPlayerStats(matchPlayerStats, this.auto_bot.currentMatch, fullTimeMatchPlayed);
-      if (this.auto_mode) this.auto_bot.currentMatch.matchStatsState = MatchStatsProcessingState.updated;
+      if (matchPlayerStats.size) {
+        if (this.auto_mode) this.updatePlayerLeftState(matchPlayerStats, this.auto_bot.currentMatch);
+        this.updateAccumulatedPlayerStats(matchPlayerStats, this.auto_bot.currentMatch, fullTimeMatchPlayed);
+        if (this.auto_mode) this.auto_bot.currentMatch.matchStatsState = MatchStatsProcessingState.updated;
+      }
     }
     this.scores = null;
     if (this.auto_mode) {
@@ -634,9 +640,9 @@ export class HaxballRoom {
       if (sId === undefined) continue;
       let stat = this.player_stats.get(sId);
       if (!stat) continue;
-      this.game_state.updatePlayerMatchStats(authId, stat, matchPlayerStats.get(stat.id)!)
-        .then(async (result) => {
-          this.game_state.loadPlayerMatchStats(authId)
+      this.game_state.updateTotalPlayerMatchStats(authId, stat, matchPlayerStats.get(stat.id)!)
+        .then(async () => {
+          this.game_state.loadTotalPlayerMatchStats(authId)
             .then(result => this.assignPlayerMatchStats(stat, result))
             .catch((e) => hb_log(`!! loadPlayerMatchStats error: ${e}`));
         })
@@ -856,20 +862,22 @@ export class HaxballRoom {
       this.game_state.loadPlayerRating(playerExt.auth_id).then(result => { // load stats
         this.assignPlayerRating(playerExt, result);
       }).catch((e) => hb_log(`!! loadPlayerRating: ${e}`));
-      this.game_state.loadPlayerMatchStats(playerExt.auth_id).then(result => {
+      this.game_state.loadTotalPlayerMatchStats(playerExt.auth_id).then(result => {
         this.assignPlayerMatchStats(playerExt.stat, result);
       }).catch((e) => hb_log(`!! loadPlayerMatchStats error ${e}`));
     }
   }
 
-  assignPlayerRating(playerExt: PlayerData, ratingData: PlayerRatingData) {
+  assignPlayerRating(playerExt: PlayerData, ratingData: PlayerRatingData|undefined) {
+    if (ratingData === undefined || ratingData === null) return;
     let g = playerExt.stat.glickoPlayer!;
     g.setRating(ratingData.rating.mu);
     g.setRd(ratingData.rating.rd);
     g.setVol(ratingData.rating.vol);
   }
 
-  assignPlayerMatchStats(stat: PlayerStat, playerMatchStats: PlayerMatchStatsData) {
+  assignPlayerMatchStats(stat: PlayerStat, playerMatchStats: PlayerMatchStatsData|undefined) {
+    if (playerMatchStats === undefined || playerMatchStats === null) return;
     stat.games = playerMatchStats.games;
     stat.fullGames = playerMatchStats.full_games;
     stat.wins = playerMatchStats.wins;
@@ -1140,7 +1148,7 @@ export class HaxballRoom {
     if (this.auto_mode) {
       if (this.auto_bot.ranked || this.ratings_for_all_games) {
         hb_log("Aktualizujemy teraz dane w bazie, najpierw czytamy z bazy");
-        this.gePlayersRatingWhichPlayedInMatch(inMatch);
+        await this.gePlayersRatingWhichPlayedInMatch(inMatch);
         hb_log("Aktualizujemy teraz dane w bazie, teraz liczymy");
         this.ratings.calculateNewPlayersRating(inMatch, this.player_stats);
         let saved = 0;
@@ -1188,6 +1196,7 @@ export class HaxballRoom {
       let playerExt = this.Pid(playerId);
       let rating = await this.game_state.loadPlayerRating(playerExt.auth_id);
       this.assignPlayerRating(playerExt, rating);
+      // hb_log(`RATING ${playerExt.name} (${rating.rating.mu, rating.rating.rd})`);
     });
   }
 
@@ -1328,7 +1337,7 @@ export class HaxballRoom {
 
     if (cmd) {
       cmd.call(this.commander, player, args);
-    } else {
+    } else if (player.id != -100) {
       this.sendMsgToPlayer(player, "Nieznana komenda: " + command);
     }
   }
@@ -1640,6 +1649,10 @@ export class HaxballRoom {
     if (p.auth_id == '' || p.auth_id == config.hostAuthId)
       return true;
     return false;
+  }
+
+  isGodPlayer(player: PlayerObject) {
+    return player.id === this.god_player.id;
   }
 
   getSselector() {

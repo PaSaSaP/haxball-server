@@ -7,6 +7,7 @@ services:
     ports:
       - "0.0.0.0:50000-50100:50000-50100/udp"
     environment:
+      - MONITORING=monitoring
       - HTTP_PROXY=http://mitmproxy:8080
       - HTTPS_PROXY=http://mitmproxy:8080
       - NODE_TLS_REJECT_UNAUTHORIZED=0
@@ -25,12 +26,77 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 60s
     command: ["futsal_3vs3_1"]
+  futsal-3vs3-2:
+    image: hx-puppeteer:1.0
+    container_name: haxball-server-futsal-3vs3-2
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:52000-52100:52000-52100/udp"
+    environment:
+      - MONITORING=monitoring
+      - HTTP_PROXY=http://ssh-proxy:3132
+      - HTTPS_PROXY=http://ssh-proxy:3132
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - HX_ROOM_CONFIG_SELECTOR=3vs3
+      - HX_ROOM_CONFIG_SUBSELECTOR=2
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    volumes:
+      - .:/src
+    cap_add:
+      - SYS_ADMIN
+      - CAP_NET_ADMIN
+    shm_size: "1gb"
+    sysctls:
+      - net.ipv4.ip_local_port_range=52000 52100
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: ["futsal_3vs3_2"]
+  futsal-3vs3-3:
+    image: hx-puppeteer:1.0
+    container_name: haxball-server-futsal-3vs3-3
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:53000-53100:53000-53100/udp"
+    environment:
+      - MONITORING=monitoring
+      - HTTP_PROXY=http://ssh-proxy:3133
+      - HTTPS_PROXY=http://ssh-proxy:3133
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - HX_ROOM_CONFIG_SELECTOR=3vs3
+      - HX_ROOM_CONFIG_SUBSELECTOR=3
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    volumes:
+      - .:/src
+    cap_add:
+      - SYS_ADMIN
+      - CAP_NET_ADMIN
+    shm_size: "1gb"
+    sysctls:
+      - net.ipv4.ip_local_port_range=53000 53100
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: ["futsal_3vs3_3"]
+############
   futsal-1vs1:
     image: hx-puppeteer:1.0
     container_name: haxball-server-futsal-1vs1
@@ -38,6 +104,7 @@ services:
     ports:
       - "0.0.0.0:51000-51100:51000-51100/udp"
     environment:
+      - MONITORING=monitoring
       - HTTP_PROXY=http://proxy-futsal-1vs1:8080
       - HTTPS_PROXY=http://proxy-futsal-1vs1:8080
       - NODE_TLS_REJECT_UNAUTHORIZED=0
@@ -56,7 +123,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -x \"$${HTTP_PROXY}\" -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -137,6 +204,10 @@ services:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
       - HX_ROOM_CONFIG_SELECTOR=3vs3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
     networks:
       - app_network
     user: node
@@ -150,11 +221,27 @@ services:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
       - HX_ROOM_CONFIG_SELECTOR=1vs1
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
     networks:
       - app_network
     user: node
     working_dir: /src
     entrypoint: npm run accu_stats_1vs1
+  ssh-proxy:
+    image: ghcr.io/puppeteer/puppeteer
+    volumes:
+      - .:/src
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run empty_app
 
 networks:
   app_network:

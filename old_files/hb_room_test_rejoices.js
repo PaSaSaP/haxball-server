@@ -259,7 +259,9 @@ class HaxballRoom {
       if (player.team == 1) red++;
       else if (player.team == 2) blue++;
     });
-    if ((red >= 2 && blue >= 3) || (red >= 3 && blue >= 2)) {
+    if ((red >= 4 && blue >= 4) {
+      this.setMapByName("futsal_big");
+    } else if ((red >= 2 && blue >= 3) || (red >= 3 && blue >= 2)) {
       this.setMapByName("futsal_big");
     } else {
       this.setMapByName("futsal");

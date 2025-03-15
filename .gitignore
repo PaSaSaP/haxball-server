@@ -143,4 +143,5 @@ db/
 players.json
 logs.json
 *.db
+latest_db_backup
 

@@ -57,6 +57,5 @@ export class RejoiceDB extends BaseDB {
         resolve();
       });
     });
-
   }
 }
