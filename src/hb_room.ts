@@ -69,6 +69,7 @@ export class HaxballRoom {
   match_stats: MatchStats;
   game_stopped_timer: any | null;
   game_paused_timer: any | null;
+  matchStatsTimer: any | null;
   last_player_team_changed_by_admin_time: number;
   last_winner_team: 0|1|2;
   auto_mode: boolean;
@@ -127,6 +128,7 @@ export class HaxballRoom {
     this.ball_possesion_tracker = new BallPossessionTracker(this.room);
     this.game_stopped_timer = null;
     this.game_paused_timer = null;
+    this.matchStatsTimer = null;
     this.last_player_team_changed_by_admin_time = Date.now();
     this.last_winner_team = 0;
     this.limit = roomConfig.playersInTeamLimit;
@@ -510,12 +512,15 @@ export class HaxballRoom {
     this.ball_possesion_tracker.resetPossession();
     if (this.auto_mode) this.auto_bot.handleGameStart(null);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
-    let anyPlayerProperties = this.getAnyPlayerDiscProperties();
-    let ballProperties = this.getBallProperties();
-    if (anyPlayerProperties === null || ballProperties === null) {
-      hb_log(`ST coś jest null: ${anyPlayerProperties}, ${ballProperties} ${anyPlayerProperties?.radius} ${anyPlayerProperties?.damping} ${ballProperties?.radius} ${ballProperties?.damping}`);
-    }
-    this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
+    this.matchStatsTimer = setTimeout(() => {
+      this.matchStatsTimer = null;
+      let anyPlayerProperties = this.getAnyPlayerDiscProperties();
+      let ballProperties = this.getBallProperties();
+      if (anyPlayerProperties === null || ballProperties === null) {
+        hb_log(`ST coś jest null: ${anyPlayerProperties}, ${ballProperties} ${anyPlayerProperties?.radius} ${anyPlayerProperties?.damping} ${ballProperties?.radius} ${ballProperties?.damping}`);
+      }
+      this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
+    }, 1000);
   }
 
   getAnyPlayerDiscProperties() {
@@ -561,6 +566,7 @@ export class HaxballRoom {
     this.last_player_team_changed_by_admin_time = now;
     this.gamePauseTimerReset();
     this.gameStopTimerReset();
+    this.matchStatsTimerReset();
     this.rejoice_maker.handleGameStop();
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
@@ -640,13 +646,15 @@ export class HaxballRoom {
       if (sId === undefined) continue;
       let stat = this.player_stats.get(sId);
       if (!stat) continue;
-      this.game_state.updateTotalPlayerMatchStats(authId, stat, matchPlayerStats.get(stat.id)!)
-        .then(async () => {
-          this.game_state.loadTotalPlayerMatchStats(authId)
-            .then(result => this.assignPlayerMatchStats(stat, result))
-            .catch((e) => hb_log(`!! loadPlayerMatchStats error: ${e}`));
-        })
-        .catch((e) => hb_log(`!! updatePlayerMatchStats error: ${e}`));
+      let playerExt = this.Pid(stat.id);
+      if (playerExt.trust_level) {
+        this.game_state.updateTotalPlayerMatchStats(authId, stat, matchPlayerStats.get(stat.id)!)
+          .then(async () => {
+            this.game_state.loadTotalPlayerMatchStats(authId)
+              .then(result => this.assignPlayerMatchStats(stat, result))
+              .catch((e) => hb_log(`!! loadPlayerMatchStats error: ${e}`));
+          }).catch((e) => hb_log(`!! updatePlayerMatchStats error: ${e}`));
+      }
     }
     if (this.auto_mode) {
       hb_log(`Aktualizujemy match player stats dla ${matchPlayerStats.size}`);
@@ -656,7 +664,7 @@ export class HaxballRoom {
           let sId = this.player_stats_auth.get(authId)!;
           if (sId === undefined) continue;
           let stat = this.player_stats.get(sId)!;
-          let teamId: 1|2 = currentMatch.redTeam.includes(stat.id) ? 1 : 2;
+          let teamId: 1 | 2 = currentMatch.redTeam.includes(stat.id) ? 1 : 2;
           this.game_state.insertNewMatchPlayerStats(matchId, authId, teamId, stat.currentMatch).catch((e) => e && hb_log(`!! insertNewMatchPlayerStats error: ${e}`));
         }
       }).catch((e) => e && hb_log(`!! insertNewMatch error: ${e}`));
@@ -696,6 +704,13 @@ export class HaxballRoom {
     if (this.game_paused_timer != null) {
       clearTimeout(this.game_paused_timer);
       this.game_paused_timer = null;
+    }
+  }
+
+  matchStatsTimerReset() {
+    if (this.matchStatsTimer != null) {
+      clearTimeout(this.matchStatsTimer);
+      this.matchStatsTimer = null;
     }
   }
 
@@ -1147,57 +1162,65 @@ export class HaxballRoom {
   async updateRatingsAndTop10(inMatch: Match) {
     if (this.auto_mode) {
       if (this.auto_bot.ranked || this.ratings_for_all_games) {
-        hb_log("Aktualizujemy teraz dane w bazie, najpierw czytamy z bazy");
-        await this.gePlayersRatingWhichPlayedInMatch(inMatch);
-        hb_log("Aktualizujemy teraz dane w bazie, teraz liczymy");
-        this.ratings.calculateNewPlayersRating(inMatch, this.player_stats);
-        let saved = 0;
-        let redTeamStr = '';
-        let blueTeamStr = '';
-        const separator = '🔸';
-        const muToStr = (oldMu: number, newMu: number, penalty: number) => {
-          let str = `${oldMu}${newMu - oldMu >= 0 ? '+' : ''}${newMu - oldMu}`;
-          if (penalty) str += `-${penalty}`;
-          return str;
-        }
-        let rankChanges: MatchRankChangesEntry[] = [];
-        for (const [playerId, oldRd, oldMu, newMu, penalty] of this.ratings.results) {
-          let playerExt = this.players_ext_all.get(playerId)!;
-          rankChanges.push({ match_id: -1, auth_id: playerExt.auth_id, old_rd: oldRd, old_mu: oldMu, new_mu: newMu, penalty: penalty });
-          if (inMatch.redTeam.includes(playerId))
-            redTeamStr += (redTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
-          else if (inMatch.blueTeam.includes(playerId))
-            blueTeamStr += (blueTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
-
-          let stat = this.player_stats.get(playerExt.id)!;
-          if (!playerExt.trust_level) {
-            this.autoTrustByPlayerGames(playerExt, stat);
-            continue;
+        try {
+          hb_log("Aktualizujemy teraz dane w bazie, najpierw czytamy z bazy");
+          await this.gePlayersRatingWhichPlayedInMatch(inMatch);
+          hb_log("Aktualizujemy teraz dane w bazie, teraz liczymy");
+          this.ratings.calculateNewPlayersRating(inMatch, this.player_stats);
+          let saved = 0;
+          let redTeamStr = '';
+          let blueTeamStr = '';
+          const separator = '🔸';
+          const muToStr = (oldMu: number, newMu: number, penalty: number) => {
+            let str = `${Math.floor(oldMu)}${newMu - oldMu >= 0 ? '+' : ''}${Math.floor(newMu - oldMu)}`;
+            if (penalty > 0) str += `-${penalty}`;
+            return str;
           }
-          let g = stat.glickoPlayer!;
-          this.game_state.updatePlayerRating(playerExt.auth_id, newMu, newMu - oldMu, g.getRd(), g.getVol()).catch((e) => hb_log(`!! updatePlayerRating error: ${e}`));
-          saved++;
-        }
-        this.updateRankChanges(inMatch, rankChanges).catch((e) => hb_log(`!! updateRankChanges error: ${e}`));
-        let predictedWinner = this.ratings.expectedScoreRed >= 50 ? '🔴' : '🔵';
-        let predictedP = Math.round(this.ratings.expectedScoreRed);
-        if (predictedP < 50) predictedP = 100 - predictedP;
-        const txt = `🔴${redTeamStr}⚔️${blueTeamStr}🔵 Przewidywano zwycięstwo ${predictedWinner}${predictedP}%`;
-        hb_log(txt);
-        this.sendMsgToAll(txt, Colors.GameState, 'italic');
-        this.updateTop10();
-        hb_log(`Aktualizujemy - zrobione (${saved}/${this.ratings.results.length})!`);
+          let rankChanges: MatchRankChangesEntry[] = [];
+          for (const [playerId, newRd, oldMu, newMu, penalty] of this.ratings.results) {
+            let playerExt = this.players_ext_all.get(playerId)!;
+            rankChanges.push({
+              match_id: -1, auth_id: playerExt.auth_id,
+              old_rd: Math.floor(newRd), old_mu: Math.floor(oldMu), new_mu: Math.floor(newMu), penalty: penalty
+            });
+            if (inMatch.redTeam.includes(playerId))
+              redTeamStr += (redTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
+            else if (inMatch.blueTeam.includes(playerId))
+              blueTeamStr += (blueTeamStr ? separator : '') + muToStr(oldMu, newMu, penalty);
+
+            let stat = this.player_stats.get(playerExt.id)!;
+            if (!playerExt.trust_level) {
+              this.autoTrustByPlayerGames(playerExt, stat);
+              continue;
+            }
+            let g = stat.glickoPlayer!;
+            this.game_state.updatePlayerRating(playerExt.auth_id, newMu, newMu - oldMu, newRd, g.getVol())
+              .catch((e) => hb_log(`!! updatePlayerRating error: ${e}`));
+            saved++;
+          }
+          this.updateRankChanges(inMatch, rankChanges).catch((e) => hb_log(`!! updateRankChanges error: ${e}`));
+          let predictedWinner = this.ratings.expectedScoreRed >= 50 ? '🔴' : '🔵';
+          let predictedP = Math.round(this.ratings.expectedScoreRed);
+          if (predictedP < 50) predictedP = 100 - predictedP;
+          const txt = `🔴${redTeamStr}⚔️${blueTeamStr}🔵 Przewidywano zwycięstwo ${predictedWinner}${predictedP}%`;
+          hb_log(txt);
+          this.sendMsgToAll(txt, Colors.GameState, 'italic');
+          this.updateTop10();
+          hb_log(`Aktualizujemy - zrobione (${saved}/${this.ratings.results.length})!`);
+        } catch (e) { hb_log(`!! updateRatingsAndTop10 error: ${e}`) };
       }
     }
   }
 
   private async gePlayersRatingWhichPlayedInMatch(inMatch: Match) {
-    await inMatch.redTeam.concat(inMatch.blueTeam).forEach(async playerId => {
+    for (let playerId of inMatch.redTeam.concat(inMatch.blueScore)) {
       let playerExt = this.Pid(playerId);
-      let rating = await this.game_state.loadPlayerRating(playerExt.auth_id);
-      this.assignPlayerRating(playerExt, rating);
-      // hb_log(`RATING ${playerExt.name} (${rating.rating.mu, rating.rating.rd})`);
-    });
+      if (playerExt.trust_level) {
+        let rating = await this.game_state.loadPlayerRating(playerExt.auth_id);
+        this.assignPlayerRating(playerExt, rating);
+        hb_log(`RATING get ${playerExt.name} (${rating.rating.mu, rating.rating.rd})`);
+      }
+    }
   }
 
   private autoTrustByPlayerGames(playerExt: PlayerData, stat: PlayerStat) {

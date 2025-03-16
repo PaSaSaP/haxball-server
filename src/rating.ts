@@ -155,7 +155,7 @@ export class Ratings {
       const stat = match.stat(playerId);
       const oldMu = oldRatings.get(playerId)!;
       const newMu = player.glickoPlayer!.getRating();
-      const oldRd = player.glickoPlayer!.getRd();
+      const newRd = player.glickoPlayer!.getRd();
       const weight = weights.get(playerId)!;
       let penalty = 0;
       let adjustedRating = newMu;
@@ -189,7 +189,7 @@ export class Ratings {
               break;
           }
           if (!isLoser) penaltyPercent /= 2;
-          penalty = newMu * penaltyPercent; // newMu or adjustedRating?
+          penalty = Math.floor(newMu * penaltyPercent); // newMu or adjustedRating?
           adjustedRating = Math.max(adjustedRating - penalty, 0);
           this.Log(`Player ${playerId} penalized: reason=${stat.leftDueTo}, penaltyPercent=${penaltyPercent}, penalty=${penalty}, newRating=${adjustedRating}`);
         }
@@ -197,7 +197,7 @@ export class Ratings {
 
       this.Log(`id=${player.id} o=${oldMu} n=${newMu} w=${weight} final=${adjustedRating}`);
       player.glickoPlayer!.setRating(adjustedRating);
-      this.results.push([playerId, Math.round(oldRd), Math.round(oldMu), Math.round(adjustedRating), Math.round(penalty)]);
+      this.results.push([playerId, newRd, oldMu, adjustedRating, penalty]);
     }
   }
 

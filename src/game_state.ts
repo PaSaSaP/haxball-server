@@ -207,10 +207,6 @@ export class GameState {
     return this.dbHandler.ratings.updatePlayerRating(auth_id, new_rating, rating_diff, rd, vol);
   }
 
-  updateTopRatings(playerMap: Map<string, string>) {
-    return this.dbHandler.topRatings.updateTopRatings(playerMap);
-  }
-
   getTopPlayersShortAuth(limit: number = 1000) {
     return this.dbHandler.topRatings.getTopNPlayersShortAuth(limit);
   }

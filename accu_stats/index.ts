@@ -13,37 +13,82 @@ import Glicko2 from 'glicko2';
 import { getTimestampHM } from '../src/utils';
 import { promises as fs } from "fs";
 
-async function main() {
-  if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
-  const selector = process.env.HX_SELECTOR;
+if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
+const selector = process.env.HX_SELECTOR;
 
-  console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
-  if (selector == '1vs1') {
-    // OK, do nothing
-  } else if (selector == '3vs3') {
-    // OK, do nothing
-  } else throw new Error(`Invalid HX_SELECTOR: ${selector}`);
+console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
+if (selector == '1vs1') {
+  // OK, do nothing
+} else if (selector == '3vs3') {
+  // OK, do nothing
+} else throw new Error(`Invalid HX_SELECTOR: ${selector}`);
+console.log(`${getTimestampHM()} Zaczynamy akumulowanie!`);
 
-  console.log(`${getTimestampHM()} Zaczynamy akumulowanie!`);
-  let roomConfig = config.getRoomConfig(selector);
-  let otherDb = new sqlite3.Database(roomConfig.otherDbFile, (err) => {
-    if (err) console.error('Error opening database:', err.message);
-  });
-  let topRatingsDaily = new TopRatingsDailyDB(otherDb);
-  let topRatingsWeekly = new TopRatingsWeeklyDB(otherDb);
-  let topRatingsTotal = new TopRatingsDB(otherDb);
-  await topRatingsDaily.setupDatabase();
-  await topRatingsWeekly.setupDatabase();
-  await topRatingsTotal.setupDatabase();
+class AccuStats {
+  selector: string;
+  roomConfig: config.RoomServerConfig;
+  otherDb: sqlite3.Database;
+  topRatingsDaily: TopRatingsDailyDB;
+  topRatingsWeekly: TopRatingsWeeklyDB;
+  topRatingsTotal: TopRatingsDB;
+  constructor(selector: string) {
+    this.selector = selector;
+    this.roomConfig = config.getRoomConfig(selector);
+    this.otherDb = new sqlite3.Database(this.roomConfig.otherDbFile, (err) => {
+      if (err) console.error('Error opening database:', err.message);
+    });
+    this.topRatingsDaily = new TopRatingsDailyDB(this.otherDb);
+    this.topRatingsWeekly = new TopRatingsWeeklyDB(this.otherDb);
+    this.topRatingsTotal = new TopRatingsDB(this.otherDb);
+  }
 
-  function createPlayerStat(id: number, glicko: Glicko2.Glicko2, rating: number = PlayerStat.DefaultRating,
+  private async setupDatabases() {
+    await this.topRatingsDaily.setupDatabase();
+    await this.topRatingsWeekly.setupDatabase();
+    await this.topRatingsTotal.setupDatabase();
+  }
+
+  async run() {
+    try {
+      await this.setupDatabases();
+      this.processOnce();
+      setInterval(() => {
+        this.processOnce();
+      }, 1 * 60 * 1000);
+    } catch (e) { e && console.error(`run error: ${e}`) };
+  }
+
+  async runOnce() {
+    try {
+      await this.setupDatabases();
+      this.processOnce();
+    } catch (e) { e && console.error(`runOnce error: ${e}`) };
+  }
+
+  private async processOnce() {
+    try {
+      let savedMatchId = await this.getSavedMatchId();
+      let lastMatchId = await this.getLastMatchId();
+      let playerNames = await this.getPlayerNames();
+      if (this.areNewMatchesToProcess(savedMatchId, lastMatchId)) {
+        console.log(`There is new data to process, saved:${savedMatchId} last:${lastMatchId}`);
+        await this.updateAccuStats(playerNames);
+        await this.updateSavedMatchId(lastMatchId);
+        await this.updateTotalRanking(playerNames);
+      } else {
+        console.log(`No new data to process, saved:${savedMatchId} last:${lastMatchId}`);
+      }
+    } catch (e) { e && console.error(`processOnce error: ${e}`) };
+  }
+
+  createPlayerStat(id: number, glicko: Glicko2.Glicko2, rating: number = PlayerStat.DefaultRating,
     rd: number = PlayerStat.DefaultRd, vol: number = PlayerStat.DefaultVol) {
     let stat = new PlayerStat(id);
     stat.glickoPlayer = glicko.makePlayer(rating, rd, vol);
     return stat;
   }
 
-  function calculateRatingFor(playerNames: Map<string, string>, matchEntries: MatchEntry[],
+  calculateRatingFor(playerNames: Map<string, string>, matchEntries: MatchEntry[],
     matchStatEntries: MatchStatsEntry[], minGames: number, playersLimit: number): PlayerTopRatingData[] {
     let glicko = new Glicko2.Glicko2();
     let ratings = new Ratings(glicko);
@@ -53,7 +98,7 @@ async function main() {
     const getPlayerIdByAuth = (authId: string) => {
       if (!playerIdByAuth.has(authId)) {
         playerIdByAuth.set(authId, nextPlayerId);
-        playerStats.set(nextPlayerId, createPlayerStat(nextPlayerId, glicko));
+        playerStats.set(nextPlayerId, this.createPlayerStat(nextPlayerId, glicko));
         nextPlayerId++;
       }
       return playerIdByAuth.get(authId)!;
@@ -103,7 +148,7 @@ async function main() {
         let playerId = playerIdByAuth.get(s.auth_id)!;
         if (s.team === 1) match.redTeam.push(playerId);
         else if (s.team === 2) match.blueTeam.push(playerId);
-        let stat = match.stat(playerId);
+        let stat = match.stat(playerId); // create stat in match data
         if (!s.full_time) {
           if (!s.left_state) {
             stat.joinedAt = matchDuration - s.playtime;
@@ -120,7 +165,6 @@ async function main() {
       match.redScore = m.match.red_score;
       match.blueScore = m.match.blue_score;
       match.pressureRed = m.match.pressure;
-      match.pressureBlue = 100 - match.pressureRed;
       match.setEnd(matchDuration, true, m.match.full_time);
       ratings.calculateNewPlayersRating(match, playerStats);
     }
@@ -144,16 +188,16 @@ async function main() {
     return playerTopRatingsArray;
   }
 
-  async function getSettings(): Promise<TopRatingDaySetings> {
+  async getSettings(): Promise<TopRatingDaySetings> {
     let settings: TopRatingDaySetings = { min_full_games_daily: 5, min_full_games_weekly: 10, players_limit: 1000 };
-    await topRatingsDaily.getTopRatingDaySettings().then((result) => {
+    await this.topRatingsDaily.getTopRatingDaySettings().then((result) => {
       console.log("settings z tabeli");
       settings = result;
     }).catch((e) => e && console.error(`getTopRatingDaySettings error: ${e}`))
     return settings;
   }
 
-  async function fetchPrivateData(name: string) {
+  async fetchPrivateData(name: string) {
     const response = await fetch(`${config.localBackendService}/api/private/${name}`, {
       method: "GET",
       headers: {
@@ -167,21 +211,21 @@ async function main() {
     return response;
   }
 
-  async function getLastMatchId() {
-    const response = await fetchPrivateData(`matches/${selector}/last_match_id`);
+  async getLastMatchId() {
+    const response = await this.fetchPrivateData(`matches/${selector}/last_match_id`);
     const data: { match_id: number } = await response.json();
     return data.match_id;
   }
 
-  async function getPlayerNames() {
-    const response = await fetchPrivateData('player_names');
+  async getPlayerNames() {
+    const response = await this.fetchPrivateData('player_names');
     const data: Record<string, string> = await response.json();
     let playerNames = new Map<string, string>(Object.entries(data));
     return playerNames;
   }
 
-  async function getMatches() {
-    const response = await fetchPrivateData(`matches/${selector}`);
+  async getMatches() {
+    const response = await this.fetchPrivateData(`matches/${selector}`);
     const data: [number, string, number, boolean, number, number, number, number, number][] = await response.json();
     let matches: MatchEntry[] = data.map(row => ({
       match_id: row[0],
@@ -197,8 +241,8 @@ async function main() {
     return matches;
   }
 
-  async function getMatchStats() {
-    const response = await fetchPrivateData(`match_stats/${selector}`);
+  async getMatchStats() {
+    const response = await this.fetchPrivateData(`match_stats/${selector}`);
     const data: [number, string, 0 | 1 | 2, number, number, number, number, number, number, number][] = await response.json();
     let matchStats: MatchStatsEntry[] = data.map(row => ({
       match_id: row[0],
@@ -215,7 +259,7 @@ async function main() {
     return matchStats;
   }
 
-  async function readIntegerFromFile(filePath: string): Promise<number> {
+  async readIntegerFromFile(filePath: string): Promise<number> {
     try {
       const data = await fs.readFile(filePath, "utf8");
       if (data.trim() === "") {
@@ -231,62 +275,49 @@ async function main() {
     }
   }
 
-  const SavedMatchIdFile = '/tmp/saved_match_id.txt';
-  async function getSavedMatchId() {
-    let savedMatchId = await readIntegerFromFile(SavedMatchIdFile);
+  static SavedMatchIdFile = '/tmp/saved_match_id.txt';
+  async getSavedMatchId() {
+    let savedMatchId = await this.readIntegerFromFile(AccuStats.SavedMatchIdFile);
     return savedMatchId;
   }
 
-  async function updateSavedMatchId(matchId: number) {
+  async updateSavedMatchId(matchId: number) {
     try {
-      await fs.writeFile(SavedMatchIdFile, matchId.toString(), "utf8");
+      await fs.writeFile(AccuStats.SavedMatchIdFile, matchId.toString(), "utf8");
       console.log(`Saved match_id: ${matchId}`);
     } catch (error) {
       console.error("Cannot save match_id to file ", error);
     }
   }
 
-  function areNewMatchesToProcess(savedMatchId: number, lastMatchId: number) {
+  areNewMatchesToProcess(savedMatchId: number, lastMatchId: number) {
     if (lastMatchId !== -1 && savedMatchId !== -1) {
       return lastMatchId > savedMatchId;
     }
     return true;
   }
 
-  async function updateTotalRanking(playerNames: Map<string, string>) {
-    await topRatingsTotal.updateTopRatings(playerNames);
+  async updateTotalRanking(playerNames: Map<string, string>) {
+    await this.topRatingsTotal.updateTopRatings(playerNames);
   }
 
-  async function updateAccuStats(playerNames: Map<string, string>) {
-    let currentDate = await topRatingsDaily.getCurrentDate();
+  async updateAccuStats(playerNames: Map<string, string>) {
+    let currentDate = await this.topRatingsDaily.getCurrentDate();
     console.log(`Current DB date: ${currentDate}`);
-    let matchesFromLastWeek = await getMatches();
+    let matchesFromLastWeek = await this.getMatches();
     let matchesFromLastDay = matchesFromLastWeek.filter(e => e.date === currentDate);
     let matchIdsFromLastDay = matchesFromLastDay.map(e => e.match_id);
-    let matchStatsFromLastWeek = await getMatchStats();
+    let matchStatsFromLastWeek = await this.getMatchStats();
     let matchStatsFromLastDay = matchStatsFromLastWeek.filter(e => matchIdsFromLastDay.includes(e.match_id));
-    let settings = await getSettings();
+    let settings = await this.getSettings();
     console.log("calculating weekly ratings");
-    let ratingsFromLastWeek = calculateRatingFor(playerNames, matchesFromLastWeek, matchStatsFromLastWeek, settings.min_full_games_weekly, settings.players_limit);
+    let ratingsFromLastWeek = this.calculateRatingFor(playerNames, matchesFromLastWeek, matchStatsFromLastWeek, settings.min_full_games_weekly, settings.players_limit);
     console.log("calculating daily ratings");
-    let ratingsFromLastDay = calculateRatingFor(playerNames, matchesFromLastDay, matchStatsFromLastDay, settings.min_full_games_daily, settings.players_limit);
-    await topRatingsWeekly.updateTopRatingsFrom(ratingsFromLastWeek).catch((e) => e && console.error(`weekly updateTopRatingsFrom error: ${e}`));
-    await topRatingsDaily.updateTopRatingsFrom(ratingsFromLastDay).catch((e) => e && console.error(`daily updateTopRatingsFrom error: ${e}`));
+    let ratingsFromLastDay = this.calculateRatingFor(playerNames, matchesFromLastDay, matchStatsFromLastDay, settings.min_full_games_daily, settings.players_limit);
+    await this.topRatingsWeekly.updateTopRatingsFrom(ratingsFromLastWeek).catch((e) => e && console.error(`weekly updateTopRatingsFrom error: ${e}`));
+    await this.topRatingsDaily.updateTopRatingsFrom(ratingsFromLastDay).catch((e) => e && console.error(`daily updateTopRatingsFrom error: ${e}`));
   }
-
-  (async () => {
-    let savedMatchId = await getSavedMatchId();
-    let lastMatchId = await getLastMatchId();
-    let playerNames = await getPlayerNames();
-    await updateTotalRanking(playerNames);
-    if (areNewMatchesToProcess(savedMatchId, lastMatchId)) {
-      console.log(`There is new data to process, saved:${savedMatchId} last:${lastMatchId}`);
-      await updateAccuStats(playerNames);
-      await updateSavedMatchId(lastMatchId);
-    } else {
-      console.log(`No new data to process, saved:${savedMatchId} last:${lastMatchId}`);
-    }
-  })().catch((e) => e && console.error(`updateAccuStats error: ${e}`));
 }
 
-main();
+let accuStats = new AccuStats(selector);
+accuStats.run();
