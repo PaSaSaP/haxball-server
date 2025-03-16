@@ -7,9 +7,10 @@ export class VotesDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase() {
+  async setupDatabase(): Promise<void> {
     // TODO change "up"/"down" to integer 1/-1
     // Nowa tabela votes
+    await this.setupWalAndSync();
     const createVotesTableQuery = `
         CREATE TABLE IF NOT EXISTS votes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +21,7 @@ export class VotesDB extends BaseDB {
         );
       `;
 
-    this.db.run(createVotesTableQuery, (e) => e && hb_log(`!! create votes error: ${e}`));
+    await this.db.run(createVotesTableQuery, (e) => e && hb_log(`!! create votes error: ${e}`));
   }
 
   // Dodanie głosu (up lub down)

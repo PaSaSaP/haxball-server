@@ -15,7 +15,8 @@ export class RejoiceDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS rejoices (
         auth_id TEXT NOT NULL,
@@ -26,7 +27,7 @@ export class RejoiceDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create rejoices error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create rejoices error: ${e}`));
   }
 
   async getRejoicesForPlayer(auth_id: string): Promise<RejoiceEntry[]> {

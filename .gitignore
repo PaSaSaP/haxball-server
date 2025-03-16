@@ -138,6 +138,7 @@ dist
 # user defined
 dynamic/
 db/
+db_files/
 !src/db
 .remove_me_to_restart_container
 players.json

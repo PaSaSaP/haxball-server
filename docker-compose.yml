@@ -17,6 +17,7 @@ services:
       - NODE_TZ=Europe/Warsaw
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     cap_add:
       - SYS_ADMIN
       - CAP_NET_ADMIN
@@ -49,6 +50,7 @@ services:
       - NODE_TZ=Europe/Warsaw
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     cap_add:
       - SYS_ADMIN
       - CAP_NET_ADMIN
@@ -81,6 +83,7 @@ services:
       - NODE_TZ=Europe/Warsaw
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     cap_add:
       - SYS_ADMIN
       - CAP_NET_ADMIN
@@ -114,6 +117,7 @@ services:
       - NODE_TZ=Europe/Warsaw
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     cap_add:
       - SYS_ADMIN
       - CAP_NET_ADMIN
@@ -134,6 +138,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -149,6 +154,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -162,6 +168,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -175,6 +182,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -188,6 +196,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -200,6 +209,7 @@ services:
     image: ghcr.io/puppeteer/puppeteer
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -217,6 +227,7 @@ services:
     image: ghcr.io/puppeteer/puppeteer
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -234,6 +245,7 @@ services:
     image: ghcr.io/puppeteer/puppeteer
     volumes:
       - .:/src
+      - /mnt/sqlite_ram/db:/src/db
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -242,7 +254,6 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run empty_app
-
 networks:
   app_network:
     external: true

@@ -8,7 +8,8 @@ export class TopRatingsDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createSettingsQuery = `
       CREATE TABLE IF NOT EXISTS top_ratings_settings (
         min_full_games INTEGER DEFAULT 20,
@@ -35,9 +36,9 @@ export class TopRatingsDB extends BaseDB {
         clean_sheets INTEGER DEFAULT 0
     );`;
 
-    this.db.run(createSettingsQuery, (e) =>  e && hb_log(`!! create top_ratings_settings error: ${e}`));
-    this.db.run(insertDefaultSettingsQuery, (e) => e && hb_log(`!! insert first top_ratings_settings error: ${e}`));
-    this.db.run(createTopRatingsQuery, (e) => e && hb_log(`!! create top_ratings error: ${e}`));
+    await this.db.run(createSettingsQuery, (e) =>  e && hb_log(`!! create top_ratings_settings error: ${e}`));
+    await this.db.run(insertDefaultSettingsQuery, (e) => e && hb_log(`!! insert first top_ratings_settings error: ${e}`));
+    await this.db.run(createTopRatingsQuery, (e) => e && hb_log(`!! create top_ratings error: ${e}`));
   }
 
   async updateTopRatings(playerMap: Map<string, string>): Promise<void> {

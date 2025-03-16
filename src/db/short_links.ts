@@ -12,7 +12,8 @@ export class ShortLinksDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS short_links (
         hash TEXT PRIMARY KEY NOT NULL,
@@ -20,7 +21,7 @@ export class ShortLinksDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create short_links error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create short_links error: ${e}`));
   }
 
   async insertShortLink(hash: string, long_link: string): Promise<void> {

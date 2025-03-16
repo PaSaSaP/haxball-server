@@ -7,7 +7,8 @@ export class ReportsDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase() {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     // Tworzenie tabeli reports, jeśli jeszcze nie istnieje
     const createReportsTableQuery = `
         CREATE TABLE IF NOT EXISTS reports (
@@ -18,7 +19,7 @@ export class ReportsDB extends BaseDB {
           at TEXT
         );
       `;
-    this.db.run(createReportsTableQuery, (e) => e && hb_log(`!! create reports error: ${e}`));
+    await this.db.run(createReportsTableQuery, (e) => e && hb_log(`!! create reports error: ${e}`));
   }
 
   addReport(player_name: string, auth_id: string, report: string) {

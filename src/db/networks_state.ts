@@ -8,7 +8,8 @@ export class NetworksStateDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS networks_state (
         conn_id TEXT PRIMARY KEY,
@@ -17,7 +18,7 @@ export class NetworksStateDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! creating networks_state error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! creating networks_state error: ${e}`));
   }
 
   async getAllNetworksGameState(): Promise<Map<string, NetworksGameState>> {

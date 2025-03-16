@@ -8,7 +8,8 @@ export class PlayerRatingsDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     // Tworzenie tabeli player_ratings, jeśli jeszcze nie istnieje
     const createPlayerRatingsTableQuery = `
       CREATE TABLE IF NOT EXISTS player_ratings (
@@ -18,7 +19,7 @@ export class PlayerRatingsDB extends BaseDB {
         volatility REAL DEFAULT 0.02
       );
     `;
-    this.db.run(createPlayerRatingsTableQuery, (e) => e && hb_log(`!! create player_ratings error: ${e}`));
+    await this.db.run(createPlayerRatingsTableQuery, (e) => e && hb_log(`!! create player_ratings error: ${e}`));
   }
 
   async loadPlayerRating(auth_id: string): Promise<PlayerRatingData> {

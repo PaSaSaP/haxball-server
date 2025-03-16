@@ -13,7 +13,8 @@ export class RejoicePricesDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS rejoice_prices (
         rejoice_id TEXT NOT NULL,
@@ -23,7 +24,7 @@ export class RejoicePricesDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create rejoice_prices error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create rejoice_prices error: ${e}`));
   }
 
   async getRejoicePrice(rejoice_id: string, for_days: number): Promise<RejoicePriceEntry | null> {

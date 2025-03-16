@@ -150,6 +150,9 @@ class ServerMonitor {
         this.sendPrivateMessage(`Tworzę plik dla nowego serwera: ${newServer}`);
         MLog(`Tworzę plik dla nowego serwera: ${newServer} (avg=${averagePlayers}, act=${activePlayerCount}, se=${activeServers.length}, thr=${this.scaleUpThreshold})`);
         this.lastScaleAction.set(selectorKey, now);
+        for (let i = 1; i <= activeServers.length; ++i) {
+          this.sendGodCommand(selectorKey, `!anno Wiele Was tutaj, za parę chwil pojawi się nowy serwer #${activeServers.length+1}`);
+        }
         return;
       }
       else if (averagePlayers <= this.scaleDownThreshold && activeServers.length > 1) {
@@ -158,8 +161,37 @@ class ServerMonitor {
         this.sendPrivateMessage(`Usuwam plik dla serwera: ${lastServer}`);
         MLog(`Usuwam plik dla serwera: ${lastServer} (avg=${averagePlayers}, act=${activePlayerCount}, se=${activeServers.length}, thr=${this.scaleUpThreshold})`);
         this.lastScaleAction.set(selectorKey, now);
+        this.sendGodCommandTimes(selectorKey, '!anno Serwer za parę chwil zostanie wyłączony, inne nadal pozostają aktywne!', 5);
         return;
       }
+    }
+  }
+
+  sendGodCommandTimes(selector: string, line: string, times: number) {
+    let count = 0;
+    let interval = setInterval(() => {
+      if (count >= times) {
+        clearInterval(interval);
+        return;
+      }
+      this.sendGodCommand(selector, line);
+      count++;
+    }, 1000);
+  }
+
+  sendGodCommand(selector: string, line: string) {
+    line = line.trim();
+    if (!line.length) return;
+    const filename = `./dynamic/god_commander_${selector}.txt`;
+    line = 'GOD,' + line;
+    this.appendLineToFile(filename, line);
+  }
+
+  async appendLineToFile(filePath: string, line: string): Promise<void> {
+    try {
+      await fs.appendFile(filePath, line + '\n');
+    } catch (error) {
+      console.error(`Błąd podczas zapisywania do pliku ${filePath}:`, error);
     }
   }
 

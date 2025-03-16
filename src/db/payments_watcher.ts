@@ -10,7 +10,8 @@ export class PaymentsWatcher extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS payment_status_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +31,7 @@ export class PaymentsWatcher extends BaseDB {
       END;
     `;
 
-    this.db.exec(createTableQuery, (e) => e && hb_log(`!! create payment_status_log error: ${e}`));
+    await this.db.exec(createTableQuery, (e) => e && hb_log(`!! create payment_status_log error: ${e}`));
   }
 
   setCallback(callback: (transaction_id: number, old_status: string, new_status: string) => void): void {

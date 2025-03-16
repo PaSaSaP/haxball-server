@@ -13,7 +13,8 @@ export class PaymentsDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS payments (
         transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +23,7 @@ export class PaymentsDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create payments error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create payments error: ${e}`));
   }
 
   async insertPayment(price: number, pay_status: 'started' | 'completed' | 'failed'): Promise<number> {

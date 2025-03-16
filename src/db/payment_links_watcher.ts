@@ -12,7 +12,8 @@ export class PaymentLinksWatcher extends BaseDB {
     this.selector = '';
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS payment_links_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +31,7 @@ export class PaymentLinksWatcher extends BaseDB {
       END;
     `;
 
-    this.db.exec(createTableQuery, (e) => e && hb_log(`!! create payment_links_log error: ${e}`));
+    await this.db.exec(createTableQuery, (e) => e && hb_log(`!! create payment_links_log error: ${e}`));
   }
 
   setCallback(callback: (auth_id: string, transaction_id: number) => void, selector: string): void {

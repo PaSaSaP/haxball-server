@@ -7,7 +7,8 @@ export class PlayersDB extends BaseDB {
   constructor(db: sqlite3.Database) {
     super(db);
   }
-  setupDatabase() {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createPlayersTableQuery = `
       CREATE TABLE IF NOT EXISTS players (
         auth_id TEXT PRIMARY KEY,
@@ -17,7 +18,7 @@ export class PlayersDB extends BaseDB {
       );
     `;
 
-    this.db.run(createPlayersTableQuery, (e) => e && hb_log(`!! create players error: ${e}`));
+    await this.db.run(createPlayersTableQuery, (e) => e && hb_log(`!! create players error: ${e}`));
   }
 
   async updateAdminLevel(auth_id: string, new_admin_level: number): Promise<void> {

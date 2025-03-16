@@ -20,6 +20,7 @@ import { PaymentsDB } from './db/payments';
 import { PaymentLinksDB } from './db/payment_links';
 import { PaymentLinksWatcher } from './db/payment_links_watcher';
 import { TopRatingsDailyDB, TopRatingsWeeklyDB } from './db/top_day_ratings';
+import { hb_log } from './log';
 
 export class DBHandler {
   playersDb: sqlite3.Database;
@@ -83,32 +84,34 @@ export class DBHandler {
     this.paymentLinks = new PaymentLinksDB(this.vipDb);
     this.paymentLinksWatcher = new PaymentLinksWatcher(this.vipDb);
 
-    this.setupDatabases();
+    this.setupDatabases().then(() => {
+      hb_log(`Databases in game_state ready to use!`);
+    })
   }
 
-  setupDatabases() {
-    this.players.setupDatabase();
-    this.playerNames.setupDatabase();
-    this.votes.setupDatabase();
+  async setupDatabases() {
+    await this.players.setupDatabase();
+    await this.playerNames.setupDatabase();
+    await this.votes.setupDatabase();
 
-    this.totalPlayerMatchStats.setupDatabase();
-    this.matches.setupDatabase();
-    this.matchStats.setupDatabase();
-    this.matchRankChanges.setupDatabase();
-    this.playerState.setupDatabase();
-    this.networksState.setupDatabase();
-    this.reports.setupDatabase();
-    this.ratings.setupDatabase();
-    this.topRatings.setupDatabase();
-    this.topRatingsDaily.setupDatabase();
-    this.topRatingsWeekly.setupDatabase();
+    await this.totalPlayerMatchStats.setupDatabase();
+    await this.matches.setupDatabase();
+    await this.matchStats.setupDatabase();
+    await this.matchRankChanges.setupDatabase();
+    await this.playerState.setupDatabase();
+    await this.networksState.setupDatabase();
+    await this.reports.setupDatabase();
+    await this.ratings.setupDatabase();
+    await this.topRatings.setupDatabase();
+    await this.topRatingsDaily.setupDatabase();
+    await this.topRatingsWeekly.setupDatabase();
 
-    this.rejoice.setupDatabase();
-    this.rejoiceTransactions.setupDatabase();
-    this.rejoicePrices.setupDatabase();
-    this.payments.setupDatabase();
-    this.paymentLinks.setupDatabase();
-    this.paymentLinksWatcher.setupDatabase();
+    await this.rejoice.setupDatabase();
+    await this.rejoiceTransactions.setupDatabase();
+    await this.rejoicePrices.setupDatabase();
+    await this.payments.setupDatabase();
+    await this.paymentLinks.setupDatabase();
+    await this.paymentLinksWatcher.setupDatabase();
   }
 
   closeDatabases() {

@@ -8,7 +8,8 @@ export class PlayerMatchStatsDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS player_match_stats (
         auth_id TEXT PRIMARY KEY,
@@ -26,7 +27,7 @@ export class PlayerMatchStatsDB extends BaseDB {
         left_server INTEGER DEFAULT 0
       );
     `;
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create player_match_stats error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create player_match_stats error: ${e}`));
   }
 
   async loadTotalPlayerMatchStats(auth_id: string): Promise<PlayerMatchStatsData> {
@@ -39,6 +40,12 @@ export class PlayerMatchStatsDB extends BaseDB {
       this.db.get(query, [auth_id], (err, row: any) => {
         if (err) {
           reject('Error loading player match stats: ' + err.message);
+        } else if (!row) {
+          // return default zeroed values
+          return {
+            games: 0, full_games: 0, wins: 0, full_wins: 0, goals: 0, assists: 0, own_goals: 0, playtime: 0, clean_sheets: 0,
+            left_afk: 0, left_votekick: 0, left_server: 0
+          }
         } else {
           resolve(row);
         }

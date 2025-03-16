@@ -25,7 +25,8 @@ export class MatchStatsDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS match_stats (
         match_id INTEGER NOT NULL,
@@ -44,9 +45,9 @@ export class MatchStatsDB extends BaseDB {
       );`;
     const createIndexAuthIdQuery = `CREATE INDEX IF NOT EXISTS index_match_stats_auth_id ON match_stats(auth_id);`;
     const createIndexMatchIdQuery = `CREATE INDEX IF NOT EXISTS index_match_stats_match_id ON match_stats(match_id);`;
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_stats error: ${e}`));
-    this.db.run(createIndexAuthIdQuery, (e) => e && hb_log(`!! create index_match_stats_auth_id error: ${e}`));
-    this.db.run(createIndexMatchIdQuery, (e) => e && hb_log(`!! create index_match_stats_match_id error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_stats error: ${e}`));
+    await this.db.run(createIndexAuthIdQuery, (e) => e && hb_log(`!! create index_match_stats_auth_id error: ${e}`));
+    await this.db.run(createIndexMatchIdQuery, (e) => e && hb_log(`!! create index_match_stats_match_id error: ${e}`));
   }
 
   async insertNewMatchPlayerStats(match_id: number, auth_id: string, team_id: 0|1|2, stat: PlayerMatchStatsData): Promise<void> {

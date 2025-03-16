@@ -17,7 +17,8 @@ class BaseTopRatingsDB extends BaseDB {
     this.tableName = tableName;
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS ${this.tableName} (
         rank INTEGER PRIMARY KEY,
@@ -31,7 +32,7 @@ class BaseTopRatingsDB extends BaseDB {
         own_goals INTEGER DEFAULT 0,
         clean_sheets INTEGER DEFAULT 0
       );`;
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create ${this.tableName} error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create ${this.tableName} error: ${e}`));
   }
 
   async updateTopRatingsFrom(playerTopRatings: PlayerTopRatingData[]): Promise<void> {

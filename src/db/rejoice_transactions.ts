@@ -17,7 +17,8 @@ export class RejoiceTransactionsDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS rejoice_transactions (
         transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +32,7 @@ export class RejoiceTransactionsDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create reojice_transactions error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create reojice_transactions error: ${e}`));
   }
 
   async insertRejoiceTransaction(auth_id: string, rejoice_id: string, at_time: number, for_days: number, selector: string): Promise<number> {

@@ -20,7 +20,8 @@ export class MatchesDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS matches (
         match_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +34,7 @@ export class MatchesDB extends BaseDB {
         pressure INTEGER DEFAULT 0, 
         possession INTEGER DEFAULT 0
       );`;
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create matches error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create matches error: ${e}`));
   }
 
   async insertNewMatch(match: Match, fullTimeMatchPlayed: boolean): Promise<number> {

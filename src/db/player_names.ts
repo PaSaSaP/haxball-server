@@ -7,7 +7,8 @@ export class PlayerNamesDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase() {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     // Tworzenie tabeli player_names, jeśli jeszcze nie istnieje
     const createPlayerNamesTableQuery = `
         CREATE TABLE IF NOT EXISTS player_names (
@@ -16,7 +17,7 @@ export class PlayerNamesDB extends BaseDB {
           PRIMARY KEY (auth_id, name)
         );
       `;
-    this.db.run(createPlayerNamesTableQuery, (e) => e && hb_log(`!! create player_names error: ${e}`));
+    await this.db.run(createPlayerNamesTableQuery, (e) => e && hb_log(`!! create player_names error: ${e}`));
   }
 
 

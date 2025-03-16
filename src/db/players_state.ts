@@ -8,7 +8,8 @@ export class PlayersStateDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS players_state (
         auth_id TEXT PRIMARY KEY,
@@ -17,7 +18,7 @@ export class PlayersStateDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create players_state error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create players_state error: ${e}`));
   }
 
   async getAllPlayersGameState(): Promise<Map<string, PlayersGameState>> {

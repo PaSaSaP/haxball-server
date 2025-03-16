@@ -16,7 +16,8 @@ export class MatchRankChangesDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS match_rank_changes (
         match_id INTEGER NOT NULL,
@@ -31,9 +32,9 @@ export class MatchRankChangesDB extends BaseDB {
       );`;
     const createIndexAuthIdQuery = `CREATE INDEX IF NOT EXISTS index_match_rank_changed_auth_id ON match_rank_changes(auth_id);`;
     const createIndexMatchIdQuery = `CREATE INDEX IF NOT EXISTS index_match_rank_changed_match_id ON match_rank_changes(match_id);`;
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_rank_changes error: ${e}`));
-    this.db.run(createIndexAuthIdQuery, (e) => e && hb_log(`!! create index_match_rank_changed_auth_id error: ${e}`));
-    this.db.run(createIndexMatchIdQuery, (e) => e && hb_log(`!! create index_match_rank_changed_match_id error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_rank_changes error: ${e}`));
+    await this.db.run(createIndexAuthIdQuery, (e) => e && hb_log(`!! create index_match_rank_changed_auth_id error: ${e}`));
+    await this.db.run(createIndexMatchIdQuery, (e) => e && hb_log(`!! create index_match_rank_changed_match_id error: ${e}`));
   }
 
   async insertNewMatchRankChanges(m: MatchRankChangesEntry): Promise<void> {

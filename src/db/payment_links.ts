@@ -13,7 +13,8 @@ export class PaymentLinksDB extends BaseDB {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS payment_links (
         auth_id TEXT NOT NULL,
@@ -24,7 +25,7 @@ export class PaymentLinksDB extends BaseDB {
       );
     `;
 
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create payment_links error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create payment_links error: ${e}`));
   }
 
   async insertPaymentLink(authId: string, paymentTransactionId: number, link: string, selector: string): Promise<void> {

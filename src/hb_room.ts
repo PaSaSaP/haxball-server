@@ -868,7 +868,7 @@ export class HaxballRoom {
     }
   }
 
-  assignPlayerRating(playerExt: PlayerData, ratingData: PlayerRatingData|undefined) {
+  assignPlayerRating(playerExt: PlayerData, ratingData: PlayerRatingData|undefined|null) {
     if (ratingData === undefined || ratingData === null) return;
     let g = playerExt.stat.glickoPlayer!;
     g.setRating(ratingData.rating.mu);
@@ -876,7 +876,7 @@ export class HaxballRoom {
     g.setVol(ratingData.rating.vol);
   }
 
-  assignPlayerMatchStats(stat: PlayerStat, playerMatchStats: PlayerMatchStatsData|undefined) {
+  assignPlayerMatchStats(stat: PlayerStat, playerMatchStats: PlayerMatchStatsData|undefined|null) {
     if (playerMatchStats === undefined || playerMatchStats === null) return;
     stat.games = playerMatchStats.games;
     stat.fullGames = playerMatchStats.full_games;

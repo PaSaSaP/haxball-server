@@ -25,6 +25,7 @@ const vipDbFile = `${dbDir}/main_vip.db`;
 export const hostAuthId = 'QrInL5KJCKDFUyBjgPxMeq392ZB0XjYksePfN6cm3BY';
 export const discordLink = 'https://discord.gg/8xFctajU';
 export const webpageLink = 'https://haxball.ovh';
+export const localBackendService = 'http://www-server:3000';
 export const StripeKey = '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';
 
 const futsal_3vs3: RoomServerConfig = {

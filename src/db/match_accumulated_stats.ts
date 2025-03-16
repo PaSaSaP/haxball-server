@@ -22,11 +22,13 @@ export interface MatchAccumulatedEntry {
 
 
 export class MatchAccumulatedStatsDB extends BaseDB {
+  // Not used currently, remove?
   constructor(db: sqlite3.Database) {
     super(db);
   }
 
-  setupDatabase(): void {
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS match_accumulated_stats (
         date DATE NOT NULL,
@@ -47,7 +49,7 @@ export class MatchAccumulatedStatsDB extends BaseDB {
       );
       CREATE INDEX IF NOT EXISTS idx_match_accumulated_stats ON match_accumulated_stats (auth_id, date);
     `;
-    this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_accumulated_stats error: ${e}`));
+    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_accumulated_stats error: ${e}`));
   }
 
   async updateStatsForDay(date: string): Promise<void> {
