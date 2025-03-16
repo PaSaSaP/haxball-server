@@ -1,7 +1,7 @@
 {
   "maxServers": { "3vs3": 3, "1vs1": 1 },
   "scaleUpThreshold": 12,
-  "scaleDownThreshold": 3,
+  "scaleDownThreshold": 4,
   "scaleCheckDuration": 180000,
   "cooldownTime": 180000,
   "pingLogs": false

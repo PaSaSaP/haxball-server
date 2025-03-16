@@ -383,6 +383,12 @@ export class Match {
     }
     this.fullTimeMatchPlayed = fullTimeMatchPlayed;
   }
+  setScore(scores: {red: number, blue: number} | null) {
+    if (scores) {
+      this.redScore = scores.red;
+      this.blueScore = scores.blue;
+    }
+  }
   isEnded() { return this.endedAt > 0; }
   stat(id: number): PlayerStatInMatch {
     if (!this.playerStats.has(id)) this.playerStats.set(id, new PlayerStatInMatch(id));

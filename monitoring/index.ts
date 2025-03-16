@@ -7,7 +7,7 @@
 // https://stackoverflow.com/a/74014021/7141464
 
 const { Client, GatewayIntentBits } = require('discord.js');
-const fs = require('fs');
+import * as fs from 'fs/promises';  // Użycie modułu z wersjami promisywnymi
 const express = require('express');
 import { tokenDatabase } from '../src/token_database';
 import * as secrets from "../src/secrets";
@@ -55,9 +55,9 @@ class ServerMonitor {
     }
   }
 
-  private loadConfig() {
+  private async loadConfig() {
     try {
-      const rawData = fs.readFileSync(this.configPath, 'utf-8');
+      const rawData = await fs.readFile(this.configPath, 'utf-8');
       const newConfig = JSON.parse(rawData);
       this.config = newConfig;
     } catch (error) {
@@ -71,8 +71,13 @@ class ServerMonitor {
     this.pingLogs = this.config.pingLogs ?? false;
   }
 
-  private shouldBeServerEnabled(selector: string): boolean {
-    return fs.existsSync(`./dynamic/server_active_${selector}.txt`);
+  private async shouldBeServerEnabled(selector: string): Promise<boolean> {
+    try {
+      await fs.access(`./dynamic/server_active_${selector}.txt`);
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   private handleServerTimeout(selector: string) {
@@ -84,23 +89,23 @@ class ServerMonitor {
     const now = Date.now();
     if (now - this.lastServerActiveStatusUpdate < 60_000) return;
     this.lastServerActiveStatusUpdate = now;
-    tokenDatabase.getActiveServers().then((servers) => {
+    tokenDatabase.getActiveServers().then(async (servers) => {
       for (let server of servers) {
-        if (server.active && !this.shouldBeServerEnabled(server.selector)) {
+        if (server.active && !(await this.shouldBeServerEnabled(server.selector))) {
           tokenDatabase.updateServerStatus(server.selector, false);
         }
       }
     }).catch((e) => MLog(`getActiveServers error ${e}`));
   }
 
-  private checkServerTimeouts() {
+  private async checkServerTimeouts() {
     this.updateServerStatusForScaledOut();
     const currentTime = Date.now();
     for (const selector of Object.keys(this.maxServers)) {
       const maxServerCount = this.maxServers[selector];
       for (let subselector = 1; subselector <= maxServerCount; subselector++) {
         const fullSelector = `${selector}_${subselector}`;
-        if (this.shouldBeServerEnabled(fullSelector)) {
+        if (await this.shouldBeServerEnabled(fullSelector)) {
           const lastRequestTime = this.serverStatus.get(fullSelector) ?? 0;
           if (currentTime - lastRequestTime > 30000) {
             const lastSentTime = this.lastDiscordMsgSent.get(fullSelector) ?? 0;
@@ -115,8 +120,8 @@ class ServerMonitor {
     }
   }
 
-  private scaleServers() {
-    this.loadConfig();
+  private async scaleServers() {
+    await this.loadConfig();
     for (const selectorKey of Object.keys(this.maxServers)) {
       const maxServerCount = this.maxServers[selectorKey];
 
@@ -126,11 +131,17 @@ class ServerMonitor {
         continue;
       }
 
-      let activeServers = Array.from({ length: maxServerCount }, (_, i) => `${selectorKey}_${i + 1}`)
-        .filter((s) => this.shouldBeServerEnabled(s));
+      let activeServers = await Promise.all(
+        Array.from({ length: maxServerCount }, (_, i) => `${selectorKey}_${i + 1}`)
+          .map(async (s) => {
+            const isEnabled = await this.shouldBeServerEnabled(s);
+            return isEnabled ? s : null;
+          })
+      );
+      activeServers = activeServers.filter((server) => server !== null);
       // if monitoring just started then set cooldown just like it started some time ago
       activeServers.forEach(sselector => {
-        if (!this.lastScaleAction.has(sselector)) this.lastScaleAction.set(sselector, now - (2/3)*this.cooldownTime);
+        if (sselector && !this.lastScaleAction.has(sselector)) this.lastScaleAction.set(sselector, now - (2/3)*this.cooldownTime);
       });
 
       let activePlayerCount = 0;
@@ -145,23 +156,22 @@ class ServerMonitor {
       }
       const averagePlayers = activePlayerCount / activeServers.length;
       if (averagePlayers >= this.scaleUpThreshold && activeServers.length < maxServerCount) {
-        const newServer = `${selectorKey}_${activeServers.length + 1}`;
-        fs.writeFileSync(`./dynamic/server_active_${newServer}.txt`, '');
-        this.sendPrivateMessage(`Tworzę plik dla nowego serwera: ${newServer}`);
-        MLog(`Tworzę plik dla nowego serwera: ${newServer} (avg=${averagePlayers}, act=${activePlayerCount}, se=${activeServers.length}, thr=${this.scaleUpThreshold})`);
+        const newServerFullSelector = `${selectorKey}_${activeServers.length + 1}`;
+        fs.writeFile(`./dynamic/server_active_${newServerFullSelector}.txt`, '');
+        this.sendPrivateMessage(`Tworzę plik dla nowego serwera: ${newServerFullSelector}`);
+        MLog(`Tworzę plik dla nowego serwera: ${newServerFullSelector} (avg=${averagePlayers}, act=${activePlayerCount}, se=${activeServers.length}, thr=${this.scaleUpThreshold})`);
         this.lastScaleAction.set(selectorKey, now);
         for (let i = 1; i <= activeServers.length; ++i) {
-          this.sendGodCommand(selectorKey, `!anno Wiele Was tutaj, za parę chwil pojawi się nowy serwer #${activeServers.length+1}`);
+          this.sendGodCommand(newServerFullSelector, `!anno Wiele Was tutaj, za parę chwil pojawi się nowy serwer #${activeServers.length+1}`);
         }
         return;
-      }
-      else if (averagePlayers <= this.scaleDownThreshold && activeServers.length > 1) {
-        const lastServer = activeServers[activeServers.length - 1];
-        fs.unlinkSync(`./dynamic/server_active_${lastServer}.txt`);
-        this.sendPrivateMessage(`Usuwam plik dla serwera: ${lastServer}`);
-        MLog(`Usuwam plik dla serwera: ${lastServer} (avg=${averagePlayers}, act=${activePlayerCount}, se=${activeServers.length}, thr=${this.scaleUpThreshold})`);
+      } else if (averagePlayers <= this.scaleDownThreshold && activeServers.length > 1) {
+        const lastServerFullSelector = activeServers[activeServers.length - 1]!;
+        fs.unlink(`./dynamic/server_active_${lastServerFullSelector}.txt`).catch((e) => { });
+        this.sendPrivateMessage(`Usuwam plik dla serwera: ${lastServerFullSelector}`);
+        MLog(`Usuwam plik dla serwera: ${lastServerFullSelector} (avg=${averagePlayers}, act=${activePlayerCount}, se=${activeServers.length}, thr=${this.scaleUpThreshold})`);
         this.lastScaleAction.set(selectorKey, now);
-        this.sendGodCommandTimes(selectorKey, '!anno Serwer za parę chwil zostanie wyłączony, inne nadal pozostają aktywne!', 5);
+        this.sendGodCommandTimes(lastServerFullSelector, '!anno Serwer za parę chwil zostanie wyłączony, inne nadal pozostają aktywne!', 5);
         return;
       }
     }
@@ -222,7 +232,7 @@ class ServerMonitor {
       if (lastPlayerCount !== undefined && currentPlayers !== lastPlayerCount) {
         const filePath = `${this.csvDir}/current_players_number_${selector}.csv`;
         const timestamp = new Date().toISOString().replace('T', ',').split('.')[0];
-        fs.appendFileSync(filePath, `${timestamp},${currentPlayers}\n`);
+        fs.appendFile(filePath, `${timestamp},${currentPlayers}\n`);
       }
 
       this.lastPlayerNum.set(selector, currentPlayers);

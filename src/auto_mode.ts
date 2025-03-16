@@ -288,6 +288,7 @@ export class AutoBot {
           else if (this.currentScores.blue > this.currentScores.red) this.setLastWinner(2);
           else this.setLastWinner(this.hb_room.pressure_right >= this.hb_room.pressure_left ? 1 : 2);
         }
+        this.currentMatch.setScore(this.currentScores);
         this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked);
       }
       this.hb_room.sendMsgToAll("Zmiana na mniejszą mapę", Colors.GameState, "italic");
@@ -399,6 +400,7 @@ export class AutoBot {
         }
         this.fullTimeMatchPlayed = true;
         this.setLastWinner(lastWinner);
+        this.currentMatch.setScore(this.currentScores);
         this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked, true);
         this.lobbyAction = () => {
           this.moveSomeTeamToSpec();
@@ -453,8 +455,7 @@ export class AutoBot {
   async handleTeamVictory(scores: ScoresObject) {
     // AMLog("handling team victory");
     this.fullTimeMatchPlayed = true;
-    this.currentMatch.redScore = scores.red;
-    this.currentMatch.blueScore = scores.blue;
+    this.currentMatch.setScore(scores);
     this.currentMatch.setEnd(scores.time, this.ranked, true);
     this.matchHistory.push(this.currentMatch);
     this.matchState = MatchState.afterVictory;
@@ -544,6 +545,7 @@ export class AutoBot {
       if (this.matchState == MatchState.started) {
         // AMLog(`Red don't play, why?`);
         this.hb_room.sendMsgToAll(`Druzyna Red nie rozpoczęła meczu w przeciągu ${this.MatchStartedTimeout / 1000} sekund...`, Colors.GameState, 'italic');
+        this.currentMatch.setScore(this.currentScores);
         this.currentMatch.setEnd(this.currentScores?.time ?? 0, false); // if they don't want to play then... just let them
         this.setLastWinner(2);
         this.lobbyAction = () => {
@@ -615,6 +617,7 @@ export class AutoBot {
             return true;
           }
         }
+        this.currentMatch.setScore(this.currentScores);
         this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked);
         this.justStopGame();
       }
