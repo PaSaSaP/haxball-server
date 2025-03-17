@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { PlayerData, PlayerStat, Match, PlayerMatchStatsData } from './structs';
+import { PlayerData, PlayerStat, Match, PlayerMatchStatsData, PlayerRatingData, GameModeType } from './structs';
 import ChatLogger from './chat_logger';
 import { PlayersDB } from './db/players';
 import { PlayerNamesDB } from './db/player_names';
@@ -21,14 +21,11 @@ import { PaymentLinksDB } from './db/payment_links';
 import { PaymentLinksWatcher } from './db/payment_links_watcher';
 import { TopRatingsDailyDB, TopRatingsWeeklyDB } from './db/top_day_ratings';
 import { hb_log } from './log';
+import { OtherDbFiles } from './config';
 
-export class DBHandler {
-  playersDb: sqlite3.Database;
-  otherDb: sqlite3.Database;
-  vipDb: sqlite3.Database;
-  players: PlayersDB;
-  playerNames: PlayerNamesDB;
-  votes: VotesDB;
+
+interface DBHandlerOtherType {
+  db: sqlite3.Database;
   totalPlayerMatchStats: PlayerMatchStatsDB; // all accumulated player stats
   matches: MatchesDB;
   matchStats: MatchStatsDB;
@@ -40,7 +37,29 @@ export class DBHandler {
   topRatings: TopRatingsDB;
   topRatingsDaily: TopRatingsDailyDB;
   topRatingsWeekly: TopRatingsWeeklyDB;
+}
 
+export class DBHandler {
+  static GameModes: GameModeType[] = ['1vs1', '2vs2', '3vs3', '4vs4'];
+  mainMode: GameModeType;
+  playersDb: sqlite3.Database;
+  otherDb: {
+    '1vs1': DBHandlerOtherType | null,
+    '2vs2': DBHandlerOtherType | null,
+    '3vs3': DBHandlerOtherType | null,
+    '4vs4': DBHandlerOtherType | null,
+  };
+  vipDb: sqlite3.Database;
+  players: PlayersDB;
+  playerNames: PlayerNamesDB;
+  votes: VotesDB;
+
+  playerState: PlayersStateDB;
+  networksState: NetworksStateDB;
+  reports: ReportsDB;
+  topRatings: TopRatingsDB;
+  topRatingsDaily: TopRatingsDailyDB;
+  topRatingsWeekly: TopRatingsWeeklyDB;
 
   rejoice: RejoiceDB;
   rejoiceTransactions: RejoiceTransactionsDB;
@@ -49,11 +68,10 @@ export class DBHandler {
   paymentLinks: PaymentLinksDB;
   paymentLinksWatcher: PaymentLinksWatcher;
 
-  constructor(playersDbFile: string, otherDbFile: string, vipDbFile: string) {
+
+  constructor(mainMode: GameModeType, playersDbFile: string, otherDbFiles: OtherDbFiles, vipDbFile: string) {
+    this.mainMode = mainMode;
     this.playersDb = new sqlite3.Database(playersDbFile, (err) => {
-      if (err) console.error('Error opening database:', err.message);
-    });
-    this.otherDb = new sqlite3.Database(otherDbFile, (err) => {
       if (err) console.error('Error opening database:', err.message);
     });
     this.vipDb = new sqlite3.Database(vipDbFile, (err) => {
@@ -65,17 +83,17 @@ export class DBHandler {
     this.playerNames = new PlayerNamesDB(this.playersDb);
     this.votes = new VotesDB(this.playersDb);
     // and second table
-    this.totalPlayerMatchStats = new PlayerMatchStatsDB(this.otherDb);
-    this.matches = new MatchesDB(this.otherDb);
-    this.matchStats = new MatchStatsDB(this.otherDb);
-    this.matchRankChanges = new MatchRankChangesDB(this.otherDb);
-    this.playerState = new PlayersStateDB(this.otherDb);
-    this.networksState = new NetworksStateDB(this.otherDb);
-    this.reports = new ReportsDB(this.otherDb);
-    this.ratings = new PlayerRatingsDB(this.otherDb);
-    this.topRatings = new TopRatingsDB(this.otherDb);
-    this.topRatingsDaily = new TopRatingsDailyDB(this.otherDb);
-    this.topRatingsWeekly = new TopRatingsWeeklyDB(this.otherDb);
+    this.otherDb = { '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null };
+    for (let selector of DBHandler.GameModes) {
+      if (!otherDbFiles[selector] || !otherDbFiles[selector].length) continue;
+      this.otherDb[selector] = this.createOtherDb(otherDbFiles[selector]);
+    }
+    this.playerState = this.otherDb[this.mainMode]!.playerState;
+    this.networksState = this.otherDb[this.mainMode]!.networksState;
+    this.reports = this.otherDb[this.mainMode]!.reports;
+    this.topRatings = this.otherDb[this.mainMode]!.topRatings;
+    this.topRatingsDaily = this.otherDb[this.mainMode]!.topRatingsDaily;
+    this.topRatingsWeekly = this.otherDb[this.mainMode]!.topRatingsWeekly;
     // and VIP table
     this.rejoice = new RejoiceDB(this.vipDb);
     this.rejoiceTransactions = new RejoiceTransactionsDB(this.vipDb);
@@ -84,27 +102,95 @@ export class DBHandler {
     this.paymentLinks = new PaymentLinksDB(this.vipDb);
     this.paymentLinksWatcher = new PaymentLinksWatcher(this.vipDb);
 
-    this.setupDatabases().then(() => {
+  }
+
+  async setup() {
+    await this.setupDatabases().then(() => {
       hb_log(`Databases in game_state ready to use!`);
     })
   }
+
+  private createOtherDb(filename: string): DBHandlerOtherType {
+    console.log(`create other db for ${filename}`);
+   let otherDb = new sqlite3.Database(filename, (err) => {
+      if (err) console.error('Error opening database:', err.message);
+    });
+    let totalPlayerMatchStats = new PlayerMatchStatsDB(otherDb);
+    let matches = new MatchesDB(otherDb);
+    let matchStats = new MatchStatsDB(otherDb);
+    let matchRankChanges = new MatchRankChangesDB(otherDb);
+    let playerState = new PlayersStateDB(otherDb);
+    let networksState = new NetworksStateDB(otherDb);
+    let reports = new ReportsDB(otherDb);
+    let ratings = new PlayerRatingsDB(otherDb);
+    let topRatings = new TopRatingsDB(otherDb);
+    let topRatingsDaily = new TopRatingsDailyDB(otherDb);
+    let topRatingsWeekly = new TopRatingsWeeklyDB(otherDb);
+    return {
+      db: otherDb,
+      totalPlayerMatchStats: totalPlayerMatchStats,
+      matches: matches,
+      matchStats: matchStats,
+      matchRankChanges: matchRankChanges,
+      playerState: playerState,
+      networksState: networksState,
+      reports: reports,
+      ratings: ratings,
+      topRatings: topRatings,
+      topRatingsDaily: topRatingsDaily,
+      topRatingsWeekly: topRatingsWeekly,
+    };
+  }
+
+  isValidSelector(selector: GameModeType) {
+    return this.otherDb[selector] !== null;
+  }
+
+  getTotalPlayerMatchStats(selector: GameModeType) {
+    return this.otherDb[selector]!.totalPlayerMatchStats;
+  }
+  getMatches(selector: GameModeType) {
+    return this.otherDb[selector]!.matches;
+  }
+  getMatchStats(selector: GameModeType) {
+    return this.otherDb[selector]!.matchStats;
+  }
+  getMatchRankChanges(selector: GameModeType) {
+    return this.otherDb[selector]!.matchRankChanges;
+  }
+  getRatings(selector: GameModeType) {
+    return this.otherDb[selector]!.ratings;
+  }
+  // getTopRatings(selector: GameModeType) {
+  //   return this.otherDb[selector]!.topRatings;
+  // }
+  // getTopRatingsDaily(selector: GameModeType) {
+  //   return this.otherDb[selector]!.topRatingsDaily;
+  // }
+  // getTopRatingsWeekly(selector: GameModeType) {
+  //   return this.otherDb[selector]!.topRatingsWeekly;
+  // }
 
   async setupDatabases() {
     await this.players.setupDatabase();
     await this.playerNames.setupDatabase();
     await this.votes.setupDatabase();
 
-    await this.totalPlayerMatchStats.setupDatabase();
-    await this.matches.setupDatabase();
-    await this.matchStats.setupDatabase();
-    await this.matchRankChanges.setupDatabase();
-    await this.playerState.setupDatabase();
-    await this.networksState.setupDatabase();
-    await this.reports.setupDatabase();
-    await this.ratings.setupDatabase();
-    await this.topRatings.setupDatabase();
-    await this.topRatingsDaily.setupDatabase();
-    await this.topRatingsWeekly.setupDatabase();
+    for (let selector of DBHandler.GameModes) {
+      let otherDb = this.otherDb[selector];
+      if (!otherDb) continue;
+      await otherDb.totalPlayerMatchStats.setupDatabase();
+      await otherDb.matches.setupDatabase();
+      await otherDb.matchStats.setupDatabase();
+      await otherDb.matchRankChanges.setupDatabase();
+      await otherDb.playerState.setupDatabase();
+      await otherDb.networksState.setupDatabase();
+      await otherDb.reports.setupDatabase();
+      await otherDb.ratings.setupDatabase();
+      await otherDb.topRatings.setupDatabase();
+      await otherDb.topRatingsDaily.setupDatabase();
+      await otherDb.topRatingsWeekly.setupDatabase();
+    }
 
     await this.rejoice.setupDatabase();
     await this.rejoiceTransactions.setupDatabase();
@@ -115,11 +201,19 @@ export class DBHandler {
   }
 
   closeDatabases() {
-    [this.playersDb, this.otherDb, this.vipDb].forEach(db => db.close((err) => {
-      if (err) {
-        console.error('Error closing database:', err.message);
-      }
-    }));
+    const closeDb = (db: sqlite3.Database) => {
+      db.close((err) => {
+        if (err) {
+          console.error('Error closing database:', err.message);
+        }
+      })
+    };
+    [this.playersDb, this.vipDb].forEach(db => closeDb(db));
+    for (let selector of DBHandler.GameModes) {
+      let otherDb = this.otherDb[selector];
+      if (!otherDb) continue;
+      closeDb(otherDb.db);
+    }
   }
 }
 
@@ -129,6 +223,10 @@ export class GameState {
   constructor(dbHandler: DBHandler, chatLogger: ChatLogger) {
     this.dbHandler = dbHandler;
     this.chatLogger = chatLogger;
+  }
+
+  async setup() {
+    await this.dbHandler.setup();
   }
 
   getTrustAndAdminLevel(player: PlayerData) {
@@ -171,40 +269,49 @@ export class GameState {
     return this.dbHandler.votes.getPlayerReputation(auth_id);
   }
 
-  loadTotalPlayerMatchStats(auth_id: string) {
-    return this.dbHandler.totalPlayerMatchStats.loadTotalPlayerMatchStats(auth_id);
+  loadTotalPlayerMatchStats(selector: GameModeType, auth_id: string): Promise<PlayerMatchStatsData|null> {
+    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
+    return this.dbHandler.getTotalPlayerMatchStats(this.dbHandler.mainMode).loadTotalPlayerMatchStats(auth_id);
   }
 
-  saveTotalPlayerMatchStats(auth_id: string, stat: PlayerStat) {
-    return this.dbHandler.totalPlayerMatchStats.saveTotalPlayerMatchStats(auth_id, stat);
+  saveTotalPlayerMatchStats(selector: GameModeType, auth_id: string, stat: PlayerStat) {
+    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
+    return this.dbHandler.getTotalPlayerMatchStats(selector).saveTotalPlayerMatchStats(auth_id, stat);
   }
 
-  updateTotalPlayerMatchStats(auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData) {
-    return this.dbHandler.totalPlayerMatchStats.updateTotalPlayerMatchStats(auth_id, stat, playerMatchStats);
+  updateTotalPlayerMatchStats(selector: GameModeType, auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData): Promise<void> {
+    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve();
+    return this.dbHandler.getTotalPlayerMatchStats(selector).updateTotalPlayerMatchStats(auth_id, stat, playerMatchStats);
   }
 
-  insertNewMatch(match: Match, fullTimeMatchPlayed: boolean) {
-    return this.dbHandler.matches.insertNewMatch(match, fullTimeMatchPlayed);
+  insertNewMatch(selector: GameModeType, match: Match, fullTimeMatchPlayed: boolean): Promise<number> {
+    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(-1);
+    return this.dbHandler.getMatches(selector).insertNewMatch(match, fullTimeMatchPlayed);
   }
   
-  insertNewMatchPlayerStats(match_id: number, auth_id: string, team_id: 0 | 1 | 2, stat: PlayerMatchStatsData) {
-    return this.dbHandler.matchStats.insertNewMatchPlayerStats(match_id, auth_id, team_id, stat);
+  insertNewMatchPlayerStats(selector: GameModeType, match_id: number, auth_id: string, team_id: 0 | 1 | 2, stat: PlayerMatchStatsData) {
+    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
+    return this.dbHandler.getMatchStats(selector).insertNewMatchPlayerStats(match_id, auth_id, team_id, stat);
   }
 
-  insertNewMatchRankChanges(m: MatchRankChangesEntry) {
-    return this.dbHandler.matchRankChanges.insertNewMatchRankChanges(m);
+  insertNewMatchRankChanges(selector: GameModeType, m: MatchRankChangesEntry) {
+    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
+    return this.dbHandler.getMatchRankChanges(selector).insertNewMatchRankChanges(m);
   }
 
-  loadPlayerRating(auth_id: string) {
-    return this.dbHandler.ratings.loadPlayerRating(auth_id);
+  loadPlayerRating(selector: GameModeType, auth_id: string): Promise<PlayerRatingData|null>  {
+    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
+    return this.dbHandler.getRatings(selector).loadPlayerRating(auth_id);
   }
 
-  savePlayerRating(auth_id: string, player: PlayerStat) {
-    return this.dbHandler.ratings.savePlayerRating(auth_id, player);
-  }
+  // savePlayerRating(selector: GameModeType, auth_id: string, player: PlayerStat) {
+  //   if (!this.dbHandler.isValidSelector(selector)) return new Promise((resolve, reject) => resolve(null));
+  //   return this.dbHandler.getRatings(selector).savePlayerRating(auth_id, player);
+  // }
 
-  updatePlayerRating(auth_id: string, new_rating: number, rating_diff: number, rd: number, vol: number) {
-    return this.dbHandler.ratings.updatePlayerRating(auth_id, new_rating, rating_diff, rd, vol);
+  updatePlayerRating(selector: GameModeType, auth_id: string, new_rating: number, rating_diff: number, rd: number, vol: number) {
+    if (!this.dbHandler.isValidSelector(selector)) return new Promise((resolve, reject) => resolve(null));
+    return this.dbHandler.getRatings(selector).updatePlayerRating(auth_id, new_rating, rating_diff, rd, vol);
   }
 
   getTopPlayersShortAuth(limit: number = 1000) {

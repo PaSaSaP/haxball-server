@@ -27,7 +27,7 @@ export class PlayerMatchStatsDB extends BaseDB {
         left_server INTEGER DEFAULT 0
       );
     `;
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create player_match_stats error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'player_match_stats');
   }
 
   async loadTotalPlayerMatchStats(auth_id: string): Promise<PlayerMatchStatsData|null> {

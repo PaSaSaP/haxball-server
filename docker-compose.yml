@@ -133,6 +133,41 @@ services:
       retries: 5
       start_period: 60s
     command: ["futsal_1vs1"]
+######
+  futsal-4vs4-1:
+    image: hx-puppeteer:1.0
+    container_name: haxball-server-futsal-4vs4-1
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:54000-54100:54000-54100/udp"
+    environment:
+      - MONITORING=monitoring
+      - HTTP_PROXY=http://ssh-proxy:3133
+      - HTTPS_PROXY=http://ssh-proxy:3133
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - HX_ROOM_CONFIG_SELECTOR=4vs4
+      - HX_ROOM_CONFIG_SUBSELECTOR=1
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    cap_add:
+      - SYS_ADMIN
+      - CAP_NET_ADMIN
+    shm_size: "1gb"
+    sysctls:
+      - net.ipv4.ip_local_port_range=54000 54100
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: ["futsal_4vs4_1"]
+### rest services
   www-server:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped
@@ -205,6 +240,24 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run market_server
+  accu-stats-4vs4:
+    image: ghcr.io/puppeteer/puppeteer
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+      - HX_ROOM_CONFIG_SELECTOR=4vs4
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run accu_stats_4vs4
   accu-stats-3vs3:
     image: ghcr.io/puppeteer/puppeteer
     volumes:

@@ -27,7 +27,7 @@ export class RejoiceDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create rejoices error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'rejoices');
   }
 
   async getRejoicesForPlayer(auth_id: string): Promise<RejoiceEntry[]> {

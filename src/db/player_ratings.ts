@@ -19,7 +19,7 @@ export class PlayerRatingsDB extends BaseDB {
         volatility REAL DEFAULT 0.02
       );
     `;
-    await this.db.run(createPlayerRatingsTableQuery, (e) => e && hb_log(`!! create player_ratings error: ${e}`));
+    await this.promiseQuery(createPlayerRatingsTableQuery, 'player_ratings');
   }
 
   async loadPlayerRating(auth_id: string): Promise<PlayerRatingData|null> {
@@ -33,7 +33,7 @@ export class PlayerRatingsDB extends BaseDB {
         if (err) {
           reject('Error loading player rating: ' + err.message);
         } else if (!row) {
-          return null;
+          resolve(null);
         } else {
           resolve({
             mu: row.rating,

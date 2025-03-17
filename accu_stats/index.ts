@@ -8,27 +8,24 @@ import { TopRatingsDB } from '../src/db/top_ratings';
 import { RollingRatingsDB, RollingRatingsData } from '../src/db/rolling_ratings';
 import { MatchEntry } from '../src/db/matches';
 import { MatchStatsEntry } from '../src/db/match_stats';
-import { Match, PlayerStat, PlayerLeavedDueTo, PlayerTopRatingData } from '../src/structs';
+import { Match, PlayerStat, PlayerLeavedDueTo, PlayerTopRatingData, MatchType, GameModeType } from '../src/structs';
 import { Ratings } from '../src/rating';
 import Glicko2 from 'glicko2';
 import { getTimestampHM } from '../src/utils';
 import { promises as fs } from "fs";
-import { timeStamp } from 'console';
 import { hb_log } from '../src/log';
 
 if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
 const selector = process.env.HX_SELECTOR;
 
 console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
-if (selector == '1vs1') {
-  // OK, do nothing
-} else if (selector == '3vs3') {
-  // OK, do nothing
-} else throw new Error(`Invalid HX_SELECTOR: ${selector}`);
+if (!['1vs1', '3vs3', '4vs4'].includes(selector)) {
+  throw new Error(`Invalid HX_SELECTOR: ${selector}`);
+}
 console.log(`${getTimestampHM()} Zaczynamy akumulowanie!`);
 
 class AccuStats {
-  selector: string;
+  selector: GameModeType;
   mode: 'old' | 'new';
   roomConfig: config.RoomServerConfig;
   otherDb: sqlite3.Database;
@@ -36,11 +33,11 @@ class AccuStats {
   topRatingsWeekly: TopRatingsWeeklyDB;
   topRatingsTotal: TopRatingsDB;
   rollingRatings: RollingRatingsDB;
-  constructor(selector: string, mode: 'old'|'new') {
+  constructor(selector: GameModeType, mode: 'old'|'new') {
     this.selector = selector;
     this.mode = mode;
     this.roomConfig = config.getRoomConfig(selector);
-    this.otherDb = new sqlite3.Database(this.roomConfig.otherDbFile, (err) => {
+    this.otherDb = new sqlite3.Database(this.roomConfig.otherDbFiles[selector], (err) => {
       if (err) console.error('Error opening database:', err.message);
     });
     this.topRatingsDaily = new TopRatingsDailyDB(this.otherDb);
@@ -152,7 +149,7 @@ class AccuStats {
       m.stats.push(s);
     }
     for (let [matchId, m] of matches) {
-      let match = new Match();
+      let match = new Match(selector as MatchType);
       const matchDuration = m.match.duration;
       for (let s of m.stats) {
         let playerId = playerIdByAuth.get(s.auth_id)!;
@@ -222,7 +219,7 @@ class AccuStats {
   }
 
   async getLastMatchId() {
-    const response = await this.fetchPrivateData(`matches/${selector}/last_match_id`);
+    const response = await this.fetchPrivateData(`matches/${this.selector}/last_match_id`);
     const data: { match_id: number } = await response.json();
     return data.match_id;
   }
@@ -235,7 +232,7 @@ class AccuStats {
   }
 
   async getMatches() {
-    const response = await this.fetchPrivateData(`matches/${selector}`);
+    const response = await this.fetchPrivateData(`matches/${this.selector}`);
     const data: [number, string, number, boolean, number, number, number, number, number][] = await response.json();
     let matches: MatchEntry[] = data.map(row => ({
       match_id: row[0],
@@ -252,7 +249,7 @@ class AccuStats {
   }
 
   async getMatchesFrom(match_id: number) {
-    const response = await this.fetchPrivateData(`matches/${selector}/from/${match_id}`);
+    const response = await this.fetchPrivateData(`matches/${this.selector}/from/${match_id}`);
     const data: [number, string, number, boolean, number, number, number, number, number][] = await response.json();
     let matches: MatchEntry[] = data.map(row => ({
       match_id: row[0],
@@ -269,7 +266,7 @@ class AccuStats {
   }
 
   async getMatchStats() {
-    const response = await this.fetchPrivateData(`match_stats/${selector}`);
+    const response = await this.fetchPrivateData(`match_stats/${this.selector}`);
     const data: [number, string, 0 | 1 | 2, number, number, number, number, number, number, number][] = await response.json();
     let matchStats: MatchStatsEntry[] = data.map(row => ({
       match_id: row[0],
@@ -288,7 +285,7 @@ class AccuStats {
 
 
   async getMatchStatsFrom(match_id: number) {
-    const response = await this.fetchPrivateData(`match_stats/${selector}/from/${match_id}`);
+    const response = await this.fetchPrivateData(`match_stats/${this.selector}/from/${match_id}`);
     const data: [number, string, 0 | 1 | 2, number, number, number, number, number, number, number][] = await response.json();
     let matchStats: MatchStatsEntry[] = data.map(row => ({
       match_id: row[0],
@@ -516,7 +513,7 @@ class AccuStats {
 
     for (let matchId of affectedMatchIds) {
       let m = matchesByMatchId.get(matchId)!;
-      let match = new Match();
+      let match = new Match(selector as MatchType);
       const matchDuration = m.match.duration;
       for (let s of m.stats) {
         let playerId = playerIdByAuth.get(s.auth_id)!;
@@ -585,5 +582,5 @@ class AccuStats {
 }
 
 const mode = 'new';
-let accuStats = new AccuStats(selector, mode);
+let accuStats = new AccuStats(selector as GameModeType, mode);
 accuStats.run();

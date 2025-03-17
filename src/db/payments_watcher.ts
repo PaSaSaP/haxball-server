@@ -31,7 +31,7 @@ export class PaymentsWatcher extends BaseDB {
       END;
     `;
 
-    await this.db.exec(createTableQuery, (e) => e && hb_log(`!! create payment_status_log error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'payment_status_log');
   }
 
   setCallback(callback: (transaction_id: number, old_status: string, new_status: string) => void): void {

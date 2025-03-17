@@ -1,9 +1,18 @@
 import { PlayerStat, PlayerStatInMatch, Match, PlayerLeavedDueTo } from "./structs";
 import Glicko2 from 'glicko2';
 
+type RatingLimitsEntry = {
+  score: number,
+  time: number, // [minutes]
+}
+
 interface RatingsOptions {
-  scoreLimit: number;
-  timeLimit: number; // [minutes]
+  limits: {
+    "1vs1": RatingLimitsEntry,
+    "2vs2": RatingLimitsEntry,
+    "3vs3": RatingLimitsEntry,
+    "4vs4": RatingLimitsEntry,
+  }
   interruptedMatchBeta: number; // rescale by time
   interruptedMatchGamma: number; // rescale by goals
 }
@@ -11,6 +20,7 @@ interface RatingsOptions {
 export class Ratings {
   static options: RatingsOptions;
   private glicko: Glicko2.Glicko2;
+  limits: RatingLimitsEntry;
   expectedScoreRed: number;
   results: [number, number, number, number, number][];
 
@@ -19,12 +29,29 @@ export class Ratings {
     this.expectedScoreRed = 0;
     this.results = [];
     Ratings.options = { 
-      scoreLimit: 3,
-      timeLimit: 3,
+      limits: {
+        "1vs1": {
+          score: 3,
+          time: 1,
+        },
+        "2vs2": {
+          score: 3,
+          time: 2,
+        },
+        "3vs3": {
+          score: 3,
+          time: 3,
+        },
+        "4vs4": {
+          score: 4,
+          time: 4,
+        },
+      },
       interruptedMatchBeta: 0.8,
       interruptedMatchGamma: 0.15,
       ...options,
     };
+    this.limits = Ratings.options.limits['3vs3'];
   }
 
   private calculateWeightedExpectedScore(
@@ -118,6 +145,7 @@ export class Ratings {
   }
 
   calculateNewPlayersRating(match: Match, playerStats: Map<number, PlayerStat>) {
+    this.updateLimits(match);
     const matchDuration = match.matchEndTime;
     const fullTimeMatchPlayed = match.fullTimeMatchPlayed;
     const weights: Map<number, number> = new Map();
@@ -131,8 +159,8 @@ export class Ratings {
     this.results = [];
 
     if (!fullTimeMatchPlayed) {
-      rescaler = Ratings.calculateInterruptedMatchWeight(match.redScore, match.blueScore, Ratings.options.scoreLimit, matchDuration, Ratings.options.timeLimit);
-      this.Log(`Rescaler = ${rescaler} because of ${match.redScore}:${match.blueScore}/${Ratings.options.scoreLimit} t:${matchDuration}/${Ratings.options.timeLimit}`);
+      rescaler = Ratings.calculateInterruptedMatchWeight(match.redScore, match.blueScore, this.limits.score, matchDuration, this.limits.time);
+      this.Log(`Rescaler = ${rescaler} because of ${match.redScore}:${match.blueScore}/${this.limits.score} t:${matchDuration}/${this.limits.time}`);
     }
     for (const playerId of playerIdsInMatch) {
       const stat = match.stat(playerId);
@@ -198,6 +226,14 @@ export class Ratings {
       this.Log(`id=${player.id} o=${oldMu} n=${newMu} w=${weight} final=${adjustedRating}`);
       player.glickoPlayer!.setRating(adjustedRating);
       this.results.push([playerId, newRd, oldMu, adjustedRating, penalty]);
+    }
+  }
+
+  private updateLimits(byMatch: Match) {
+    if (byMatch.matchType === '4vs4') {
+      this.limits = Ratings.options.limits['4vs4'];
+    } else {
+      this.limits = Ratings.options.limits['3vs3'];
     }
   }
 

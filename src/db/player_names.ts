@@ -17,7 +17,7 @@ export class PlayerNamesDB extends BaseDB {
           PRIMARY KEY (auth_id, name)
         );
       `;
-    await this.db.run(createPlayerNamesTableQuery, (e) => e && hb_log(`!! create player_names error: ${e}`));
+    await this.promiseQuery(createPlayerNamesTableQuery, 'player_names');
   }
 
 

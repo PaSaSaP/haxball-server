@@ -27,6 +27,7 @@ export class MatchAccumulatedStatsDB extends BaseDB {
     super(db);
   }
 
+
   async setupDatabase(): Promise<void> {
     await this.setupWalAndSync();
     const createTableQuery = `
@@ -49,7 +50,7 @@ export class MatchAccumulatedStatsDB extends BaseDB {
       );
       CREATE INDEX IF NOT EXISTS idx_match_accumulated_stats ON match_accumulated_stats (auth_id, date);
     `;
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_accumulated_stats error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'match_accumulated_stats');
   }
 
   async updateStatsForDay(date: string): Promise<void> {

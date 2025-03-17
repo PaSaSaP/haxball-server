@@ -961,7 +961,7 @@ class Commander {
       return;
     }
 
-    const link = config.webpageLink + '/' + ranking.selector;
+    const link = `${config.webpageLink}/${this.hb_room.room_config.playersInTeamLimit}/${ranking.selector}`;
     this.sendMsgToPlayer(player, `🏆 Pełny ranking dostępny pod linkiem: ${link}`, Colors.BrightBlue);
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     const formatEntry = (e: PlayerTopRatingDataShort, index: number, shift: number) =>

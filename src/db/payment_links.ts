@@ -25,7 +25,7 @@ export class PaymentLinksDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create payment_links error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'payment_links');
   }
 
   async insertPaymentLink(authId: string, paymentTransactionId: number, link: string, selector: string): Promise<void> {

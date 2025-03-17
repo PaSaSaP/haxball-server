@@ -32,9 +32,9 @@ export class MatchRankChangesDB extends BaseDB {
       );`;
     const createIndexAuthIdQuery = `CREATE INDEX IF NOT EXISTS index_match_rank_changed_auth_id ON match_rank_changes(auth_id);`;
     const createIndexMatchIdQuery = `CREATE INDEX IF NOT EXISTS index_match_rank_changed_match_id ON match_rank_changes(match_id);`;
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create match_rank_changes error: ${e}`));
-    await this.db.run(createIndexAuthIdQuery, (e) => e && hb_log(`!! create index_match_rank_changed_auth_id error: ${e}`));
-    await this.db.run(createIndexMatchIdQuery, (e) => e && hb_log(`!! create index_match_rank_changed_match_id error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'match_rank_changes');
+    await this.promiseQuery(createIndexAuthIdQuery, 'index_match_rank_changed_auth_id');
+    await this.promiseQuery(createIndexMatchIdQuery, 'index_match_rank_changed_match_id');
   }
 
   async insertNewMatchRankChanges(m: MatchRankChangesEntry): Promise<void> {

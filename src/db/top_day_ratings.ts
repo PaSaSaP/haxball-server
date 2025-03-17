@@ -33,7 +33,7 @@ class BaseTopRatingsDB extends BaseDB {
         own_goals INTEGER DEFAULT 0,
         clean_sheets INTEGER DEFAULT 0
       );`;
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create ${this.tableName} error: ${e}`));
+    await this.promiseQuery(createTableQuery, this.tableName);
   }
 
   async updateTopRatingsFrom(playerTopRatings: PlayerTopRatingData[]): Promise<void> {

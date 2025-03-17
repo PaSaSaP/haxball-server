@@ -21,7 +21,7 @@ export class VotesDB extends BaseDB {
         );
       `;
 
-    await this.db.run(createVotesTableQuery, (e) => e && hb_log(`!! create votes error: ${e}`));
+    await this.promiseQuery(createVotesTableQuery, 'votes');
   }
 
   // Dodanie głosu (up lub down)

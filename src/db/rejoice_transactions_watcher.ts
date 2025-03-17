@@ -30,7 +30,7 @@ export class RejoiceTransactionsWatcher extends BaseDB {
       END;
     `;
 
-    await this.db.exec(createTableQuery, (e) => e && hb_log(`!! create rejoice_transactions_log error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'rejoice_transactions_log');
   }
 
   setCallback(callback: (auth_id: string, transaction_id: number, selector: string) => void): void {

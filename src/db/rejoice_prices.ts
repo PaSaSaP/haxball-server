@@ -24,7 +24,7 @@ export class RejoicePricesDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create rejoice_prices error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'rejoice_prices');
   }
 
   async getRejoicePrice(rejoice_id: string, for_days: number): Promise<RejoicePriceEntry | null> {

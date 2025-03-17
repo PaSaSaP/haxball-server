@@ -18,7 +18,7 @@ class ServerMonitor {
   private lastDiscordMsgSent: Map<string, number> = new Map();
   private serverStatus: Map<string, number> = new Map();
   private playerCounts: Map<string, number[]> = new Map();
-  private maxServers: Record<string, number> = { '3vs3': 3, '1vs1': 2 };
+  private maxServers: Record<string, number> = { '4vs4': 1, '3vs3': 2, '1vs1': 1 };
   private userId = '1345319721863741515';
   private csvDir = './dynamic';
   private checkInterval = 5 * 1000;
@@ -63,7 +63,7 @@ class ServerMonitor {
     } catch (error) {
       MLog(`Błąd ładowania konfiguracji: ${error}`);
     }
-    this.maxServers = this.config.maxServers ?? { '3vs3': 3, '1vs1': 2 };
+    this.maxServers = this.config.maxServers ?? { '4vs4': 1, '3vs3': 2, '1vs1': 1 };
     this.scaleUpThreshold = this.config.scaleUpThreshold ?? 10;
     this.scaleDownThreshold = this.config.scaleDownThreshold ?? 3;
     this.scaleCheckDuration = this.config.scaleCheckDuration ?? 3 * 60 * 1000;

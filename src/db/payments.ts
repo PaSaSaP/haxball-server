@@ -23,7 +23,7 @@ export class PaymentsDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create payments error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'payments');
   }
 
   async insertPayment(price: number, pay_status: 'started' | 'completed' | 'failed'): Promise<number> {

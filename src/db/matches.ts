@@ -34,7 +34,7 @@ export class MatchesDB extends BaseDB {
         pressure INTEGER DEFAULT 0, 
         possession INTEGER DEFAULT 0
       );`;
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create matches error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'matches');
   }
 
   async insertNewMatch(match: Match, fullTimeMatchPlayed: boolean): Promise<number> {

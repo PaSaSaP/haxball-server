@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import * as config from "../src/config";
 import { tokenDatabase } from './token_database';
 
 const SECRET_KEY = 'No i co Sefinek?';
@@ -10,5 +11,5 @@ export function generateVerificationLink(player_name: string): string {
     .digest('hex'); // Generowanie tokenu w formacie hex
   const shortToken = token.substring(0, 16);
   tokenDatabase.saveToken(player_name, shortToken);
-  return `https://haxball.ovh/verify?token=${shortToken}`;
+  return `${config.webpageLink}/verify?token=${shortToken}`;
 }

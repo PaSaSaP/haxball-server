@@ -32,7 +32,7 @@ export class RejoiceTransactionsDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create reojice_transactions error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'reojice_transactions');
   }
 
   async insertRejoiceTransaction(auth_id: string, rejoice_id: string, at_time: number, for_days: number, selector: string): Promise<number> {

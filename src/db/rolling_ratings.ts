@@ -52,7 +52,7 @@ export class RollingRatingsDB extends BaseDB {
       CREATE INDEX IF NOT EXISTS index_rolling_stats_auth_id ON rolling_ratings (auth_id);
       CREATE INDEX IF NOT EXISTS index_rolling_stats_date ON rolling_ratings (date);
     `;
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create rollinkg_ratings error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'rollinkg_ratings');
   }
 
   async updateRollingRatingsFrom(rating: RollingRatingsData): Promise<void> {

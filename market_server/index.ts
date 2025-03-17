@@ -141,8 +141,8 @@ async function main() {
           auth_id: auth_id,
           transaction_id: transaction_id.toString(),
         },
-        success_url: 'https://haxball.ovh',
-        cancel_url: 'https://haxball.ovh',
+        success_url: config.webpageLink,
+        cancel_url: config.webpageLink,
       });
       console.log(`Created session ID: ${session.id}`);
       return session.url;

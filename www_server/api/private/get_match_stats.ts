@@ -4,17 +4,13 @@ import {MatchStatsDB, MatchStatsEntry} from "../../../src/db/match_stats";
 import * as config from "../../../src/config";
 import * as secrets from "../../../src/secrets";
 import { getTimestampHM } from "../../../src/utils";
-import { getFirstMatchId1vs1, getFirstMatchId3vs3 } from "./get_matches";
+import { getFirstMatchId1vs1, getFirstMatchId3vs3, getFirstMatchId4vs4 } from "./get_matches";
 
 const router = express.Router();
 
-let roomConfig3vs3 = config.getRoomConfig("3vs3");
-let roomConfig1vs1 = config.getRoomConfig("1vs1");
-
-
 type CacheData = [number, string, 0 | 1 | 2, number, number, number, number, number, number, number];
 interface Cache {
-  which: "1vs1"|"3vs3";
+  which: "1vs1"|"3vs3"|"4vs4";
   dbFile: string;
   matchStats: MatchStatsEntry[];
   matchStatsByMatchId: Map<number, MatchStatsEntry[]>;
@@ -24,11 +20,15 @@ interface Cache {
 }
 
 let matchStats1vs1Cache: Cache = {
-  which: "1vs1", dbFile: roomConfig1vs1.otherDbFile, matchStats: [],
+  which: "1vs1", dbFile: config.AllOtherDbFiles["1vs1"], matchStats: [],
   matchStatsByMatchId: new Map<number, MatchStatsEntry[]>(), cache: [], lastRowId: -1, lastFetchTime: 0
 };
 let matchStats3vs3Cache: Cache = {
-  which: "3vs3", dbFile: roomConfig3vs3.otherDbFile, matchStats: [],
+  which: "3vs3", dbFile: config.AllOtherDbFiles["3vs3"], matchStats: [],
+  matchStatsByMatchId: new Map<number, MatchStatsEntry[]>(), cache: [], lastRowId: -1, lastFetchTime: 0
+};
+let matchStats4vs4Cache: Cache = {
+  which: "4vs4", dbFile: config.AllOtherDbFiles["4vs4"], matchStats: [],
   matchStatsByMatchId: new Map<number, MatchStatsEntry[]>(), cache: [], lastRowId: -1, lastFetchTime: 0
 };
 
@@ -65,7 +65,11 @@ async function fetchMatchStats(cache: Cache) {
     console.log(`(${cache.which}) Got ${results.length} new match stats, now there is ${cache.matchStats.length} matches, lastRowId=${cache.lastRowId}, rowId=${rowId}`);
     newRowId = rowId;
 
-    let firstMatchId = cache.which === "1vs1" ? getFirstMatchId1vs1() : getFirstMatchId3vs3();
+    let firstMatchId = -1;
+    if (cache.which === "1vs1") firstMatchId = getFirstMatchId1vs1();
+    else if (cache.which === "3vs3") firstMatchId = getFirstMatchId3vs3();
+    else if (cache.which === "4vs4") firstMatchId = getFirstMatchId4vs4();
+    else throw new Error("invalid selector");
     if (firstMatchId > 0) {
       let foundIdx = -1;
       for (let i = 0; i < cache.matchStats.length; ++i) {
@@ -102,10 +106,14 @@ async function getMatchStats1vs1Cached() {
 async function getMatchStats3vs3Cached() {
   return await getMatchesCached(matchStats3vs3Cache);
 }
+async function getMatchStats4vs4Cached() {
+  return await getMatchesCached(matchStats4vs4Cache);
+}
 
 function getCacheBySelector(selector: string) {
   if (selector === '1vs1') return getMatchStats1vs1Cached();
   if (selector === '3vs3') return getMatchStats3vs3Cached();
+  if (selector === '4vs4') return getMatchStats4vs4Cached();
   throw new Error(`getCacheBySelecor() match stats invalid selector: ${selector}`);
 }
 
@@ -133,6 +141,11 @@ router.get("/3vs3", async (req: any, res: any) => {
   let cached = await getMatchStats3vs3Cached();
   res.json(cached.cache);
 });
+router.get("/4vs4", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  let cached = await getMatchStats4vs4Cached();
+  res.json(cached.cache);
+});
 
 router.get("/1vs1/id/:matchId", async (req: any, res: any) => {
   if (!verify(req, res)) return;
@@ -150,6 +163,14 @@ router.get("/3vs3/id/:matchId", async (req: any, res: any) => {
   if (!m) return res.json([]);
   res.json(m.map(matchToArray));
 });
+router.get("/4vs4/id/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatchStats4vs4Cached();
+  let m = cached.matchStatsByMatchId.get(matchId);
+  if (!m) return res.json([]);
+  res.json(m.map(matchToArray));
+});
 router.get("/1vs1/from/:matchId", async (req: any, res: any) => {
   if (!verify(req, res)) return;
   const matchId = Number(req.params.matchId);
@@ -161,6 +182,13 @@ router.get("/3vs3/from/:matchId", async (req: any, res: any) => {
   if (!verify(req, res)) return;
   const matchId = Number(req.params.matchId);
   let cached = await getMatchStats3vs3Cached();
+  let selected = getCacheDataFromMatchId(cached, matchId);
+  res.json(selected);
+});
+router.get("/4vs4/from/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatchStats4vs4Cached();
   let selected = getCacheDataFromMatchId(cached, matchId);
   res.json(selected);
 });

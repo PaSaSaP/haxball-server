@@ -14,6 +14,7 @@
     "futsal_3vs3_1": "HX_ROOM_CONFIG_SELECTOR=3vs3 HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",
     "futsal_3vs3_2": "HX_ROOM_CONFIG_SELECTOR=3vs3 HX_ROOM_CONFIG_SUBSELECTOR=2 node dist/src/src/index.js",
     "futsal_3vs3_3": "HX_ROOM_CONFIG_SELECTOR=3vs3 HX_ROOM_CONFIG_SUBSELECTOR=3 node dist/src/src/index.js",
+    "futsal_4vs4_1": "HX_ROOM_CONFIG_SELECTOR=4vs4 HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",
     "discord_build": "taskset -c 1 npx tsc -p discord_client/tsconfig.json",
     "discord_1vs1": "HX_SELECTOR=1vs1 HX_SUBSELECTOR=1 node dist/discord_client/discord_client/index.js",
     "discord_3vs3": "HX_SELECTOR=3vs3 HX_SUBSELECTOR=1 node dist/discord_client/discord_client/index.js",
@@ -22,8 +23,9 @@
     "monitoring_build": "taskset -c 1 npx tsc -p monitoring/tsconfig.json",
     "monitoring": "node dist/monitoring/monitoring/index.js",
     "accu_stats_build": "taskset -c 1 npx tsc -p accu_stats/tsconfig.json",
-    "accu_stats_3vs3": "HX_SELECTOR=3vs3 nice -n 19 node dist/accu_stats/accu_stats/index.js",
     "accu_stats_1vs1": "HX_SELECTOR=1vs1 nice -n 19 node dist/accu_stats/accu_stats/index.js",
+    "accu_stats_3vs3": "HX_SELECTOR=3vs3 nice -n 19 node dist/accu_stats/accu_stats/index.js",
+    "accu_stats_4vs4": "HX_SELECTOR=4vs4 nice -n 19 node dist/accu_stats/accu_stats/index.js",
     "start": "echo \"No longer supported\" && exit 1"
   },
   "keywords": [],

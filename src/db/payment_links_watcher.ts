@@ -31,7 +31,7 @@ export class PaymentLinksWatcher extends BaseDB {
       END;
     `;
 
-    await this.db.exec(createTableQuery, (e) => e && hb_log(`!! create payment_links_log error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'payment_links_log');
   }
 
   setCallback(callback: (auth_id: string, transaction_id: number) => void, selector: string): void {

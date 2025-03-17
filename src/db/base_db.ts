@@ -24,4 +24,17 @@ export class BaseDB {
       });
     });
   }
+
+  promiseQuery(query: string, elementName: string) {
+    return new Promise<void>((resolve, reject) => {
+      this.db.run(query, (e) => {
+        if (e) {
+          hb_log(`!! create ${elementName} error: ${e}`);
+          reject(e);
+        } else {
+          resolve();
+        }
+      });
+    });
+  };
 }

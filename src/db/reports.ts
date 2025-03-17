@@ -19,7 +19,7 @@ export class ReportsDB extends BaseDB {
           at TEXT
         );
       `;
-    await this.db.run(createReportsTableQuery, (e) => e && hb_log(`!! create reports error: ${e}`));
+    await this.promiseQuery(createReportsTableQuery, 'reports');
   }
 
   addReport(player_name: string, auth_id: string, report: string) {

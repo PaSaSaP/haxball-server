@@ -36,9 +36,9 @@ export class TopRatingsDB extends BaseDB {
         clean_sheets INTEGER DEFAULT 0
     );`;
 
-    await this.db.run(createSettingsQuery, (e) =>  e && hb_log(`!! create top_ratings_settings error: ${e}`));
-    await this.db.run(insertDefaultSettingsQuery, (e) => e && hb_log(`!! insert first top_ratings_settings error: ${e}`));
-    await this.db.run(createTopRatingsQuery, (e) => e && hb_log(`!! create top_ratings error: ${e}`));
+    await this.promiseQuery(createSettingsQuery, 'create top_ratings_settings');
+    await this.promiseQuery(insertDefaultSettingsQuery, 'insert first top_ratings_settings');
+    await this.promiseQuery(createTopRatingsQuery, 'top_ratings');
   }
 
   async updateTopRatingsFrom(playerTopRatings: PlayerTopRatingData[]): Promise<void> {

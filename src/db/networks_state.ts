@@ -18,7 +18,7 @@ export class NetworksStateDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! creating networks_state error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'networks_state');
   }
 
   async getAllNetworksGameState(): Promise<Map<string, NetworksGameState>> {

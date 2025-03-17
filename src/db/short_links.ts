@@ -21,7 +21,7 @@ export class ShortLinksDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create short_links error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'short_links');
   }
 
   async insertShortLink(hash: string, long_link: string): Promise<void> {

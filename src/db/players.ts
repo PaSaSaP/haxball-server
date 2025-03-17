@@ -18,7 +18,7 @@ export class PlayersDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createPlayersTableQuery, (e) => e && hb_log(`!! create players error: ${e}`));
+    await this.promiseQuery(createPlayersTableQuery, 'players');
   }
 
   async updateAdminLevel(auth_id: string, new_admin_level: number): Promise<void> {

@@ -44,13 +44,13 @@ runTest("3v3 full match - red team wins", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 1;
   match.matchEndTime = 3 * 60;
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   for (let i = 1; i <= 3; i++) {
     const player = playerStats.get(i)!;
@@ -77,14 +77,14 @@ runTest("3v3 one player joins late", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 1;
   match.matchEndTime = 3 * 60;
   match.stat(2).joinedAt = 150;
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   const player2 = playerStats.get(2)!;
   assertEqual(player2.games, 1, "Player 2 should have 1 game");
@@ -102,7 +102,7 @@ runTest("3v3 one player leaves early with lead", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 1;
@@ -110,7 +110,7 @@ runTest("3v3 one player leaves early with lead", () => {
   match.matchEndTime = 3 * 60;
   match.stat(3).leftAt = 30;
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   const player3 = playerStats.get(3)!;
   assertEqual(player3.games, 1, "Player 3 should have 1 game");
@@ -150,7 +150,7 @@ runTest("1000 matches for 20 players with specific win ratios", () => {
 
   for (let m = 0; m < 1000; m++) {
     // if (m == 998) ratings.debug = true;
-    const match = new Match();
+    const match = new Match('3vs3');
     const allPlayers = Array.from(playerStats.keys());
     const shuffled = allPlayers.sort(() => Math.random() - 0.5);
     match.redTeam = shuffled.slice(0, 3);
@@ -186,7 +186,7 @@ runTest("1000 matches for 20 players with specific win ratios", () => {
     // match.winnerTeam = Math.random() < (redWinProb / (Math.abs(redWinProb) + 1)) ? 1 : 2; // Normalizacja i losowość
 
 
-    ratings.updatePlayersRating(match, playerStats);
+    ratings.calculateNewPlayersRating(match, playerStats);
 
         // Aktualizacja liczników
         match.redTeam.forEach(id => {
@@ -223,22 +223,22 @@ runTest("3v3 rematch after close win - rating stabilization", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match1 = new Match();
+  const match1 = new Match('3vs3');
   match1.redTeam = [1, 2, 3];
   match1.blueTeam = [4, 5, 6];
   match1.winnerTeam = 1;
   match1.goals = [[3 * 60 - 10, 1]]; // Czerwoni wygrywają 1:0 w ostatniej chwili
   match1.matchEndTime = 3 * 60;
-  ratings.updatePlayersRating(match1, playerStats);
+  ratings.calculateNewPlayersRating(match1, playerStats);
   ratings.LogTop();
 
-  const match2 = new Match();
+  const match2 = new Match('3vs3');
   match2.redTeam = [1, 2, 3];
   match2.blueTeam = [4, 5, 6];
   match2.winnerTeam = 2;
   match2.goals = [[3 * 60 - 10, 2]]; // Niebiescy wygrywają 1:0
   match2.matchEndTime = 3 * 60;
-  ratings.updatePlayersRating(match2, playerStats);
+  ratings.calculateNewPlayersRating(match2, playerStats);
   ratings.LogTop();
 
   const player1 = playerStats.get(1)!;
@@ -262,21 +262,21 @@ runTest("3vs3 rematch - win then lose x 1000", () => {
   let rdLog = 300;
 
   for (let i = 0; i < 500; i++) {
-    const match1 = new Match();
+    const match1 = new Match('3vs3');
     match1.redTeam = [1, 2, 3];
     match1.blueTeam = [4, 5, 6];
     match1.winnerTeam = 1;
     match1.goals = [[3 * 60 - 10, 1]]; // Czerwoni wygrywają 1:0 w ostatniej chwili
     match1.matchEndTime = 3 * 60;
-    ratings.updatePlayersRating(match1, playerStats);
+    ratings.calculateNewPlayersRating(match1, playerStats);
 
-    const match2 = new Match();
+    const match2 = new Match('3vs3');
     match2.redTeam = [1, 2, 3];
     match2.blueTeam = [4, 5, 6];
     match2.winnerTeam = 2;
     match2.goals = [[3 * 60 - 10, 2]]; // Niebiescy wygrywają 1:0
     match2.matchEndTime = 3 * 60;
-    ratings.updatePlayersRating(match2, playerStats);
+    ratings.calculateNewPlayersRating(match2, playerStats);
 
     let rd = playerStats.get(1)!.glickoPlayer!.getRd();
     if (rd < rdLog) {
@@ -311,13 +311,13 @@ runTest("3v3 unbalanced teams - rating reflects skill gap", () => {
 
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 1;
   match.matchEndTime = 3 * 60;
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   ratings.LogTop();
 
   const player1 = playerStats.get(1)!;
@@ -337,7 +337,7 @@ runTest("3v3 partial participation - weights affect rating", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 1;
@@ -345,7 +345,7 @@ runTest("3v3 partial participation - weights affect rating", () => {
   match.stat(1).joinedAt = 90; // Gracz 1 dołącza w połowie
   match.stat(4).leftAt = 90; // Gracz 4 wychodzi w połowie
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   const player1 = playerStats.get(1)!;
   assertEqual(player1.games, 1, "Player 1 should have 1 game");
@@ -370,7 +370,7 @@ runTest("3v3 - AFK penalty at halftime", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 1;
@@ -378,7 +378,7 @@ runTest("3v3 - AFK penalty at halftime", () => {
   match.stat(4).leftAt = 90; // Gracz 4 wychodzi w połowie
   match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   const player4 = playerStats.get(4)!;
   assertEqual(player4.games, 1, "Player 4 should have 1 game");
@@ -395,7 +395,7 @@ runTest("3v3 - VoteKicked penalty near start", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 1;
@@ -403,7 +403,7 @@ runTest("3v3 - VoteKicked penalty near start", () => {
   match.stat(2).leftAt = 30; // Gracz 2 wychodzi po 30s
   match.stat(2).leftDueTo = PlayerLeavedDueTo.voteKicked;
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   const player2 = playerStats.get(2)!;
   assertEqual(player2.games, 1, "Player 2 should have 1 game");
@@ -419,7 +419,7 @@ runTest("3v3 - LeftServer penalty late but before 90%", () => {
     playerStats.set(i, createPlayerStat(i, glicko));
   }
 
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3];
   match.blueTeam = [4, 5, 6];
   match.winnerTeam = 2;
@@ -427,7 +427,7 @@ runTest("3v3 - LeftServer penalty late but before 90%", () => {
   match.stat(1).leftAt = 150; // Gracz 1 wychodzi na 30s przed końcem (83%)
   match.stat(1).leftDueTo = PlayerLeavedDueTo.leftServer;
 
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   const player1 = playerStats.get(1)!;
   assertEqual(player1.games, 1, "Player 1 should have 1 game");
@@ -441,10 +441,10 @@ runTest("AFK at start", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).leftAt = 0; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1450, "Player 4 should lose ~50 for AFK at start");
 });
 
@@ -454,10 +454,10 @@ runTest("AFK at start 5s loser", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).leftAt = 5; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1450, "Player 4 should lose ~50 for AFK at start");
 });
 
@@ -467,10 +467,10 @@ runTest("AFK at start 5s winner", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
   match.stat(4).leftAt = 5; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1450, "Player 4 should lose ~50 for AFK at start");
 });
 
@@ -480,10 +480,10 @@ runTest("AFK at end", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).leftAt = 170; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() > 1470, "Player 4 should lose <30 for AFK near end");
 });
 
@@ -493,10 +493,10 @@ runTest("LeftServer at start", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).leftAt = 0; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1470, "Player 4 should lose ~30 for leaving at start");
 });
 
@@ -506,10 +506,10 @@ runTest("LeftServer at end", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).leftAt = 170; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() > 1200, "Player 4 should lose <20 for leaving near end");
 });
 
@@ -519,10 +519,10 @@ runTest("LeftServer at beginning", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).leftAt = 0; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() > 1200, "Player 4 should lose <20 for leaving near end");
 });
 
@@ -532,10 +532,10 @@ runTest("Join mid-game, no leave - no penalty", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).joinedAt = 90; // Dołącza w połowie
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() >= 1500, "Player 4 should not lose rating for joining mid-game");
 });
 
@@ -545,10 +545,10 @@ runTest("Join mid-game, AFK mid-game - penalty", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).joinedAt = 60; match.stat(4).leftAt = 120; match.stat(4).leftDueTo = PlayerLeavedDueTo.afk;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1500, "Player 4 should lose rating for AFK after joining mid-game");
 });
 
@@ -558,10 +558,10 @@ runTest("Join at start, leave mid-game - penalty", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 1; match.matchEndTime = 180;
   match.stat(4).joinedAt = 0; match.stat(4).leftAt = 90; match.stat(4).leftDueTo = PlayerLeavedDueTo.leftServer;
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(4)!.glickoPlayer!.getRating() < 1470, "Player 4 should lose rating for leaving mid-game");
 });
 
@@ -571,10 +571,10 @@ runTest("Join mid-game, finish - gain rating", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
   match.stat(5).joinedAt = 90; // Dołącza w połowie, wygrywa
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(5)!.glickoPlayer!.getRating() > 1500, "Player 5 should gain rating for joining mid-game and winning");
 });
 
@@ -583,10 +583,10 @@ runTest("Mid-game join, big impact", () => {
   let ratings = new Ratings(glicko);
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
   match.stat(5).joinedAt = 90; match.goals = [[100, 2], [120, 2]]; // +2 po dołączeniu
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(5)!.glickoPlayer!.getRating() > 1500, "Player 5 should gain for big impact");
 });
 
@@ -596,11 +596,11 @@ runTest("Join then leave", () => {
   // ratings.debug = true;
   const playerStats = new Map<number, PlayerStat>();
   for (let i = 1; i <= 6; i++) playerStats.set(i, createPlayerStat(i, glicko));
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; match.blueTeam = [4, 5, 6]; match.winnerTeam = 2; match.matchEndTime = 180;
   match.stat(5).joinedAt = 90; match.stat(5).leftAt = 130; match.stat(5).leftDueTo = PlayerLeavedDueTo.leftServer;
   match.goals = [[100, 2], [120, 2]]; // +2 po dołączeniu
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
   assertTrue(playerStats.get(5)!.glickoPlayer!.getRating() > 1500, "Player 5 should gain for big impact");
 });
 
@@ -619,14 +619,14 @@ runTest("Top player with 2200 loses with teammates 1850 vs 1750 opponents", () =
   playerStats.set(6, createPlayerStat(6, glicko, 1750, 30, 0.02)); // Przeciwnik 3
 
   // Definiowanie meczu: czerwoni (2200, 1850, 1850) vs niebiescy (1750, 1750, 1750)
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; // Drużyna z top graczem
   match.blueTeam = [4, 5, 6]; // Drużyna przeciwna
   match.winnerTeam = 2; // Niebiescy wygrywają (2 = blue team)
   match.matchEndTime = 180; // Standardowy czas meczu (3 minuty)
 
   // Aktualizacja statystyk po meczu
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   // Sprawdzenie wyników
   const topPlayerRatingAfter = playerStats.get(1)!.glickoPlayer!.getRating();
@@ -651,14 +651,14 @@ runTest("Top player with 2200 loses with teammates 1850 vs 1750 opponents curren
   playerStats.set(6, createPlayerStat(6, glicko, 1750, 80, 0.06)); // Przeciwnik 3
 
   // Definiowanie meczu: czerwoni (2200, 1850, 1850) vs niebiescy (1750, 1750, 1750)
-  const match = new Match();
+  const match = new Match('3vs3');
   match.redTeam = [1, 2, 3]; // Drużyna z top graczem
   match.blueTeam = [4, 5, 6]; // Drużyna przeciwna
   match.winnerTeam = 2; // Niebiescy wygrywają (2 = blue team)
   match.matchEndTime = 180; // Standardowy czas meczu (3 minuty)
 
   // Aktualizacja statystyk po meczu
-  ratings.updatePlayersRating(match, playerStats);
+  ratings.calculateNewPlayersRating(match, playerStats);
 
   // Sprawdzenie wyników
   const topPlayerRatingAfter = playerStats.get(1)!.glickoPlayer!.getRating();
@@ -684,7 +684,7 @@ runTest("Player with 2 wins and 1 loss reaching rating milestones", () => {
   while (currentRating < 2200) {
     // Cykl: 2 wygrane, 1 przegrana
     for (let i = 0; i < 3; i++) {
-      const match = new Match();
+      const match = new Match('3vs3');
       match.redTeam = [1, 2, 3]; // Nasz gracz + teammates
       match.blueTeam = [4, 5, 6]; // Przeciwnicy
       match.matchEndTime = 180;
@@ -695,7 +695,7 @@ runTest("Player with 2 wins and 1 loss reaching rating milestones", () => {
         match.winnerTeam = 2; // Przegrana czerwonych (1 raz)
       }
 
-      ratings.updatePlayersRating(match, playerStats);
+      ratings.calculateNewPlayersRating(match, playerStats);
       matchesPlayed++;
       currentRating = playerStats.get(1)!.glickoPlayer!.getRating();
       for (let i = 2; i <= 6; i++) playerStats.get(i)!.glickoPlayer?.setRating(currentRating);
@@ -730,7 +730,7 @@ runTest("Player with 3 wins and 1 loss reaching rating milestones", () => {
   while (currentRating < 2200) {
     // Cykl: 3 wygrane, 1 przegrana
     for (let i = 0; i < 4; i++) {
-      const match = new Match();
+      const match = new Match('3vs3');
       match.redTeam = [1, 2, 3]; // Nasz gracz + teammates
       match.blueTeam = [4, 5, 6]; // Przeciwnicy
       match.matchEndTime = 180;
@@ -741,7 +741,7 @@ runTest("Player with 3 wins and 1 loss reaching rating milestones", () => {
         match.winnerTeam = 2; // Przegrana czerwonych (1 raz)
       }
 
-      ratings.updatePlayersRating(match, playerStats);
+      ratings.calculateNewPlayersRating(match, playerStats);
       matchesPlayed++;
       currentRating = playerStats.get(1)!.glickoPlayer!.getRating();
       for (let i = 2; i <= 6; i++) playerStats.get(i)!.glickoPlayer?.setRating(currentRating);
@@ -776,7 +776,7 @@ runTest("Player with 4 wins and 1 loss reaching rating milestones", () => {
   while (currentRating < 2200) {
     // Cykl: 4 wygrane, 1 przegrana
     for (let i = 0; i < 5; i++) {
-      const match = new Match();
+      const match = new Match('3vs3');
       match.redTeam = [1, 2, 3]; // Nasz gracz + teammates
       match.blueTeam = [4, 5, 6]; // Przeciwnicy
       match.matchEndTime = 180;
@@ -787,7 +787,7 @@ runTest("Player with 4 wins and 1 loss reaching rating milestones", () => {
         match.winnerTeam = 2; // Przegrana czerwonych (1 raz)
       }
 
-      ratings.updatePlayersRating(match, playerStats);
+      ratings.calculateNewPlayersRating(match, playerStats);
       matchesPlayed++;
       currentRating = playerStats.get(1)!.glickoPlayer!.getRating();
       for (let i = 2; i <= 6; i++) playerStats.get(i)!.glickoPlayer?.setRating(currentRating);

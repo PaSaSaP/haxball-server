@@ -18,7 +18,7 @@ export class PlayersStateDB extends BaseDB {
       );
     `;
 
-    await this.db.run(createTableQuery, (e) => e && hb_log(`!! create players_state error: ${e}`));
+    await this.promiseQuery(createTableQuery, 'players_state');
   }
 
   async getAllPlayersGameState(): Promise<Map<string, PlayersGameState>> {

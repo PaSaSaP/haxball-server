@@ -331,8 +331,11 @@ export enum MatchStatsProcessingState {
   updated
 }
 
+export type GameModeType = '1vs1' | '2vs2' | '3vs3' | '4vs4';
+export type MatchType = 'none' | GameModeType;
 export class Match {
   matchId: number; // relates to match_id from DB, changed after insertion into DB
+  matchType: MatchType;
   redScore: number; // goals scored by red
   blueScore: number; // goals scored by blue
   matchEndTime: number; // total [seconds]
@@ -352,8 +355,9 @@ export class Match {
   pressureBlue: number; // pressure by blue, 0-100 [%], (it is of course: 100 - pressureRed)
   possessionRed: number;
 
-  constructor() {
+  constructor(matchType: MatchType) {
     this.matchId = -1;
+    this.matchType = matchType;
     this.redScore = 0;
     this.blueScore = 0;
     this.matchEndTime = 0;
