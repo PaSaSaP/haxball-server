@@ -14,6 +14,7 @@ import Glicko2 from 'glicko2';
 import { getTimestampHM } from '../src/utils';
 import { promises as fs } from "fs";
 import { timeStamp } from 'console';
+import { hb_log } from '../src/log';
 
 if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
 const selector = process.env.HX_SELECTOR;
@@ -392,6 +393,9 @@ class AccuStats {
     let daysSet: Set<string> = new Set(matchIdsByDay.keys());
     rollingDaysArray.forEach(day => daysSet.add(day));
     let days = Array.from(daysSet).sort((lhs: string, rhs: string) => lhs < rhs ? -1 : 1);
+    for (let day of days) {
+      if (!matchIdsByDay.has(day)) matchIdsByDay.set(day, new Set());
+    }
     console.log(`Concat match ids for days ${days.join(" ")}`);
     for (let i = 0; i < days.length-1; ++i) {
       let matchIdsInto = matchIdsByDay.get(days[i])!;
@@ -400,6 +404,7 @@ class AccuStats {
         matchIdsFrom.forEach(matchId => matchIdsInto.add(matchId));
       }
     }
+    console.log(`matchIds count ${matchIdsByDay.size}`);
 
     for (let s of matchStats) {
       let match = matchesByMatchId.get(s.match_id);
@@ -414,6 +419,10 @@ class AccuStats {
     if (weekAgoDate < days[0]) weekAgoDate = days[0];
     const oldestDate = days[0];
     for (let [day, matchIds] of matchIdsByDay) {
+      if (!matchIds.size) {
+        console.log(`EMpty matchIds for ${day}`);
+        continue;
+      }
       let rr = rrByDate.get(day) ?? [];
       let minGames = 0;
       let playersLimit = 0;
@@ -427,27 +436,21 @@ class AccuStats {
         minGames = settings.min_full_games;
         playersLimit = settings.players_limit;
       }
-      let ratings = this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId, minGames, playersLimit);
+      await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId, minGames, playersLimit);
       if (day == todayDate) {
-        await this.topRatingsDaily.updateTopRatingsFrom(ratings).catch((e) => e && console.error(`daily updateTopRatingsFrom error: ${e}`));
+        await this.updateTopRanking(playerNames, day, minGames, playersLimit, this.topRatingsDaily);
       }
       if (day == weekAgoDate) {
         if (weekAgoDate == todayDate) {
-          ratings = ratings.filter(e => e.games > settings.min_full_games_weekly);
-          for (let i = 0; i < ratings.length; ++i) {
-            ratings[i].rank = i + 1;
-          }
+          minGames = settings.min_full_games_weekly;
         }
-        await this.topRatingsWeekly.updateTopRatingsFrom(ratings).catch((e) => e && console.error(`weekly updateTopRatingsFrom error: ${e}`));
+        await this.updateTopRanking(playerNames, day, minGames, playersLimit, this.topRatingsWeekly);
       }
       if (day == oldestDate) {
         if (oldestDate == weekAgoDate) {
-          ratings = ratings.filter(e => e.games > settings.min_full_games);
-          for (let i = 0; i < ratings.length; ++i) {
-            ratings[i].rank = i + 1;
-          }
+          minGames = settings.min_full_games;
         }
-        await this.topRatingsTotal.updateTopRatingsFrom(ratings).catch((e) => e && console.error(`total updateTopRatingsFrom error: ${e}`));
+        await this.updateTopRanking(playerNames, day, minGames, playersLimit, this.topRatingsTotal);
       }
     }
   }
@@ -462,9 +465,9 @@ class AccuStats {
     return date.toISOString().split("T")[0]; // Format YYYY-MM-DD
   }
 
-  calculateRollingRating(playerNames: Map<string, string>, matchDay: string, rollingRatings: RollingRatingsData[],
+  async calculateRollingRating(playerNames: Map<string, string>, matchDay: string, rollingRatings: RollingRatingsData[],
     affectedMatchIds: Set<number>, matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }>,
-    minGames: number, playersLimit: number): PlayerTopRatingData[] {
+    minGames: number, playersLimit: number) {
     console.log(`calculateRollingRating for day: ${matchDay} elements: ${rollingRatings.length} minGames: ${minGames} pLimit: ${playersLimit}`);
     let glicko = new Glicko2.Glicko2();
     let ratings = new Ratings(glicko);
@@ -480,7 +483,7 @@ class AccuStats {
       return playerIdByAuth.get(authId)!;
     }
 
-    let playerTopRatings = new Map<number, RollingRatingsData>();
+    let playerTopRatings: Map<number, RollingRatingsData> = new Map();
     for (let rr of rollingRatings) {
       let playerId = getPlayerIdByAuth(rr.auth_id);
       playerTopRatings.set(playerId, rr);
@@ -570,42 +573,33 @@ class AccuStats {
       // console.log(`${playerId} => ${stat.id} games:${stat.games}/${ptr.games} goals:${stat.goals}/${ptr.goals}`)
     }
 
-    playerTopRatings.forEach(rr => {
-      this.rollingRatings.updateRollingRatingsFrom(rr);
-    })
-
-    if (playersLimit === 0) return [];
-    let playerTopRatingsArray = Array.from(playerTopRatings.values());
-    playerTopRatingsArray = playerTopRatingsArray.sort((lhs: RollingRatingsData, rhs: RollingRatingsData) =>
-      rhs.mu - lhs.mu);
-    const nAll = playerTopRatingsArray.length;
-    playerTopRatingsArray = playerTopRatingsArray.filter(e => e.games >= minGames);
-    const nGames = playerTopRatingsArray.length;
-    playerTopRatingsArray = playerTopRatingsArray.slice(0, playersLimit);
-    const nLimit = playerTopRatingsArray.length;
-
-    let result: PlayerTopRatingData[] = [];
-    for (let i = 0; i < playerTopRatingsArray.length; i++) {
-      let r = playerTopRatingsArray[i];
-      result.push({
-        rank: i + 1,
-        auth_id: r.auth_id,
-        player_name: playerNames.get(r.auth_id) ?? 'GOD',
-        rating: Math.floor(r.mu),
-        games: r.games,
-        wins: r.wins,
-        goals: r.goals,
-        assists: r.assists,
-        own_goals: r.own_goals,
-        clean_sheets: r.clean_sheets
-      })
+    for (let [playerId, rr] of playerTopRatings) {
+      await this.rollingRatings.updateRollingRatingsFrom(rr).catch((e) => hb_log(`!! updateRollingRatingsFrom error: ${e}`));
     }
-    // for (let i = 0; i < 5 && i < result.length; ++i) {
-    //   let r = result[i];
-    //   console.log(`${i} => ${r.player_name} ${r.games} ${r.goals}`);
-    // }
-    console.log(`Done, all:${nAll} games:${nGames} limit:${nLimit}, settings.min=${minGames} settings.limit=${playersLimit}`);
-    return result;
+  }
+
+  async updateTopRanking(playerNames: Map<string, string>, day: string, minGames: number, playersLimit: number, ratingsDb: TopRatingsDailyDB| TopRatingsWeeklyDB|TopRatingsDB) {
+    try {
+      let allRatings = await this.rollingRatings.getRollingRatingsByDate(day, minGames, playersLimit);
+      let result: PlayerTopRatingData[] = [];
+      for (let i = 0; i < allRatings.length; i++) {
+        let r = allRatings[i];
+        result.push({
+          rank: i + 1,
+          auth_id: r.auth_id,
+          player_name: playerNames.get(r.auth_id) ?? 'GOD',
+          rating: Math.floor(r.mu),
+          games: r.games,
+          wins: r.wins,
+          goals: r.goals,
+          assists: r.assists,
+          own_goals: r.own_goals,
+          clean_sheets: r.clean_sheets
+        });
+      }
+      await ratingsDb.updateTopRatingsFrom(result).catch((e) => hb_log(`!! updateTopRatingsFrom ${day} error: ${e}`));
+      console.log(`Done, inRanking: ${result.length} settings.min: ${minGames} settings.limit: ${playersLimit}`);
+    } catch (e) { hb_log(`!!recalcTopRanking error: ${e}`) };
   }
 }
 

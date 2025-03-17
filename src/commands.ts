@@ -1397,9 +1397,9 @@ class Commander {
     if (this.warnIfPlayerIsNotHost(player, 'auto_debug')) return;
     if (!this.hb_room.ratings_for_all_games) {
       this.hb_room.player_duplicate_allowed = true;
-      this.hb_room.limit = 3;
+      this.hb_room.limit = Number.parseInt(cmds[0]) || 3;
       this.hb_room.auto_afk = false;
-      this.hb_room.auto_bot.MaxMatchTime = cmds.length? 10: 150;
+      this.hb_room.auto_bot.MaxMatchTime = Number.parseInt(cmds[1]) || 150;
       this.hb_room.auto_bot.autoVoter.setRequiredVotes(2);
       this.commandAutoMode(player, ["on"]);
     } else {

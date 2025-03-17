@@ -137,7 +137,24 @@ export class RollingRatingsDB extends BaseDB {
     });
   }
 
-  async getRollingRatingsAfterMatchId(match_id: number): Promise<RollingRatingsData[]|null> {
+  async getRollingRatingsByDate(date: string, min_games: number, limit_players: number): Promise<RollingRatingsData[]> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT auth_id, date, match_id, mu, rd, vol, games, wins, goals, assists, own_goals, clean_sheets,
+          playtime, left_afk, left_votekick, left_server
+        FROM rolling_ratings
+        WHERE date = ? AND games > ?
+        ORDER BY mu DESC
+        LIMIT ?;
+      `;
+      this.db.all(query, [date, min_games-1, limit_players], (err: any, rows: RollingRatingsData[]) => {
+        if (err) return reject(`Error fetching from rolling_ratings: ${err.message}`);
+        resolve(rows? rows as RollingRatingsData[]: []);
+      });
+    });
+  }
+
+  async getRollingRatingsAfterMatchId(match_id: number): Promise<RollingRatingsData[]> {
     return new Promise((resolve, reject) => {
       const query = `
         SELECT DISTINCT rr.*
@@ -148,7 +165,7 @@ export class RollingRatingsDB extends BaseDB {
       `;
       this.db.all(query, [match_id], (err: any, rows: RollingRatingsData[]) => {
         if (err) return reject(`Error fetching from rolling_ratings: ${err.message}`);
-        resolve(rows? rows as RollingRatingsData[]: null);
+        resolve(rows? rows as RollingRatingsData[]: []);
       });
     });
   }
@@ -169,12 +186,12 @@ export class RollingRatingsDB extends BaseDB {
 
   async getRollingRatingAllDays(): Promise<string[]> {
     return new Promise((resolve, reject) => {
-      const query = `SELECT date FROM rolling_ratings;`;
-      this.db.all(query, [], (err: any, rows: {date: string}) => {
+      const query = `SELECT DISTINCT date FROM rolling_ratings;`;
+      this.db.all(query, [], (err: any, rows: {date: string}[]) => {
         if (err) {
           reject('Error fetching dates: ' + err.message);
         } else {
-          resolve(Array.isArray(rows) ? rows.map(row => row.date) : []);
+          resolve(rows? rows.map(row => row.date): []);
         }
       });
     });

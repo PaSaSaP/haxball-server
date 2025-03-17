@@ -5,13 +5,16 @@
 import { tokenDatabase, ServerData } from './token_database';
 import * as config from './config';
 import ChatLogger from './chat_logger';
-import { sleep, normalizeNameString, getTimestampHMS, getTimestampHM } from './utils';
+import { sleep, normalizeNameString } from './utils';
 import { Emoji } from './emoji';
 import { ScoreCaptcha } from './captcha';
 import { BallPossessionTracker } from './possesion_tracker';
 import { AntiSpam } from './anti_spam';
 import { PlayerAccelerator } from './player_accelerator';
-import { PPP, AdminStats, PlayerData, PlayerStat, MatchStatsProcessingState, TransactionByPlayerInfo, PlayerTopRatingDataShort, PlayerMatchStatsData, Match, PlayerLeavedDueTo, PlayerRatingData } from './structs';
+import {
+  PPP, AdminStats, PlayerData, PlayerStat, MatchStatsProcessingState, TransactionByPlayerInfo,
+  PlayerTopRatingDataShort, PlayerMatchStatsData, Match, PlayerLeavedDueTo, PlayerRatingData
+} from './structs';
 import { Colors } from './colors';
 import all_maps from './maps';
 import { BuyCoffee } from './buy_coffee';
@@ -494,9 +497,14 @@ export class HaxballRoom {
       if (player.team == 1) red++;
       else if (player.team == 2) blue++;
     });
-    if ((red >= 2 && blue >= 3) || (red >= 3 && blue >= 2)) {
+    if (red >= 4 && blue >= 4) {
+      this.setScoreTimeLimit(4, 4);
+      this.setMapByName("futsal_huge");
+    }  else if ((red >= 2 && blue >= 3) || (red >= 3 && blue >= 2)) {
+      this.setScoreTimeLimit(3, 3);
       this.setMapByName("futsal_big");
     } else {
+      this.setScoreTimeLimit(3, 2);
       this.setMapByName("futsal");
     }
   }
@@ -994,6 +1002,11 @@ export class HaxballRoom {
   setDefaultScoreTimeLimit() {
     this.room.setScoreLimit(3);
     this.room.setTimeLimit(this.limit == 1 ? 2 : 3);
+  }
+
+  setScoreTimeLimit(score: number, time: number) {
+    this.room.setScoreLimit(score);
+    this.room.setTimeLimit(time);
   }
 
   setDefaultKickRateLimit() {
