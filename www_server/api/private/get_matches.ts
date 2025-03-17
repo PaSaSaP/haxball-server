@@ -4,19 +4,19 @@ import { MatchEntry, MatchesDB } from "../../../src/db/matches";
 import * as config from "../../../src/config";
 import * as secrets from "../../../src/secrets";
 import { getTimestampHM } from "../../../src/utils";
-import { match } from "assert";
 
 const router = express.Router();
 
 let roomConfig3vs3 = config.getRoomConfig("3vs3");
 let roomConfig1vs1 = config.getRoomConfig("1vs1");
 
+type CacheData = [number, string, number, boolean, number, number, number, number, number];
 interface Cache {
   which: "1vs1"|"3vs3";
   dbFile: string;
   matches: MatchEntry[];
   matchByMatchId: Map<number, MatchEntry>;
-  cache: [number, string, number, boolean, number, number, number, number, number][];
+  cache: CacheData[];
   lastMatchId: number;
   lastFetchTime: number;
 }
@@ -31,8 +31,14 @@ let matches3vs3Cache: Cache = {
 
 const CACHE_DURATION = 1 * 60 * 1000; // 1 minute
 
-function matchToArray(m: MatchEntry): [number, string, number, boolean, number, number, number, number, number] {
+function matchToArray(m: MatchEntry): CacheData {
   return [m.match_id, m.date, m.duration, m.full_time, m.winner, m.red_score, m.blue_score, m.pressure, m.possession];
+}
+
+function getCacheDataFromMatchId(cache: Cache, match_id: number): CacheData[] {
+  const idx = cache.cache.findIndex(e => e[0] == match_id);
+  if (idx === -1) return [];
+  return cache.cache.slice(idx);
 }
 
 async function fetchMatches(cache: Cache) {
@@ -135,6 +141,20 @@ router.get("/3vs3/id/:matchId", async (req: any, res: any) => {
   let m = cached.matchByMatchId.get(matchId as number);
   if (!m) return res.json([]);
   res.json(matchToArray(m));
+});
+router.get("/1vs1/from/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatches1vs1Cached();
+  let selected = getCacheDataFromMatchId(cached, matchId);
+  res.json(selected);
+});
+router.get("/3vs3/from/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatches3vs3Cached();
+  let selected = getCacheDataFromMatchId(cached, matchId);
+  res.json(selected);
 });
 router.get("/1vs1/first_match_id", async (req: any, res: any) => {
   if (!verify(req, res)) return;

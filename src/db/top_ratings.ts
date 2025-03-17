@@ -41,65 +41,51 @@ export class TopRatingsDB extends BaseDB {
     await this.db.run(createTopRatingsQuery, (e) => e && hb_log(`!! create top_ratings error: ${e}`));
   }
 
-  async updateTopRatings(playerMap: Map<string, string>): Promise<void> {
+  async updateTopRatingsFrom(playerTopRatings: PlayerTopRatingData[]): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.serialize(() => {
+        // Rozpoczynamy transakcję
         this.db.run("BEGIN TRANSACTION");
-
-        const settingsQuery = "SELECT min_full_games, players_limit FROM top_ratings_settings LIMIT 1";
-        this.db.get(settingsQuery, (err, settings: {min_full_games: string, players_limit: number}) => {
+  
+        // Usuwamy wszystkie dane z tabeli przed wstawieniem nowych
+        this.db.run(`DELETE FROM top_ratings`, (err) => {
           if (err) {
+            // Jeśli wystąpił błąd podczas usuwania, anulujemy transakcję
             this.db.run("ROLLBACK");
-            return reject("Error fetching settings: " + err.message);
+            return reject(`Error deleting from top_ratings: ${err.message}`);
           }
-
-          const minFullGames = settings?.min_full_games || 20;
-          const playersLimit = settings?.players_limit || 100;
-
-          this.db.run("DELETE FROM top_ratings", (err) => {
+  
+          const insertQuery = `
+            INSERT INTO top_ratings (rank, auth_id, player_name, rating, games, wins, goals, assists, own_goals, clean_sheets)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `;
+    
+          // Przygotowujemy zapytanie wstawiające dane
+          const stmt = this.db.prepare(insertQuery);
+    
+          // Wstawiamy dane w pętli
+          playerTopRatings.forEach((row) => {
+            stmt.run(row.rank, row.auth_id, row.player_name, Math.round(row.rating), row.games,
+              row.wins, row.goals, row.assists, row.own_goals, row.clean_sheets);
+          });
+    
+          // Finalizujemy zapytanie przygotowane
+          stmt.finalize((err) => {
             if (err) {
+              // Jeśli wystąpił błąd, anulujemy transakcję
               this.db.run("ROLLBACK");
-              return reject("Error deleting from top_ratings: " + err.message);
+              return reject(`Error finalizing statement for top_ratings: ${err.message}`);
             }
-
-            const insertQuery = `
-              INSERT INTO top_ratings (rank, auth_id, player_name, rating, games, wins, goals, assists, own_goals, clean_sheets)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-
-            const selectQuery = `
-              SELECT p.auth_id, r.rating, p.full_games AS games, p.full_wins AS wins, p.goals, p.assists, p.own_goals, p.clean_sheets
-              FROM player_match_stats p
-              JOIN player_ratings r ON p.auth_id = r.auth_id
-              WHERE p.full_games >= ?
-              ORDER BY r.rating DESC
-              LIMIT ?;
-            `;
-
-            this.db.all(selectQuery, [minFullGames, playersLimit], (err, rows: PlayerTopRatingData[]) => {
+    
+            // Zatwierdzamy transakcję
+            this.db.run("COMMIT", (err) => {
               if (err) {
+                // Jeśli wystąpił błąd przy zatwierdzaniu transakcji, anulujemy
                 this.db.run("ROLLBACK");
-                return reject("Error selecting top players: " + err.message);
+                return reject(`Error committing transaction for top_ratings: ${err.message}`);
+              } else {
+                resolve();
               }
-
-              const stmt = this.db.prepare(insertQuery);
-              rows.forEach((row, index) => {
-                const playerName = playerMap.get(row.auth_id) || "GOD";
-                stmt.run(index + 1, row.auth_id, playerName, Math.round(row.rating), row.games,
-                         row.wins, row.goals, row.assists, row.own_goals, row.clean_sheets);
-              });
-
-              stmt.finalize((err) => {
-                if (err) {
-                  this.db.run("ROLLBACK");
-                  return reject("Error finalizing statement: " + err.message);
-                }
-
-                this.db.run("COMMIT", (err) => {
-                  if (err) reject("Error committing transaction: " + err.message);
-                  else resolve();
-                });
-              });
             });
           });
         });

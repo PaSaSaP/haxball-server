@@ -12,12 +12,13 @@ let roomConfig3vs3 = config.getRoomConfig("3vs3");
 let roomConfig1vs1 = config.getRoomConfig("1vs1");
 
 
+type CacheData = [number, string, 0 | 1 | 2, number, number, number, number, number, number, number];
 interface Cache {
   which: "1vs1"|"3vs3";
   dbFile: string;
   matchStats: MatchStatsEntry[];
   matchStatsByMatchId: Map<number, MatchStatsEntry[]>;
-  cache: [number, string, 0|1|2, number, number, number, number, number, number, number][];
+  cache: CacheData[];
   lastRowId: number;
   lastFetchTime: number;
 }
@@ -33,8 +34,14 @@ let matchStats3vs3Cache: Cache = {
 
 const CACHE_DURATION = 1 * 60 * 1000; // 1 minute
 
-function matchToArray(m: MatchStatsEntry): [number, string, 0|1|2, number, number, number, number, number, number, number] {
+function matchToArray(m: MatchStatsEntry): CacheData {
   return [m.match_id, m.auth_id, m.team, m.goals, m.assists, m.own_goals, m.clean_sheet, m.playtime, m.full_time, m.left_state];
+}
+
+function getCacheDataFromMatchId(cache: Cache, match_id: number): CacheData[] {
+  const idx = cache.cache.findIndex(e => e[0] == match_id);
+  if (idx === -1) return [];
+  return cache.cache.slice(idx);
 }
 
 function getCacheMatchStatsByMatchId(cache: Cache, matchId: number) {
@@ -142,6 +149,20 @@ router.get("/3vs3/id/:matchId", async (req: any, res: any) => {
   let m = cached.matchStatsByMatchId.get(matchId);
   if (!m) return res.json([]);
   res.json(m.map(matchToArray));
+});
+router.get("/1vs1/from/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatchStats1vs1Cached();
+  let selected = getCacheDataFromMatchId(cached, matchId);
+  res.json(selected);
+});
+router.get("/3vs3/from/:matchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const matchId = Number(req.params.matchId);
+  let cached = await getMatchStats3vs3Cached();
+  let selected = getCacheDataFromMatchId(cached, matchId);
+  res.json(selected);
 });
 
 export default router;

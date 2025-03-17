@@ -1218,7 +1218,7 @@ export class HaxballRoom {
       if (playerExt.trust_level) {
         let rating = await this.game_state.loadPlayerRating(playerExt.auth_id);
         this.assignPlayerRating(playerExt, rating);
-        hb_log(`RATING get ${playerExt.name} (${rating.rating.mu, rating.rating.rd})`);
+        hb_log(`RATING get ${playerExt.name} (${rating.rating.mu}, ${rating.rating.rd})`);
       }
     }
   }

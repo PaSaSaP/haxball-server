@@ -6,6 +6,7 @@ import { BaseDB } from './base_db';
 export interface TopRatingDaySetings {
   min_full_games_daily: number;
   min_full_games_weekly: number;
+  min_full_games: number;
   players_limit: number;
 }
 
@@ -118,7 +119,7 @@ class BaseTopRatingsDB extends BaseDB {
   }
 
   async getTopRatingDaySettings(): Promise<TopRatingDaySetings> {
-    const query = 'SELECT min_full_games_daily, min_full_games_weekly, players_limit FROM top_ratings_settings LIMIT 1';
+    const query = 'SELECT min_full_games_daily, min_full_games_weekly, min_full_games, players_limit FROM top_ratings_settings LIMIT 1';
     return new Promise((resolve, reject) => {
       this.db.all(query, [], (err, rows: TopRatingDaySetings[]) => {
         if (err) {
