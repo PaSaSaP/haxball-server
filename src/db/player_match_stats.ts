@@ -30,7 +30,7 @@ export class PlayerMatchStatsDB extends BaseDB {
     await this.db.run(createTableQuery, (e) => e && hb_log(`!! create player_match_stats error: ${e}`));
   }
 
-  async loadTotalPlayerMatchStats(auth_id: string): Promise<PlayerMatchStatsData> {
+  async loadTotalPlayerMatchStats(auth_id: string): Promise<PlayerMatchStatsData|null> {
     return new Promise((resolve, reject) => {
       const query = `
         SELECT games, full_games, wins, full_wins, goals, assists, own_goals, playtime, clean_sheets, left_afk, left_votekick, left_server
@@ -41,11 +41,7 @@ export class PlayerMatchStatsDB extends BaseDB {
         if (err) {
           reject('Error loading player match stats: ' + err.message);
         } else if (!row) {
-          // return default zeroed values
-          return {
-            games: 0, full_games: 0, wins: 0, full_wins: 0, goals: 0, assists: 0, own_goals: 0, playtime: 0, clean_sheets: 0,
-            left_afk: 0, left_votekick: 0, left_server: 0
-          }
+          return null;
         } else {
           resolve(row);
         }

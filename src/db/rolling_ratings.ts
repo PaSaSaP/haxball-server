@@ -1,13 +1,14 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
-import { PlayerRatingData, PlayerTopRatingData, PlayerTopRatingDataShort } from '../structs';
 import { BaseDB } from './base_db';
 
 export interface RollingRatingsData {
   auth_id: string;
   date: string;
   match_id: number; // last processed match id, not as key!!
-  rating: PlayerRatingData;
+  mu: number;
+  rd: number;
+  vol: number;
   games: number;
   wins: number;
   goals: number;
@@ -83,9 +84,9 @@ export class RollingRatingsDB extends BaseDB {
         rating.auth_id,
         rating.date,
         rating.match_id,
-        rating.rating.rating.mu,
-        rating.rating.rating.rd,
-        rating.rating.rating.vol,
+        rating.mu,
+        rating.rd,
+        rating.vol,
         rating.games,
         rating.wins,
         rating.goals,
@@ -161,6 +162,19 @@ export class RollingRatingsDB extends BaseDB {
           reject('Error fetching max match_id: ' + err.message);
         } else {
           resolve(row?.max_match_id ?? 0);
+        }
+      });
+    });
+  }
+
+  async getRollingRatingAllDays(): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const query = `SELECT date FROM rolling_ratings;`;
+      this.db.all(query, [], (err: any, rows: {date: string}) => {
+        if (err) {
+          reject('Error fetching dates: ' + err.message);
+        } else {
+          resolve(Array.isArray(rows) ? rows.map(row => row.date) : []);
         }
       });
     });

@@ -28,6 +28,7 @@ import WelcomeMessage from './welcome_message';
 import Pinger from './pinger';
 import { MatchRankChangesEntry } from './db/match_rank_changes';
 import GodCommander from './god_commander';
+import { DelayJoiner } from './delay_join';
 
 
 export class HaxballRoom {
@@ -96,6 +97,7 @@ export class HaxballRoom {
   welcome_message: WelcomeMessage;
   pinger: Pinger;
   god_commander: GodCommander;
+  delay_joiner: DelayJoiner;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -160,6 +162,9 @@ export class HaxballRoom {
     this.pinger = new Pinger(this.getSselector(), () => this.players_ext.size);
     this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
       roomConfig.selector, roomConfig.subselector);
+    this.delay_joiner = new DelayJoiner((player: PlayerData) => { this.auto_bot.handlePlayerJoin(player); },
+      () => { return !this.auto_bot.isLobbyTime(); },
+      this.auto_mode);
     this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
@@ -835,7 +840,7 @@ export class HaxballRoom {
       this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name);
       this.updateAdmins(null);
       this.loadPlayerStat(playerExt);
-      if (this.auto_mode) this.auto_bot.handlePlayerJoin(playerExt);
+      if (this.auto_mode) this.delay_joiner.handlePlayerJoin(playerExt);
       this.rejoice_maker.handlePlayerJoin(playerExt);
       this.welcome_message.sendWelcomeMessage(playerExt);
       const initialMute = playerExt.trust_level < 2;
@@ -883,16 +888,16 @@ export class HaxballRoom {
     }
   }
 
-  assignPlayerRating(playerExt: PlayerData, ratingData: PlayerRatingData|undefined|null) {
-    if (ratingData === undefined || ratingData === null) return;
+  assignPlayerRating(playerExt: PlayerData, ratingData: PlayerRatingData|null) {
+    if (!ratingData) return;
     let g = playerExt.stat.glickoPlayer!;
-    g.setRating(ratingData.rating.mu);
-    g.setRd(ratingData.rating.rd);
-    g.setVol(ratingData.rating.vol);
+    g.setRating(ratingData.mu);
+    g.setRd(ratingData.rd);
+    g.setVol(ratingData.vol);
   }
 
-  assignPlayerMatchStats(stat: PlayerStat, playerMatchStats: PlayerMatchStatsData|undefined|null) {
-    if (playerMatchStats === undefined || playerMatchStats === null) return;
+  assignPlayerMatchStats(stat: PlayerStat, playerMatchStats: PlayerMatchStatsData|null) {
+    if (!playerMatchStats) return;
     stat.games = playerMatchStats.games;
     stat.fullGames = playerMatchStats.full_games;
     stat.wins = playerMatchStats.wins;
@@ -971,6 +976,7 @@ export class HaxballRoom {
     this.removePlayerMuted(player);
     let playerExt = this.Pid(player.id);
     this.match_stats.handlePlayerLeave(playerExt);
+    this.delay_joiner.handlePlayerLeave(playerExt);
     if (this.auto_mode) this.auto_bot.handlePlayerLeave(playerExt);
     playerExt.mark_disconnected();
     this.players_ext.delete(player.id);
@@ -1214,12 +1220,14 @@ export class HaxballRoom {
 
   private async gePlayersRatingWhichPlayedInMatch(inMatch: Match) {
     for (let playerId of inMatch.redTeam.concat(inMatch.blueScore)) {
-      let playerExt = this.Pid(playerId);
-      if (playerExt.trust_level) {
-        let rating = await this.game_state.loadPlayerRating(playerExt.auth_id);
-        this.assignPlayerRating(playerExt, rating);
-        hb_log(`RATING get ${playerExt.name} (${rating.rating.mu}, ${rating.rating.rd})`);
-      }
+      try {
+        let playerExt = this.Pid(playerId);
+        if (playerExt.trust_level) {
+          let rating = await this.game_state.loadPlayerRating(playerExt.auth_id);
+          this.assignPlayerRating(playerExt, rating);
+          // hb_log(`RATING get ${playerExt.name} (${rating.mu}, ${rating.rd})`);
+        }
+      } catch (e) { hb_log(`!! loadPlayerRating error: ${e}`) };
     }
   }
 

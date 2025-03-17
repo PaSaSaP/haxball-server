@@ -22,7 +22,7 @@ export class PlayerRatingsDB extends BaseDB {
     await this.db.run(createPlayerRatingsTableQuery, (e) => e && hb_log(`!! create player_ratings error: ${e}`));
   }
 
-  async loadPlayerRating(auth_id: string): Promise<PlayerRatingData> {
+  async loadPlayerRating(auth_id: string): Promise<PlayerRatingData|null> {
     return new Promise((resolve, reject) => {
       const query = `
         SELECT auth_id, rating, rd, volatility
@@ -33,21 +33,12 @@ export class PlayerRatingsDB extends BaseDB {
         if (err) {
           reject('Error loading player rating: ' + err.message);
         } else if (!row) {
-          // Zwracamy domyślne wartości dla nowego gracza
-          resolve({
-            rating: {
-              mu: PlayerStat.DefaultRating,
-              rd: PlayerStat.DefaultRd,
-              vol: PlayerStat.DefaultVol,
-            },
-          });
+          return null;
         } else {
           resolve({
-            rating: {
-              mu: row.rating,
-              rd: row.rd,
-              vol: row.volatility,
-            },
+            mu: row.rating,
+            rd: row.rd,
+            vol: row.volatility,
           });
         }
       });

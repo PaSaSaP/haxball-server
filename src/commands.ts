@@ -195,6 +195,7 @@ class Commander {
       only_trusted_chat: this.commandOnlyTrustedChat,
       trust_nick: this.commandWhitelistNonTrustedNick,
       auto_debug: this.commandAutoDebug,
+      set_delay: this.commandSetDelayOnJoin,
       set_welcome: this.commandSetWelcomeMsg,
       anno: this.commandSendAnnoToAllPlayers,
 
@@ -1410,6 +1411,16 @@ class Commander {
     }
     this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
     this.sendMsgToPlayer(player, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
+  }
+
+  async commandSetDelayOnJoin(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'set_delay')) return;
+    if (!cmds.length) return;
+    let time = Number.parseInt(cmds[0]);
+    if (!isNaN(time)) {
+      this.hb_room.delay_joiner.DelayTime = time * 1000;
+      this.sendMsgToPlayer(player, `Delay ustawiony na: ${time} s`);
+    }
   }
 
   async commandSetWelcomeMsg(player: PlayerObject, cmds: string[]) {

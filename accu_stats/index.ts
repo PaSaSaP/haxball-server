@@ -13,6 +13,7 @@ import { Ratings } from '../src/rating';
 import Glicko2 from 'glicko2';
 import { getTimestampHM } from '../src/utils';
 import { promises as fs } from "fs";
+import { timeStamp } from 'console';
 
 if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
 const selector = process.env.HX_SELECTOR;
@@ -362,6 +363,7 @@ class AccuStats {
     let currentDate = await this.topRatingsDaily.getCurrentDate();
     console.log(`Current DB date: ${currentDate}`);
     let lastProcessedMatchId = await this.rollingRatings.getRollingRatingsMaxMatchId();
+    let rollingDaysArray = await this.rollingRatings.getRollingRatingAllDays();
     let matches = await this.getMatchesFrom(lastProcessedMatchId+1);
     let matchStats = await this.getMatchStatsFrom(lastProcessedMatchId+1);
     let settings = await this.getSettings();
@@ -387,7 +389,9 @@ class AccuStats {
       if (!matchIdsByDay.has(m.date)) matchIdsByDay.set(m.date, new Set());
       matchIdsByDay.get(m.date)!.add(m.match_id);
     }
-    let days = Array.from(matchIdsByDay.keys()).sort((lhs: string, rhs: string) => lhs < rhs ? -1 : 1);
+    let daysSet: Set<string> = new Set(matchIdsByDay.keys());
+    rollingDaysArray.forEach(day => daysSet.add(day));
+    let days = Array.from(daysSet).sort((lhs: string, rhs: string) => lhs < rhs ? -1 : 1);
     console.log(`Concat match ids for days ${days.join(" ")}`);
     for (let i = 0; i < days.length-1; ++i) {
       let matchIdsInto = matchIdsByDay.get(days[i])!;
@@ -492,7 +496,9 @@ class AccuStats {
             date: matchDay,
             auth_id: stat.auth_id,
             match_id: 0,
-            rating: { rating: { mu: PlayerStat.DefaultRating, rd: PlayerStat.DefaultRd, vol: PlayerStat.DefaultVol } },
+            mu: PlayerStat.DefaultRating,
+            rd: PlayerStat.DefaultRd,
+            vol: PlayerStat.DefaultVol,
             games: 0,
             wins: 0,
             goals: 0,
@@ -558,10 +564,9 @@ class AccuStats {
     for (let [playerId, stat] of playerStats) {
       let ptr = playerTopRatings.get(playerId)!;
       let g = stat.glickoPlayer!;
-      let rating = ptr.rating.rating;
-      rating.mu = g.getRating();
-      rating.rd = g.getRd();
-      rating.vol = g.getVol();
+      ptr.mu = g.getRating();
+      ptr.rd = g.getRd();
+      ptr.vol = g.getVol();
       // console.log(`${playerId} => ${stat.id} games:${stat.games}/${ptr.games} goals:${stat.goals}/${ptr.goals}`)
     }
 
@@ -572,7 +577,7 @@ class AccuStats {
     if (playersLimit === 0) return [];
     let playerTopRatingsArray = Array.from(playerTopRatings.values());
     playerTopRatingsArray = playerTopRatingsArray.sort((lhs: RollingRatingsData, rhs: RollingRatingsData) =>
-      rhs.rating.rating.mu - lhs.rating.rating.mu);
+      rhs.mu - lhs.mu);
     const nAll = playerTopRatingsArray.length;
     playerTopRatingsArray = playerTopRatingsArray.filter(e => e.games >= minGames);
     const nGames = playerTopRatingsArray.length;
@@ -586,7 +591,7 @@ class AccuStats {
         rank: i + 1,
         auth_id: r.auth_id,
         player_name: playerNames.get(r.auth_id) ?? 'GOD',
-        rating: Math.floor(r.rating.rating.mu),
+        rating: Math.floor(r.mu),
         games: r.games,
         wins: r.wins,
         goals: r.goals,

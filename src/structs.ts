@@ -172,11 +172,9 @@ export class PlayerData {
 }
 
 export interface PlayerRatingData {
-  rating: {
-    mu: number;      // Glicko2 rating (mu)
-    rd: number;      // Glicko2 rating deviation (sigma)
-    vol: number;     // Glicko2 volatility
-  };
+  mu: number;      // Glicko2 rating (mu)
+  rd: number;      // Glicko2 rating deviation (sigma)
+  vol: number;     // Glicko2 volatility
 }
 
 export interface PlayerMatchStatsData {
