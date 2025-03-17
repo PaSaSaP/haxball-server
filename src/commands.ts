@@ -143,6 +143,8 @@ class Commander {
 
       votekick: this.commandVoteKick,
       votemute: this.commandVoteMute,
+      votev4: this.commandVoteV4,
+      "4": this.commandVoteV4,
       votereset: this.commandVoteReset,
       yes: this.commandVoteYes,
       tak: this.commandVoteYes,
@@ -886,6 +888,15 @@ class Commander {
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     let byPlayerExt = this.Pid(player.id);
     this.hb_room.auto_bot.autoVoter.requestVoteMute(cmdPlayerExt, byPlayerExt);
+  }
+
+  async commandVoteV4(player: PlayerObject, cmds: string[]) {
+    let byPlayerExt = this.Pid(player.id);
+    if (byPlayerExt.afk || byPlayerExt.afk_maybe) {
+      this.sendMsgToPlayer(byPlayerExt, "Jesteś AFK, najpierw wyjdź z AFKa!", Colors.White);
+      return;
+    }
+    this.hb_room.auto_bot.autoVoter.requestVote4(null, byPlayerExt);
   }
 
   async commandVoteReset(player: PlayerObject, cmds: string[]) {

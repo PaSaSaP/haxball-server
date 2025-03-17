@@ -3,6 +3,7 @@ import { PlayerData, Match, PlayerLeavedDueTo, RatingProcessingState, MatchType 
 import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
 import { AutoVoteHandler } from "./vote_kick";
+import { timeStamp } from "console";
 
 enum MatchState {
   lobby,
@@ -112,6 +113,7 @@ export class AutoBot {
     this.chosingPlayerNextReminder = 60;
     this.autoVoter = new AutoVoteHandler(this);
     this.lobbyAction = () => { return false; };
+    this.prepareShortMatchHelp();
   }
 
   resetLobbyAction() {
@@ -148,6 +150,10 @@ export class AutoBot {
   }
 
   limit() {
+    return this.currentLimit;
+  }
+
+  getCurrentLimit() {
     return this.currentLimit;
   }
 
@@ -352,6 +358,7 @@ export class AutoBot {
     // AMLog("handling game stopped");
     this.clearMissingPlayersInTeamsTimer();
     this.clearMatchStartedTimer();
+    this.autoVoter.handleGameStop();
     if (this.currentMatch.ratingState === RatingProcessingState.ranked) {
       this.hb_room.updateRatingsAndTop10(this.currentMatch);
       this.currentMatch.ratingState = RatingProcessingState.updated;
@@ -695,9 +702,22 @@ export class AutoBot {
       }
       if (Math.abs(rl - bl) > 1) {
         // AMLog("Przesuwamy bo 3vs1 albo 2vs0");
-        if (rl > bl) this.movePlayerToBlue(this.redTeam[this.redTeam.length - 1], this.redTeam);
-        else this.movePlayerToRed(this.blueTeam[this.blueTeam.length - 1], this.blueTeam);
+        if (rl > bl) this.moveLastFromTeamToSpec(this.redTeam, true);
+        else this.moveLastFromTeamToSpec(this.blueTeam, true);
         return;
+      }
+      if (limit === 4 && (rl === limit && bl === limit-1 || rl === limit-1 && bl === limit)) {
+        if (rl < bl) {
+          this.movePlayerToSpec(this.blueTeam[-1], this.blueTeam);
+        } else this.movePlayerToSpec(this.redTeam[-1], this.redTeam, true);
+        this.currentLimit = 3;
+        // and no return because we are going to play ranked 3vs3
+      }
+      // just in case
+      if (rl > limit) {
+        this.moveLastFromTeamToSpec(this.redTeam, true);
+      } else if (bl > limit) {
+        this.moveLastFromTeamToSpec(this.blueTeam, true);
       }
       
       // if no more players then go below
@@ -734,6 +754,11 @@ export class AutoBot {
   }
 
   static ShortMatchHelp = 'Restart: !r, Pauza: !p, !votekick !votemute';
+
+  prepareShortMatchHelp() {
+    AutoBot.ShortMatchHelp = 'Restart !r, Pauza !p, !votekick !votemute';
+    if (this.hb_room.room_config.playersInTeamLimit === 4) AutoBot.ShortMatchHelp += ' !4';
+  }
   
   checkForPreparedSelection(spec: PlayerData) {
     let rl = this.redTeam.length;
@@ -996,6 +1021,11 @@ export class AutoBot {
   movePlayerToSpec(playerExt: PlayerData, fromTeam: PlayerData[], onTop = false) {
     playerExt.team = 0;
     this.movePlayer(playerExt.id, fromTeam, this.specTeam, playerExt.team, onTop);
+  }
+
+  moveLastFromTeamToSpec(fromTeam: PlayerData[], onTop = false) {
+    if (!fromTeam.length) return;
+    this.movePlayerToSpec(fromTeam[fromTeam.length - 1], fromTeam, onTop);
   }
 
   movePlayer(playerId: number, fromTeam: PlayerData[], toTeam: PlayerData[], toTeamNumbered: number, onTop = false): void {

@@ -10,6 +10,7 @@ export interface AutoVoter {
   handleYes(byPlayer: PlayerData): void;
   handleNo(byPlayer: PlayerData): void;
   handleChangeAssignment(player: PlayerData): void;
+  handleGameStop(): void;
   reset(): void;
 }
 
@@ -74,6 +75,10 @@ export class VoteKicker implements AutoVoter {
 
   handleChangeAssignment(player: PlayerData) {
     if (this.team != 0 && this.voted && player.id == this.voted.id && !player.team) this.reset();
+  }
+
+  handleGameStop(): void {
+    if (this.active()) this.reset();
   }
 
   private check() {
@@ -162,6 +167,9 @@ export class VoteMuter implements AutoVoter {
   handleChangeAssignment(player: PlayerData) {
   }
 
+  handleGameStop(): void {
+  }
+
   private check() {
     if (!this.voted) return;
     if (this.expired()) {
@@ -191,16 +199,104 @@ export class VoteMuter implements AutoVoter {
   }
 }
 
+export class VoteV4 implements AutoVoter {
+  RequiredVotes = 3;
+  hbRoom: HaxballRoom;
+  agreedBy: Set<number>;
+  disagreedBy: Set<number>;
+  at: number;
+
+  constructor(hbRoom: HaxballRoom) {
+    this.hbRoom = hbRoom;
+    this.agreedBy = new Set<number>();
+    this.disagreedBy = new Set<number>();
+    this.at = 0;
+  }
+
+  expired() {
+    return Date.now() - this.at > 60_000;
+  }
+
+  active(): boolean {
+    return !this.expired();
+  }
+
+  handle(votedPlayer: PlayerData|null, byPlayer: PlayerData) {
+    let autoBot = this.hbRoom.auto_bot;
+    if (!this.active() && autoBot.getCurrentLimit() === 3 && !autoBot.isLobbyTime() && autoBot.getNonAfkAllCount() >= 8) {
+      this.at = Date.now();
+      this.agreedBy.add(byPlayer.id);
+      this.hbRoom.sendMsgToAll(`(!4) Rozpoczęto głosowanie za przełączeniem na rozgrywkę 4vs4 (!tak !yes !nie !no)`, Colors.BrightBlue, 'italic');
+      AMLog(`!4 by ${byPlayer.name}`);
+      return;
+    }
+    if (this.active()) this.handleYes(byPlayer);
+  }
+
+  handleYes(byPlayer: PlayerData) {
+    if (!this.active()) return;
+    this.agreedBy.add(byPlayer.id);
+    this.check();
+    AMLog(`!4 BY: ${byPlayer.name} YES`);
+  }
+
+  handleNo(byPlayer: PlayerData) {
+    if (!this.active()) return;
+    this.disagreedBy.add(byPlayer.id);
+    this.check();
+    AMLog(`!4 BY: ${byPlayer.name} NO`);
+  }
+
+  handleChangeAssignment(player: PlayerData) {
+  }
+
+  handleGameStop(): void {
+    if (this.active()) this.reset();
+  }
+
+  private check() {
+    if (this.expired()) {
+      this.hbRoom.sendMsgToAll(`(!4) Upłynął limit czasu na głosowanie...`, Colors.BrightBlue, 'italic');
+      this.reset();
+      return;
+    }
+    const y = this.agreedBy.size;
+    const n = this.disagreedBy.size;
+    if (n >= y + this.RequiredVotes) {
+      this.hbRoom.sendMsgToAll(`(!4) Wniosek o zmianę rozgrywki na 4vs4 odrzucony (${y}/${n})`, Colors.BrightBlue, 'italic');
+      this.reset();
+      return;
+    }
+    if (y >= n + this.RequiredVotes) {
+      const activePlayers = this.hbRoom.auto_bot.getNonAfkAllCount();
+      this.hbRoom.sendMsgToAll(`(!4) Wniosek o zmianę rozgrywki na 4vs4 przyjęty (${y}/${n}), liczba aktywnych graczy: ${activePlayers}`, Colors.BrightBlue, 'italic');
+      if (activePlayers >= 8) {
+        this.hbRoom.room.stopGame();
+      }
+      this.reset();
+      return;
+    }
+  }
+
+  reset() {
+    this.at = 0;
+    this.agreedBy.clear();
+    this.disagreedBy.clear();
+  }
+}
+
 export class AutoVoteHandler implements AutoVoter {
   hbRoom: HaxballRoom;
   voteKicker: VoteKicker;
   voteMuter: VoteMuter;
+  voteV4: VoteV4;
   activeVoter: AutoVoter|null;
 
   constructor(autoBot: AutoBot) {
     this.hbRoom = autoBot.hb_room;
     this.voteKicker = new VoteKicker(autoBot);
     this.voteMuter = new VoteMuter(autoBot.hb_room);
+    this.voteV4 = new VoteV4(autoBot.hb_room);
     this.activeVoter = null;
   }
 
@@ -238,6 +334,16 @@ export class AutoVoteHandler implements AutoVoter {
     this.voteMuter.handle(votedPlayer, byPlayer);
     return true;
   }
+  requestVote4(votedPlayer: PlayerData | null, byPlayer: PlayerData) {
+    AMLog(`requestedVote4 by ${byPlayer.name}`);
+    if (this.active()) {
+      this.hbRoom.sendMsgToPlayer(byPlayer, 'Inne głosowanie jest w trakcie!', Colors.Warning);
+      return false;
+    }
+    this.activeVoter = this.voteV4;
+    this.voteV4.handle(votedPlayer, byPlayer);
+    return true;
+  }
   handle(votedPlayer: PlayerData | null, byPlayer: PlayerData): void {
     if (this.activeVoter == null) return;
     this.activeVoter.handle(votedPlayer, byPlayer);
@@ -253,6 +359,10 @@ export class AutoVoteHandler implements AutoVoter {
   handleChangeAssignment(player: PlayerData): void {
     if (this.activeVoter == null) return;
     this.activeVoter.handleChangeAssignment(player);
+  }
+  handleGameStop(): void {
+    if (this.activeVoter == null) return;
+    this.activeVoter.handleGameStop();
   }
   reset(): void {
     if (this.activeVoter === null) return;
