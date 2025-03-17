@@ -424,33 +424,15 @@ class AccuStats {
         continue;
       }
       let rr = rrByDate.get(day) ?? [];
-      let minGames = 0;
-      let playersLimit = 0;
+      await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId);
       if (day == todayDate) {
-        minGames = settings.min_full_games_daily;
-        playersLimit = settings.players_limit;
-      } else if (day == weekAgoDate) {
-        minGames = settings.min_full_games_weekly;
-        playersLimit = settings.players_limit;
-      } else if (day == oldestDate) {
-        minGames = settings.min_full_games;
-        playersLimit = settings.players_limit;
-      }
-      await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId, minGames, playersLimit);
-      if (day == todayDate) {
-        await this.updateTopRanking(playerNames, day, minGames, playersLimit, this.topRatingsDaily);
+        await this.updateTopRanking(playerNames, day, settings.min_full_games_daily, settings.players_limit, this.topRatingsDaily);
       }
       if (day == weekAgoDate) {
-        if (weekAgoDate == todayDate) {
-          minGames = settings.min_full_games_weekly;
-        }
-        await this.updateTopRanking(playerNames, day, minGames, playersLimit, this.topRatingsWeekly);
+        await this.updateTopRanking(playerNames, day, settings.min_full_games_weekly, settings.players_limit, this.topRatingsWeekly);
       }
       if (day == oldestDate) {
-        if (oldestDate == weekAgoDate) {
-          minGames = settings.min_full_games;
-        }
-        await this.updateTopRanking(playerNames, day, minGames, playersLimit, this.topRatingsTotal);
+        await this.updateTopRanking(playerNames, day, settings.min_full_games, settings.players_limit, this.topRatingsTotal);
       }
     }
   }
@@ -466,9 +448,8 @@ class AccuStats {
   }
 
   async calculateRollingRating(playerNames: Map<string, string>, matchDay: string, rollingRatings: RollingRatingsData[],
-    affectedMatchIds: Set<number>, matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }>,
-    minGames: number, playersLimit: number) {
-    console.log(`calculateRollingRating for day: ${matchDay} elements: ${rollingRatings.length} minGames: ${minGames} pLimit: ${playersLimit}`);
+    affectedMatchIds: Set<number>, matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }>) {
+    console.log(`calculateRollingRating for day: ${matchDay} elements: ${rollingRatings.length}`);
     let glicko = new Glicko2.Glicko2();
     let ratings = new Ratings(glicko);
     let playerStats = new Map<number, PlayerStat>();

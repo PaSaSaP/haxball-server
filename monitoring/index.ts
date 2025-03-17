@@ -162,7 +162,8 @@ class ServerMonitor {
         MLog(`Tworzę plik dla nowego serwera: ${newServerFullSelector} (avg=${averagePlayers}, act=${activePlayerCount}, se=${activeServers.length}, thr=${this.scaleUpThreshold})`);
         this.lastScaleAction.set(selectorKey, now);
         for (let i = 1; i <= activeServers.length; ++i) {
-          this.sendGodCommand(newServerFullSelector, `!anno Wiele Was tutaj, za parę chwil pojawi się nowy serwer #${activeServers.length+1}`);
+          const serverSelector = `${selectorKey}_${i}`;
+          this.sendGodCommand(serverSelector, `!anno Wiele Was tutaj, za parę chwil pojawi się nowy serwer #${activeServers.length+1}`);
         }
         return;
       } else if (averagePlayers <= this.scaleDownThreshold && activeServers.length > 1) {
