@@ -41,7 +41,7 @@ export class VoteKicker implements AutoVoter {
   }
 
   handle(votedPlayer: PlayerData|null, byPlayer: PlayerData) {
-    if (this.autobot.isLobbyTime() || !this.autobot.ranked) return;
+    if (this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
     if (this.team == 0) {
       if (!votedPlayer || !votedPlayer.team) return;
       if (byPlayer.team && votedPlayer.team == byPlayer.team) {
@@ -58,7 +58,7 @@ export class VoteKicker implements AutoVoter {
   }
 
   handleYes(byPlayer: PlayerData) {
-    if (this.autobot.isLobbyTime() || !this.autobot.ranked) return;
+    if (this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
     if (!this.voted || this.voted.id == byPlayer.id) return;
     this.agreedBy.add(byPlayer.id);
     this.check();
@@ -66,7 +66,7 @@ export class VoteKicker implements AutoVoter {
   }
 
   handleNo(byPlayer: PlayerData) {
-    if (this.autobot.isLobbyTime() || !this.autobot.ranked) return;
+    if (this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
     if (!this.voted || this.voted.id == byPlayer.id) return;
     this.disagreedBy.add(byPlayer.id);
     this.check();
@@ -98,7 +98,7 @@ export class VoteKicker implements AutoVoter {
     if (y >= n + this.RequiredVotes) {
       this.autobot.hb_room.sendMsgToAll(`(!votekick) Wniosek o szkalowanie gracza ${this.voted.name} przyjęty (${y}/${n})`, Colors.BrightBlue, 'italic');
       this.autobot.setPlayerLeftStatusTo(this.voted, PlayerLeavedDueTo.voteKicked);
-      this.autobot.movePlayerToSpec(this.voted, this.team == 1 ? this.autobot.redTeam : this.autobot.blueTeam);
+      this.autobot.movePlayerToSpec(this.voted, this.team == 1 ? this.autobot.R() : this.autobot.B());
       this.autobot.fillByPreparedSelection();
       this.reset();
       return;

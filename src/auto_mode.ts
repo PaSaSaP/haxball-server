@@ -3,7 +3,6 @@ import { PlayerData, Match, PlayerLeavedDueTo, RatingProcessingState, MatchType 
 import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
 import { AutoVoteHandler } from "./vote_kick";
-import { timeStamp } from "console";
 
 enum MatchState {
   lobby,
@@ -42,40 +41,40 @@ export class AutoBot {
   // TODO handle returning afk players
   hb_room: HaxballRoom;
   room: RoomObject;
-  redTeam: PlayerData[];
-  blueTeam: PlayerData[];
-  specTeam: PlayerData[];
-  shuffled: boolean;
-  matchState: MatchState;
-  currentScores: ScoresObject|null;
-  ranked: boolean;
-  lastWinner: 0 | 1 | 2;
-  winStreak: number;
-  currentMatchLastGoalScorer: 0 | 1 | 2;
-  currentMatchGameTime: number;
-  fullTimeMatchPlayed: boolean;
-  lastOneMatchLoserTeamIds: number[];
-  lastAutoSelectedPlayerIds: number[];
+  private redTeam: PlayerData[];
+  private blueTeam: PlayerData[];
+  private specTeam: PlayerData[];
+  private shuffled: boolean;
+  private matchState: MatchState;
+  private currentScores: ScoresObject|null;
+  private ranked: boolean;
+  private lastWinner: 0 | 1 | 2;
+  private winStreak: number;
+  private currentMatchLastGoalScorer: 0 | 1 | 2;
+  private currentMatchGameTime: number;
+  private fullTimeMatchPlayed: boolean;
+  private lastOneMatchLoserTeamIds: number[];
+  private lastAutoSelectedPlayerIds: number[];
 
-  lobbyMonitoringTimer: any;
-  matchStartedTimer: any;
-  afterPositionsResetTimer: any;
-  missingPlayersInTeamsTimer: any
+  private lobbyMonitoringTimer: any;
+  private matchStartedTimer: any;
+  private afterPositionsResetTimer: any;
+  private missingPlayersInTeamsTimer: any
 
-  currentLimit: number;
+  private currentLimit: number;
   LobbyMonitoringTimeout = 250; // [ms]
   MatchStartedTimeout = 20 * 1000; // [ms]
   AfterPositionsResetTimeout = 15 * 1000; // [ms]
   MaxMatchTime = 6 * 60; // [s]
   WinStreakLimit = 100; // matches when winner moves to spec // TODO change to lower value in future
   matchHistory: MatchHistory;
-  currentMatch: Match;
-  pauseUsedByRed: boolean;
-  pauseUsedByBlue: boolean;
-  restartRequestedByRed: boolean;
-  restartRequestedByBlue: boolean;
-  minuteLeftReminder: boolean;
-  chosingPlayerNextReminder: number;
+  private currentMatch: Match;
+  private pauseUsedByRed: boolean;
+  private pauseUsedByBlue: boolean;
+  private restartRequestedByRed: boolean;
+  private restartRequestedByBlue: boolean;
+  private minuteLeftReminder: boolean;
+  private chosingPlayerNextReminder: number;
   autoVoter: AutoVoteHandler;
   lobbyAction: () => boolean;
 
@@ -115,6 +114,12 @@ export class AutoBot {
     this.lobbyAction = () => { return false; };
     this.prepareShortMatchHelp();
   }
+
+  R() { return this.redTeam; }
+  B() { return this.blueTeam; }
+  S() { return this.specTeam; }
+  M() { return this.currentMatch; }
+  isRanked() { return this.ranked; }
 
   resetLobbyAction() {
     this.lobbyAction = () => { return false; };

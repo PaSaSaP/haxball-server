@@ -32,7 +32,6 @@ import Pinger from './pinger';
 import { MatchRankChangesEntry } from './db/match_rank_changes';
 import GodCommander from './god_commander';
 import { DelayJoiner } from './delay_join';
-import { timeStamp } from 'console';
 
 
 export class HaxballRoom {
@@ -559,7 +558,7 @@ export class HaxballRoom {
   }
 
   getRedBluePlayerInTeams(from: PlayerData[]): [PlayerData[], PlayerData[]] {
-    if (this.auto_mode) return [this.auto_bot.redTeam, this.auto_bot.blueTeam];
+    if (this.auto_mode) return [this.auto_bot.R(), this.auto_bot.B()];
     return this.getRedBluePlayerTeamIdsFrom(from);
   }
 
@@ -588,11 +587,12 @@ export class HaxballRoom {
     }
     let doUpdateState = false;
     let fullTimeMatchPlayed = true;
+    let currentMatch = this.auto_bot.M();
     if (this.auto_mode) {
       this.auto_bot.handleGameStop(null);
-      this.match_stats.setWinner(this.auto_bot.currentMatch.winnerTeam as 1|2);
+      this.match_stats.setWinner(currentMatch.winnerTeam as 1|2);
       fullTimeMatchPlayed = this.auto_bot.wasFullTimeMatchPlayed();
-      if (this.auto_bot.currentMatch.matchStatsState == MatchStatsProcessingState.ranked) doUpdateState = true;
+      if (currentMatch.matchStatsState == MatchStatsProcessingState.ranked) doUpdateState = true;
     } else {
       doUpdateState = true;
       if (this.scores) {
@@ -603,9 +603,9 @@ export class HaxballRoom {
     if (doUpdateState) {
       let matchPlayerStats = this.match_stats.updatePlayerStats(this.players_ext_all, fullTimeMatchPlayed);
       if (matchPlayerStats.size) {
-        if (this.auto_mode) this.updatePlayerLeftState(matchPlayerStats, this.auto_bot.currentMatch);
-        this.updateAccumulatedPlayerStats(matchPlayerStats, this.auto_bot.currentMatch, fullTimeMatchPlayed);
-        if (this.auto_mode) this.auto_bot.currentMatch.matchStatsState = MatchStatsProcessingState.updated;
+        if (this.auto_mode) this.updatePlayerLeftState(matchPlayerStats, currentMatch);
+        this.updateAccumulatedPlayerStats(matchPlayerStats, currentMatch, fullTimeMatchPlayed);
+        if (this.auto_mode) currentMatch.matchStatsState = MatchStatsProcessingState.updated;
       }
     }
     this.scores = null;
@@ -1195,7 +1195,7 @@ export class HaxballRoom {
 
   async updateRatingsAndTop10(inMatch: Match) {
     if (this.auto_mode) {
-      if (this.auto_bot.ranked || this.ratings_for_all_games) {
+      if (this.auto_bot.isRanked() || this.ratings_for_all_games) {
         try {
           const selector = this.getSelectorFromMatch(inMatch);
           hb_log(`Aktualizujemy teraz dane w bazie, najpierw czytamy z bazy dla ${selector}`);

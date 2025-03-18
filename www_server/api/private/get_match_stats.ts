@@ -44,6 +44,14 @@ function getCacheDataFromMatchId(cache: Cache, match_id: number): CacheData[] {
   return cache.cache.slice(idx);
 }
 
+function getCacheDataBetween(cache: Cache, startMatchId: number, endMatchId: number): CacheData[] {
+  const startIdx = cache.cache.findIndex(e => e[0] === startMatchId);
+  if (startIdx === -1) return [];
+  const endIdx = cache.cache.findIndex((e, i) => i >= startIdx && e[0] === endMatchId);
+  if (endIdx !== -1) return cache.cache.slice(startIdx, endIdx+1);
+  return []; // if no end idx found, argh...
+}
+
 function getCacheMatchStatsByMatchId(cache: Cache, matchId: number) {
   if (!cache.matchStatsByMatchId.has(matchId)) cache.matchStatsByMatchId.set(matchId, []);
   return cache.matchStatsByMatchId.get(matchId)!;
@@ -190,6 +198,33 @@ router.get("/4vs4/from/:matchId", async (req: any, res: any) => {
   const matchId = Number(req.params.matchId);
   let cached = await getMatchStats4vs4Cached();
   let selected = getCacheDataFromMatchId(cached, matchId);
+  res.json(selected);
+});
+router.get("/1vs1/between/:startMatchId/:endMatchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const startMatchId = Number(req.params.startMatchId);
+  const endMatchId = Number(req.params.endMatchId);
+  let cached = await getMatchStats1vs1Cached();
+  let selected = getCacheDataBetween(cached, startMatchId, endMatchId);
+  console.log(`match stats 1vs1 between ${startMatchId} and ${endMatchId} = ${selected.length}`)
+  res.json(selected);
+});
+router.get("/3vs3/between/:startMatchId/:endMatchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const startMatchId = Number(req.params.startMatchId);
+  const endMatchId = Number(req.params.endMatchId);
+  let cached = await getMatchStats3vs3Cached();
+  let selected = getCacheDataBetween(cached, startMatchId, endMatchId);
+  console.log(`match stats 3vs3 between ${startMatchId} and ${endMatchId} = ${selected.length}`)
+  res.json(selected);
+});
+router.get("/4vs4/between/:startMatchId/:endMatchId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const startMatchId = Number(req.params.startMatchId);
+  const endMatchId = Number(req.params.endMatchId);
+  let cached = await getMatchStats4vs4Cached();
+  let selected = getCacheDataBetween(cached, startMatchId, endMatchId);
+  console.log(`match stats 4vs4 between ${startMatchId} and ${endMatchId} = ${selected.length}`)
   res.json(selected);
 });
 

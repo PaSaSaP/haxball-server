@@ -5,6 +5,8 @@ import * as config from "../src/config";
 import * as secrets from "../src/secrets";
 import { TopRatingDaySetings, TopRatingsDailyDB, TopRatingsWeeklyDB } from '../src/db/top_day_ratings';
 import { TopRatingsDB } from '../src/db/top_ratings';
+import { TopRatingsHistoryDB } from '../src/db/top_ratings_history';
+import { HallOfFameDB } from '../src/db/hall_of_fame';
 import { RollingRatingsDB, RollingRatingsData } from '../src/db/rolling_ratings';
 import { MatchEntry } from '../src/db/matches';
 import { MatchStatsEntry } from '../src/db/match_stats';
@@ -24,15 +26,21 @@ if (!['1vs1', '3vs3', '4vs4'].includes(selector)) {
 }
 console.log(`${getTimestampHM()} Zaczynamy akumulowanie!`);
 
-class AccuStats {
-  selector: GameModeType;
-  mode: 'old' | 'new';
-  roomConfig: config.RoomServerConfig;
-  otherDb: sqlite3.Database;
-  topRatingsDaily: TopRatingsDailyDB;
-  topRatingsWeekly: TopRatingsWeeklyDB;
-  topRatingsTotal: TopRatingsDB;
-  rollingRatings: RollingRatingsDB;
+type MatchEntryAsArray = [number, string, number, boolean, number, number, number, number, number];
+type MatchStatsEntryAsArray = [number, string, 0 | 1 | 2, number, number, number, number, number, number, number];
+
+export class AccuStats {
+  private selector: GameModeType;
+  private mode: 'old' | 'new';
+  private fetchHost = `config.localBackendService`;
+  private roomConfig: config.RoomServerConfig;
+  private otherDb: sqlite3.Database;
+  private topRatingsDaily: TopRatingsDailyDB;
+  private topRatingsWeekly: TopRatingsWeeklyDB;
+  private topRatingsTotal: TopRatingsDB;
+  private topRatingsHistory: TopRatingsHistoryDB;
+  private hallOfFame: HallOfFameDB;
+  private rollingRatings: RollingRatingsDB;
   constructor(selector: GameModeType, mode: 'old'|'new') {
     this.selector = selector;
     this.mode = mode;
@@ -43,13 +51,21 @@ class AccuStats {
     this.topRatingsDaily = new TopRatingsDailyDB(this.otherDb);
     this.topRatingsWeekly = new TopRatingsWeeklyDB(this.otherDb);
     this.topRatingsTotal = new TopRatingsDB(this.otherDb);
+    this.topRatingsHistory = new TopRatingsHistoryDB(this.otherDb);
+    this.hallOfFame = new HallOfFameDB(this.otherDb);
     this.rollingRatings = new RollingRatingsDB(this.otherDb);
+  }
+
+  setFetchHost(fetchHost: string) {
+    this.fetchHost = fetchHost;
   }
 
   private async setupDatabases() {
     await this.topRatingsDaily.setupDatabase();
     await this.topRatingsWeekly.setupDatabase();
     await this.topRatingsTotal.setupDatabase();
+    await this.topRatingsHistory.setupDatabase();
+    await this.hallOfFame.setupDatabase();
     await this.rollingRatings.setupDatabase();
   }
 
@@ -86,6 +102,15 @@ class AccuStats {
         // console.log(`No new data to process, saved:${savedMatchId} last:${lastMatchId}`);
       }
     } catch (e) { e && console.error(`processOnce error: ${e}`) };
+  }
+
+  async makeHistoryForDate(day: string) {
+    try {
+      await this.setupDatabases();
+      let playerNames = await this.getPlayerNames();
+      await this.updateHistoryForDate(playerNames, day);
+      await this.updateHallOfFame(playerNames);
+    } catch (e) { e && console.error(`makeHistoryForDate error: ${e}`) }; 
   }
 
   createPlayerStat(id: number, glicko: Glicko2.Glicko2, rating: number = PlayerStat.DefaultRating,
@@ -205,7 +230,9 @@ class AccuStats {
   }
 
   async fetchPrivateData(name: string) {
-    const response = await fetch(`${config.localBackendService}/api/private/${name}`, {
+    const fetchAddress = `${this.fetchHost}/api/private/${name}`;
+    console.log(`fetch addr = ${fetchAddress}`);
+    const response = await fetch(fetchAddress, {
       method: "GET",
       headers: {
         "x-api-key": secrets.PrivateApiKey,
@@ -233,25 +260,27 @@ class AccuStats {
 
   async getMatches() {
     const response = await this.fetchPrivateData(`matches/${this.selector}`);
-    const data: [number, string, number, boolean, number, number, number, number, number][] = await response.json();
-    let matches: MatchEntry[] = data.map(row => ({
-      match_id: row[0],
-      date: row[1],
-      duration: row[2],
-      full_time: row[3],
-      winner: row[4],
-      red_score: row[5],
-      blue_score: row[6],
-      pressure: row[7],
-      possession: row[8]
-    }));
+    const data: MatchEntryAsArray[] = await response.json();
+    let matches: MatchEntry[] = this.arrayToMatchEntryArray(data);
     return matches;
   }
 
   async getMatchesFrom(match_id: number) {
     const response = await this.fetchPrivateData(`matches/${this.selector}/from/${match_id}`);
-    const data: [number, string, number, boolean, number, number, number, number, number][] = await response.json();
-    let matches: MatchEntry[] = data.map(row => ({
+    const data: MatchEntryAsArray[] = await response.json();
+    let matches: MatchEntry[] = this.arrayToMatchEntryArray(data);
+    return matches;
+  }
+
+  async getMatchesByDate(day: string) {
+    const response = await this.fetchPrivateData(`matches/${this.selector}/by/${day}`);
+    const data: MatchEntryAsArray[] = await response.json();
+    let matches: MatchEntry[] = this.arrayToMatchEntryArray(data);
+    return matches;
+  }
+  
+  private arrayToMatchEntryArray(data: MatchEntryAsArray[]): MatchEntry[] {
+    return data.map(row => ({
       match_id: row[0],
       date: row[1],
       duration: row[2],
@@ -262,32 +291,33 @@ class AccuStats {
       pressure: row[7],
       possession: row[8]
     }));
-    return matches;
   }
 
   async getMatchStats() {
     const response = await this.fetchPrivateData(`match_stats/${this.selector}`);
-    const data: [number, string, 0 | 1 | 2, number, number, number, number, number, number, number][] = await response.json();
-    let matchStats: MatchStatsEntry[] = data.map(row => ({
-      match_id: row[0],
-      auth_id: row[1],
-      team: row[2],
-      goals: row[3],
-      assists: row[4],
-      own_goals: row[5],
-      clean_sheet: row[6],
-      playtime: row[7],
-      full_time: row[8],
-      left_state: row[9],
-    }));
+    const data: MatchStatsEntryAsArray[] = await response.json();
+    const matchStats = this.arrayToMatchStatsEntryArray(data);
     return matchStats;
   }
 
 
   async getMatchStatsFrom(match_id: number) {
     const response = await this.fetchPrivateData(`match_stats/${this.selector}/from/${match_id}`);
-    const data: [number, string, 0 | 1 | 2, number, number, number, number, number, number, number][] = await response.json();
-    let matchStats: MatchStatsEntry[] = data.map(row => ({
+    const data: MatchStatsEntryAsArray[] = await response.json();
+    const matchStats = this.arrayToMatchStatsEntryArray(data);
+    return matchStats;
+  }
+
+  async getMatchStatsBetween(startMatchId: number, endMatchId: number) {
+    // start and end inclusive
+    const response = await this.fetchPrivateData(`match_stats/${this.selector}/between/${startMatchId}/${endMatchId}`);
+    const data: MatchStatsEntryAsArray[] = await response.json();
+    const matchStats = this.arrayToMatchStatsEntryArray(data);
+    return matchStats;
+  }
+
+  private arrayToMatchStatsEntryArray(data: MatchStatsEntryAsArray[]): MatchStatsEntry[] {
+    return data.map(row => ({
       match_id: row[0],
       auth_id: row[1],
       team: row[2],
@@ -299,7 +329,6 @@ class AccuStats {
       full_time: row[8],
       left_state: row[9],
     }));
-    return matchStats;
   }
 
   async readIntegerFromFile(filePath: string): Promise<number> {
@@ -390,6 +419,10 @@ class AccuStats {
     let daysSet: Set<string> = new Set(matchIdsByDay.keys());
     rollingDaysArray.forEach(day => daysSet.add(day));
     let days = Array.from(daysSet).sort((lhs: string, rhs: string) => lhs < rhs ? -1 : 1);
+    if (days.length > 8) {
+      // there is at least 9 days, so we are interested in the oldest one and last 7 days
+      days = [days[0], ...days.slice(-7)];
+    }
     for (let day of days) {
       if (!matchIdsByDay.has(day)) matchIdsByDay.set(day, new Set());
     }
@@ -421,7 +454,7 @@ class AccuStats {
         continue;
       }
       let rr = rrByDate.get(day) ?? [];
-      await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId);
+      await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId, true);
       if (day == todayDate) {
         await this.updateTopRanking(playerNames, day, settings.min_full_games_daily, settings.players_limit, this.topRatingsDaily);
       }
@@ -432,6 +465,39 @@ class AccuStats {
         await this.updateTopRanking(playerNames, day, settings.min_full_games, settings.players_limit, this.topRatingsTotal);
       }
     }
+  }
+
+  async updateHistoryForDate(playerNames: Map<string, string>, day: string) {
+    console.log(`updateHistoryForDate date: ${day}`);
+    let matches = await this.getMatchesByDate(day);
+    if (!matches.length) {
+      console.log('empty matches list');
+      return;
+    }
+
+    let matchStats = await this.getMatchStatsBetween(matches.at(0)!.match_id, matches.at(-1)!.match_id);
+    let settings = await this.getSettings();
+    console.log(`updateHistoryForDate for ${day} day, matches: ${matches.length} stats: ${matchStats.length}`);
+    let matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }> = new Map();
+    for (let m of matches) {
+      matchesByMatchId.set(m.match_id, { match: m, stats: [] });
+    }
+
+    for (let s of matchStats) {
+      let match = matchesByMatchId.get(s.match_id);
+      if (!match) {
+        console.log(`No match for match stats specified by match_id=${s.match_id}`);
+        continue;
+      }
+      match.stats.push(s);
+    }
+    let playerRatings = await this.calculateRollingRating(playerNames, day, [], new Set(matchesByMatchId.keys()), matchesByMatchId);
+    let playerRatingsArray = Array.from(playerRatings.values())
+      .filter(e => e.games >= settings.min_full_games_daily)
+      .sort((lhs: RollingRatingsData, rhs: RollingRatingsData) => rhs.mu - lhs.mu)
+      .slice(0, 10);
+    this.topRatingsHistory.setDate(day);
+    await this.updateTopRankingWith(playerNames, day, settings.min_full_games_daily, 10, playerRatingsArray, this.topRatingsHistory);
   }
 
   async getRollingRatingsAfterMatchId(matchId: number) {
@@ -445,7 +511,7 @@ class AccuStats {
   }
 
   async calculateRollingRating(playerNames: Map<string, string>, matchDay: string, rollingRatings: RollingRatingsData[],
-    affectedMatchIds: Set<number>, matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }>) {
+    affectedMatchIds: Set<number>, matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }>, update = false) {
     console.log(`calculateRollingRating for day: ${matchDay} elements: ${rollingRatings.length}`);
     let glicko = new Glicko2.Glicko2();
     let ratings = new Ratings(glicko);
@@ -551,36 +617,56 @@ class AccuStats {
       // console.log(`${playerId} => ${stat.id} games:${stat.games}/${ptr.games} goals:${stat.goals}/${ptr.goals}`)
     }
 
-    for (let [playerId, rr] of playerTopRatings) {
-      await this.rollingRatings.updateRollingRatingsFrom(rr).catch((e) => hb_log(`!! updateRollingRatingsFrom error: ${e}`));
+    if (update) {
+      for (let [playerId, rr] of playerTopRatings) {
+        await this.rollingRatings.updateRollingRatingsFrom(rr).catch((e) => hb_log(`!! updateRollingRatingsFrom error: ${e}`));
+      }
     }
+    return playerTopRatings;
   }
 
-  async updateTopRanking(playerNames: Map<string, string>, day: string, minGames: number, playersLimit: number, ratingsDb: TopRatingsDailyDB| TopRatingsWeeklyDB|TopRatingsDB) {
+  async updateTopRankingWith(playerNames: Map<string, string>, day: string, minGames: number, playersLimit: number,
+    allRatings: RollingRatingsData[],
+    ratingsDb: TopRatingsDailyDB | TopRatingsWeeklyDB | TopRatingsDB | TopRatingsHistoryDB) {
+        try {
+          let result: PlayerTopRatingData[] = [];
+          for (let i = 0; i < allRatings.length; i++) {
+            let r = allRatings[i];
+            result.push({
+              rank: i + 1,
+              auth_id: r.auth_id,
+              player_name: playerNames.get(r.auth_id) ?? 'GOD',
+              rating: Math.floor(r.mu),
+              games: r.games,
+              wins: r.wins,
+              goals: r.goals,
+              assists: r.assists,
+              own_goals: r.own_goals,
+              clean_sheets: r.clean_sheets
+            });
+          }
+          await ratingsDb.updateTopRatingsFrom(result).catch((e) => hb_log(`!! updateTopRatingsFrom ${day} error: ${e}`));
+          console.log(`Done, inRanking: ${result.length} settings.min: ${minGames} settings.limit: ${playersLimit}`);
+        } catch (e) { hb_log(`!!recalcTopRanking error: ${e}`) };
+    }
+
+  async updateTopRanking(playerNames: Map<string, string>, day: string, minGames: number, playersLimit: number,
+    ratingsDb: TopRatingsDailyDB | TopRatingsWeeklyDB | TopRatingsDB | TopRatingsHistoryDB) {
     try {
       let allRatings = await this.rollingRatings.getRollingRatingsByDate(day, minGames, playersLimit);
-      let result: PlayerTopRatingData[] = [];
-      for (let i = 0; i < allRatings.length; i++) {
-        let r = allRatings[i];
-        result.push({
-          rank: i + 1,
-          auth_id: r.auth_id,
-          player_name: playerNames.get(r.auth_id) ?? 'GOD',
-          rating: Math.floor(r.mu),
-          games: r.games,
-          wins: r.wins,
-          goals: r.goals,
-          assists: r.assists,
-          own_goals: r.own_goals,
-          clean_sheets: r.clean_sheets
-        });
-      }
-      await ratingsDb.updateTopRatingsFrom(result).catch((e) => hb_log(`!! updateTopRatingsFrom ${day} error: ${e}`));
-      console.log(`Done, inRanking: ${result.length} settings.min: ${minGames} settings.limit: ${playersLimit}`);
+      await this.updateTopRankingWith(playerNames, day, minGames, playersLimit, allRatings, ratingsDb);
     } catch (e) { hb_log(`!!recalcTopRanking error: ${e}`) };
+  }
+
+  async updateHallOfFame(playerNames: Map<string, string>) {
+    try {
+      await this.hallOfFame.updateHallOfFame();
+    } catch(e) {hb_log(`!! updateHallOfFame error: ${e}`)}
   }
 }
 
-const mode = 'new';
-let accuStats = new AccuStats(selector as GameModeType, mode);
-accuStats.run();
+if (require.main === module) {
+  const mode = 'new';
+  let accuStats = new AccuStats(selector as GameModeType, mode);
+  accuStats.run();
+}

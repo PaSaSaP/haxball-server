@@ -7,6 +7,7 @@ import { getTimestampHM } from "../../../src/utils";
 
 const router = express.Router();
 
+//               matchId, date,   durati, full_ti, winner, red_sc, blu_sc, pressu, possession
 type CacheData = [number, string, number, boolean, number, number, number, number, number];
 interface Cache {
   which: "1vs1"|"3vs3"|"4vs4";
@@ -40,6 +41,14 @@ function getCacheDataFromMatchId(cache: Cache, match_id: number): CacheData[] {
   const idx = cache.cache.findIndex(e => e[0] == match_id);
   if (idx === -1) return [];
   return cache.cache.slice(idx);
+}
+
+function getCacheDataByDate(cache: Cache, day: string): CacheData[] {
+  const startIdx = cache.cache.findIndex(e => e[1] === day);
+  if (startIdx === -1) return [];
+  const endIdx = cache.cache.findIndex((e, i) => i > startIdx && e[1] !== day);
+  if (endIdx !== -1) return cache.cache.slice(startIdx, endIdx);
+  return cache.cache.slice(startIdx);
 }
 
 async function fetchMatches(cache: Cache) {
@@ -179,6 +188,30 @@ router.get("/4vs4/from/:matchId", async (req: any, res: any) => {
   const matchId = Number(req.params.matchId);
   let cached = await getMatches4vs4Cached();
   let selected = getCacheDataFromMatchId(cached, matchId);
+  res.json(selected);
+});
+router.get("/1vs1/by/:day", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const day = String(req.params.day);
+  let cached = await getMatches1vs1Cached();
+  let selected = getCacheDataByDate(cached, day);
+  console.log(`matches 1vs1 by ${day} = ${selected.length}`)
+  res.json(selected);
+});
+router.get("/3vs3/by/:day", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const day = String(req.params.day);
+  let cached = await getMatches3vs3Cached();
+  let selected = getCacheDataByDate(cached, day);
+  console.log(`matches 3vs3 by ${day} = ${selected.length}`)
+  res.json(selected);
+});
+router.get("/4vs4/by/:day", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const day = String(req.params.day);
+  let cached = await getMatches4vs4Cached();
+  let selected = getCacheDataByDate(cached, day);
+  console.log(`matches 4vs4 by ${day} = ${selected.length}`)
   res.json(selected);
 });
 router.get("/1vs1/first_match_id", async (req: any, res: any) => {
