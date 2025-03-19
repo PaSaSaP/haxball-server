@@ -12,12 +12,17 @@ const express = require('express');
 import { tokenDatabase } from '../src/token_database';
 import * as secrets from "../src/secrets";
 import { getTimestampHMS } from "../src/utils";
+import { crc32 } from 'zlib';
 
+interface PlayersCount {
+  all: number;
+  afk: number;
+}
 class ServerMonitor {
   private client: typeof Client;
   private lastDiscordMsgSent: Map<string, number> = new Map();
   private serverStatus: Map<string, number> = new Map();
-  private playerCounts: Map<string, number[]> = new Map();
+  private playerCounts: Map<string, PlayersCount[]> = new Map();
   private maxServers: Record<string, number> = { '4vs4': 1, '3vs3': 2, '1vs1': 1 };
   private userId = '1345319721863741515';
   private csvDir = './dynamic';
@@ -120,6 +125,19 @@ class ServerMonitor {
     }
   }
 
+  private async getActiveServers(selectorKey: string) {
+    const maxServerCount = this.maxServers[selectorKey];
+    let activeServers = await Promise.all(
+      Array.from({ length: maxServerCount }, (_, i) => `${selectorKey}_${i + 1}`)
+        .map(async (s) => {
+          const isEnabled = await this.shouldBeServerEnabled(s);
+          return isEnabled ? s : null;
+        })
+    );
+    activeServers = activeServers.filter((server) => server !== null);
+    return activeServers;
+  }
+
   private async scaleServers() {
     await this.loadConfig();
     for (const selectorKey of Object.keys(this.maxServers)) {
@@ -131,14 +149,7 @@ class ServerMonitor {
         continue;
       }
 
-      let activeServers = await Promise.all(
-        Array.from({ length: maxServerCount }, (_, i) => `${selectorKey}_${i + 1}`)
-          .map(async (s) => {
-            const isEnabled = await this.shouldBeServerEnabled(s);
-            return isEnabled ? s : null;
-          })
-      );
-      activeServers = activeServers.filter((server) => server !== null);
+      let activeServers = await this.getActiveServers(selectorKey);
       // if monitoring just started then set cooldown just like it started some time ago
       activeServers.forEach(sselector => {
         if (sselector && !this.lastScaleAction.has(sselector)) this.lastScaleAction.set(sselector, now - (2/3)*this.cooldownTime);
@@ -150,7 +161,7 @@ class ServerMonitor {
         if (this.playerCounts.has(fullSelector)) {
           const playerCount = this.playerCounts.get(fullSelector) || [];
           const lastThreeMinutes = playerCount.slice(-Math.floor(this.scaleCheckDuration / this.checkInterval));
-          const averagePlayers = lastThreeMinutes.reduce((a, b) => a + b, 0) / lastThreeMinutes.length || 0;
+          const averagePlayers = lastThreeMinutes.reduce((a, b) => a + b.all - b.afk, 0) / lastThreeMinutes.length || 0;
           activePlayerCount += averagePlayers;
         }
       }
@@ -206,11 +217,48 @@ class ServerMonitor {
     }
   }
 
+  private async checkPlayerCounts() {
+    for (const selectorKey of Object.keys(this.maxServers)) {
+      let activeServers = await this.getActiveServers(selectorKey);
+      if (activeServers.length < 2) continue;
+      const s1 = `${selectorKey}_1`;
+      const s2 = `${selectorKey}_2`;
+      const s3 = `${selectorKey}_3`;
+      let pc1 = this.playerCounts.get(s1);
+      let pc2 = this.playerCounts.get(s2);
+      let pc3 = this.playerCounts.get(s3);
+      if (!pc1 || !pc2 || !pc1.length || !pc2.length) continue;
+      let limit = selectorKey === '4vs4' ? 4*2 : 3*2;
+      let c1 = pc1.at(-1)!;
+      let c2 = pc2.at(-1)!;
+      const check = (a: PlayersCount, b: PlayersCount, ssA: string, ssB: string) => {
+        let act1 = a.all - a.afk;
+        let act2 = b.all - b.afk;
+        if (act1 < limit && act2 < limit && act2 > 0) {
+          const afkMsg = a.afk > 0 ? ` ${a.afk} AFCZY,` : '';
+          this.sendGodCommandTimes(`${selectorKey}_${ssB}`, `!anno Na ${selectorKey} #${ssA} gra obecnie ${act1} graczy,${afkMsg} Idźcie do nich!`, 5);
+        }
+      }
+      if (activeServers.length === 2) {
+        check(c1, c2, '1', '2');
+        continue;
+      }
+      if (!pc3 || !pc3.length) continue;
+      let c3 = pc3.at(-1)!;
+      if (activeServers.length === 3) {
+        check(c1, c3, '1', '3');
+        check(c1, c2, '1', '2');
+        continue;
+      }
+    }
+  }
+
   public startExpressServer() {
     const app = express();
     const port = 80;
 
     app.get('/ping/:selector/:currentPlayers', (req: any, res: any) => {
+      // TODO remove handler
       const selector = req.params.selector;  // np. '1vs1_1', '3vs3_2'
       const currentPlayers = parseInt(req.params.currentPlayers, 10);
       if (this.pingLogs) MLog(`Got ping from ${selector} with ${currentPlayers}`);
@@ -225,7 +273,7 @@ class ServerMonitor {
 
       // Dodaj liczbę graczy do historii
       const playerCount = this.playerCounts.get(selector) || [];
-      playerCount.push(currentPlayers);
+      playerCount.push({all: currentPlayers, afk: 0});
       this.playerCounts.set(selector, playerCount);
 
       // Zapisz dane do pliku CSV, jeśli liczba graczy się zmienia
@@ -239,6 +287,38 @@ class ServerMonitor {
       this.lastPlayerNum.set(selector, currentPlayers);
       res.send('');
     });
+
+    app.get('/ping/:selector/:currentPlayers/:afkPlayers', (req: any, res: any) => {
+      const selector = req.params.selector;  // np. '1vs1_1', '3vs3_2'
+      const currentPlayers = parseInt(req.params.currentPlayers, 10);
+      const afkPlayers = parseInt(req.params.afkPlayers, 10);
+      if (this.pingLogs) MLog(`Got ping from ${selector} with ${currentPlayers} players, ${afkPlayers} AFKs`);
+
+      // Zaktualizuj status serwera w mapie
+      this.serverStatus.set(selector, Date.now());
+
+      // Jeśli nie ma danych o liczbie graczy, zainicjuj je
+      if (!this.playerCounts.has(selector)) {
+        this.playerCounts.set(selector, []);
+      }
+
+      // Dodaj liczbę graczy do historii
+      const playerCount = this.playerCounts.get(selector) || [];
+      playerCount.push({all: currentPlayers, afk: afkPlayers});
+      this.playerCounts.set(selector, playerCount);
+
+      // Zapisz dane do pliku CSV, jeśli liczba graczy się zmienia
+      let lastPlayerCount = this.lastPlayerNum.get(selector);
+      if (lastPlayerCount !== undefined && currentPlayers !== lastPlayerCount) {
+        const filePath = `${this.csvDir}/current_players_number_${selector}.csv`;
+        const timestamp = new Date().toISOString().replace('T', ',').split('.')[0];
+        fs.appendFile(filePath, `${timestamp},${currentPlayers},${afkPlayers}\n`);
+      }
+      this.checkPlayerCounts();
+      this.lastPlayerNum.set(selector, currentPlayers);
+      res.send('');
+    });
+
 
     app.get('/healthcheck/:selector', (req: any, res: any) => {
       const selector = req.params.selector;

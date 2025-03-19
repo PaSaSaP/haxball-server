@@ -162,7 +162,7 @@ export class HaxballRoom {
     this.rejoice_maker = new RejoiceMaker(this);
     this.rejoice_prices = new Map<string, { for_days: number, price: number }[]>();
     this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.OrangeTangelo) });
-    this.pinger = new Pinger(this.getSselector(), () => this.players_ext.size);
+    this.pinger = new Pinger(this.getSselector(), () => [this.players_ext.size, this.getAfkCount()]);
     this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
       roomConfig.selector, roomConfig.subselector);
     this.delay_joiner = new DelayJoiner((player: PlayerData) => { this.auto_bot.handlePlayerJoin(player); },
@@ -271,6 +271,14 @@ export class HaxballRoom {
 
   private getGodPlayer() {
     return this.Pid(this.god_player.id);
+  }
+
+  getAfkCount() {
+    let afks = 0;
+    this.players_ext.forEach(p => {
+      if (p.afk || p.afk_maybe) ++afks;
+    });
+    return afks;
   }
 
   anyPlayer(): PlayerData|null {
@@ -931,7 +939,7 @@ export class HaxballRoom {
   }
 
   checkIfPlayerNameContainsNotAllowedChars(player: PlayerObject) {
-    if ('﷽' == player.name) return false; // there is such player with that name so it is olny exception :)
+    if ('﷽' === player.name) return false; // there is such player with that name so it is olny exception :)
     if (this.containsWideCharacters(player.name)) {
       this.room.kickPlayer(player.id, "Zmień nick! ﷽", false);
       return true;
@@ -944,7 +952,7 @@ export class HaxballRoom {
   }
 
   checkIfDotPlayerIsHost(player: PlayerObject) {
-    if (player.name.trim() == '.' && !this.isPlayerHost(player)) {
+    if (player.name.trim() === '.' && !this.isPlayerHost(player)) {
       this.room.kickPlayer(player.id, "Kropka Nienawiści!", false);
       return true;
     }
@@ -957,7 +965,7 @@ export class HaxballRoom {
     let player_auth = player.auth || '';
     for (let p of this.getPlayersExt()) {
       if (p.id != player.id) {
-        if (p.auth_id == player_auth) {
+        if (p.auth_id === player_auth) {
           this.room.kickPlayer(player.id, "One tab, one brain!", false);
           kicked = true;
           break;
@@ -1049,11 +1057,11 @@ export class HaxballRoom {
     }
     const t = BuyCoffee.buy_coffe_link;
     this.feature_pressure_stadium = true;
-    if (`${t} Classic BAR` == newStadiumName) this.last_selected_map_name = 'classic';
-    else if (`${t} Big BAR` == newStadiumName) this.last_selected_map_name = 'big';
-    else if (`${t} Winky's Medium Futsal BAR` == newStadiumName) this.last_selected_map_name = 'futsal';
-    else if (`${t} Winky's Futsal BAR` == newStadiumName) this.last_selected_map_name = 'futsal_big';
-    else if (`${t} Winky's Huge Futsal BAR` == newStadiumName) this.last_selected_map_name = 'futsal_huge';
+    if (`${t} Classic BAR` === newStadiumName) this.last_selected_map_name = 'classic';
+    else if (`${t} Big BAR` === newStadiumName) this.last_selected_map_name = 'big';
+    else if (`${t} Winky's Medium Futsal BAR` === newStadiumName) this.last_selected_map_name = 'futsal';
+    else if (`${t} Winky's Futsal BAR` === newStadiumName) this.last_selected_map_name = 'futsal_big';
+    else if (`${t} Winky's Huge Futsal BAR` === newStadiumName) this.last_selected_map_name = 'futsal_huge';
     else {
       this.feature_pressure_stadium = false;
       this.last_selected_map_name = '';
@@ -1113,7 +1121,7 @@ export class HaxballRoom {
         fastKicks = byPlayerExt.admin_stats.add_kick_timestamp();
       }
       let kickedPlayerExt = this.P(kickedPlayer);
-      if (byPlayerExt.trust_level == 0) {
+      if (byPlayerExt.trust_level === 0) {
         this.room.kickPlayer(byPlayerExt.id, 'Nie kickuj!', false);
       } else if (kickedPlayerExt.trust_level > byPlayerExt.trust_level) {
         this.giveAdminSomeRestAfterKicking(byPlayerExt, "Weź głęboki oddech :)");

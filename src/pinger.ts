@@ -1,19 +1,20 @@
 import { hb_log } from "./log";
 
+type ParamGetterType = () => [number, number];
 class Pinger {
   private selector: string;
   private lastPingTime: number = 0;
   private intervalId: NodeJS.Timeout | null = null;
-  private playerNumGetter: () => number;
+  private playerParamGetter: ParamGetterType;
 
-  constructor(selector: string, playerNumGetter: () => number) {
+  constructor(selector: string, playerNumGetter: ParamGetterType) {
     this.selector = selector;
-    this.playerNumGetter = playerNumGetter;
+    this.playerParamGetter = playerNumGetter;
   }
 
   private async sendRequest() {
-    const playerNum = this.playerNumGetter();
-    const url = `http://monitoring/ping/${this.selector}/${playerNum}`;
+    const [playerNum, afkPlayersNum] = this.playerParamGetter();
+    const url = `http://monitoring/ping/${this.selector}/${playerNum}/${afkPlayersNum}`;
   
     try {
       const response = await fetch(url);

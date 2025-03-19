@@ -32,7 +32,7 @@ type MatchStatsEntryAsArray = [number, string, 0 | 1 | 2, number, number, number
 export class AccuStats {
   private selector: GameModeType;
   private mode: 'old' | 'new';
-  private fetchHost = `config.localBackendService`;
+  private fetchHost = `${config.localBackendService}`;
   private roomConfig: config.RoomServerConfig;
   private otherDb: sqlite3.Database;
   private topRatingsDaily: TopRatingsDailyDB;
@@ -90,8 +90,8 @@ export class AccuStats {
     try {
       let savedMatchId = await this.getSavedMatchId();
       let lastMatchId = await this.getLastMatchId();
-      let playerNames = await this.getPlayerNames();
       if (this.areNewMatchesToProcess(savedMatchId, lastMatchId)) {
+        let playerNames = await this.getPlayerNames();
         console.log(`There is new data to process, saved:${savedMatchId} last:${lastMatchId}`);
         if (this.mode == 'old')
           await this.updateAccuStats(playerNames);
@@ -434,7 +434,6 @@ export class AccuStats {
         matchIdsFrom.forEach(matchId => matchIdsInto.add(matchId));
       }
     }
-    console.log(`matchIds count ${matchIdsByDay.size}`);
 
     for (let s of matchStats) {
       let match = matchesByMatchId.get(s.match_id);
@@ -448,9 +447,12 @@ export class AccuStats {
     let weekAgoDate = this.getDateMinusDays(currentDate);
     if (weekAgoDate < days[0]) weekAgoDate = days[0];
     const oldestDate = days[0];
-    for (let [day, matchIds] of matchIdsByDay) {
+    console.log(`matchIds count ${matchIdsByDay.size}, today: ${todayDate}, week ago: ${weekAgoDate}, oldest: ${oldestDate}`);
+    for (let day of days) {
+    // for (let [day, matchIds] of matchIdsByDay) {
+      let matchIds = matchIdsByDay.get(day)!;
       if (!matchIds.size) {
-        console.log(`EMpty matchIds for ${day}`);
+        console.log(`Empty matchIds for ${day}`);
         continue;
       }
       let rr = rrByDate.get(day) ?? [];

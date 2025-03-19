@@ -8,19 +8,22 @@ container_state() {
 }
 
 check() {
-    F="$1"
-    DF="$DDIR/$F"
-    S="$2"
-    if [[ -e "$DF" && "$(container_state "$S")" == "false" ]]; then
-        docker start "$S"
+    SELECTOR="$1"
+    SERVER_FILE="$DDIR/server_active_${SELECOR}.txt"
+    CONTAINER="haxball-server-futsal-${SELECTOR/_/-}"
+    COUNTERS="$DDIR/current_players_number_${SELECTOR}.csv"
+    if [[ -e "$SERVER_FILE" && "$(container_state "$CONTAINER")" == "false" ]]; then
+        docker start "$CONTAINER"
         exit 0
     fi
-    if [[ ! -e "$DF" && "$(container_state "$S")" == "true" ]]; then
-        docker stop "$S"
+    if [[ ! -e "$SERVER_FILE" && "$(container_state "$CONTAINER")" == "true" ]]; then
+        docker stop "$CONTAINER"
+        echo "$(date +"%Y-%m-%d,%H:%M:%S"),-1,0" >>$COUNTERS
         exit
     fi
 }
 
-check "server_active_3vs3_2.txt" "haxball-server-futsal-3vs3-2"
-check "server_active_3vs3_3.txt" "haxball-server-futsal-3vs3-3"
-
+# do not scale 3vs3_1 as main server
+check "3vs3_2"
+check "3vs3_3"
+check "4vs4_1"

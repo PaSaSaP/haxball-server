@@ -9,6 +9,7 @@ import apiPrivateGetMatches from './api/private/get_matches';
 import apiPrivateGetMatchStats from './api/private/get_match_stats';
 import apiGetAggStats from './api/get_agg_match_stats';
 import apiGetHallOfFame from './api/get_hall_of_fame';
+import apiGetServersTimeline from './api/get_servers_timeline';
 import stripeRedirect from './api/stripe_redirect';
 import apiLogin from './api/login';
 import apiSaveToken from './api/save_token';
@@ -33,6 +34,7 @@ app.use("/api/private/matches", apiPrivateGetMatches);
 app.use("/api/private/match_stats", apiPrivateGetMatchStats);
 app.use("/api/agg_stats", apiGetAggStats);
 app.use("/api/hall_of_fame", apiGetHallOfFame);
+app.use("/api/servers_timeline", apiGetServersTimeline);
 
 app.use("/api/login", apiLogin);
 app.use("/api/save_token", apiSaveToken);

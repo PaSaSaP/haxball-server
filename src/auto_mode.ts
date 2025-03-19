@@ -1,8 +1,11 @@
+import * as config from './config';
 import { HaxballRoom } from "./hb_room";
 import { PlayerData, Match, PlayerLeavedDueTo, RatingProcessingState, MatchType } from "./structs";
 import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
 import { AutoVoteHandler } from "./vote_kick";
+import { randomInt } from "crypto";
+
 
 enum MatchState {
   lobby,
@@ -75,6 +78,7 @@ export class AutoBot {
   private restartRequestedByBlue: boolean;
   private minuteLeftReminder: boolean;
   private chosingPlayerNextReminder: number;
+  private adNextReminder: number;
   autoVoter: AutoVoteHandler;
   lobbyAction: () => boolean;
 
@@ -110,6 +114,7 @@ export class AutoBot {
     this.restartRequestedByBlue = false;
     this.minuteLeftReminder = false;
     this.chosingPlayerNextReminder = 60;
+    this.adNextReminder = 30 + randomInt(90);
     this.autoVoter = new AutoVoteHandler(this);
     this.lobbyAction = () => { return false; };
     this.prepareShortMatchHelp();
@@ -174,7 +179,9 @@ export class AutoBot {
     let rl = this.redTeam.length;
     let bl = this.blueTeam.length;
     let added = true;
-    if (rl < limit && rl <= bl) {
+    if (playerExt.afk || playerExt.afk_maybe) {
+      added = false;
+    } else if (rl < limit && rl <= bl) {
       this.movePlayerToRed(playerExt, this.specTeam);
       rl++;
     } else if (bl < limit) {
@@ -346,6 +353,7 @@ export class AutoBot {
     this.minuteLeftReminder = false;
     this.fullTimeMatchPlayed = false;
     this.chosingPlayerNextReminder = 60;
+    this.adNextReminder = 30 + randomInt(90);
     this.autoVoter.resetOnMatchStarted();
     let matchType: MatchType = 'none';
     if (this.ranked) {
@@ -448,10 +456,15 @@ export class AutoBot {
   showChosingPlayerReminder(scores: ScoresObject) {
     if (scores.time > this.chosingPlayerNextReminder) {
       this.specTeam.forEach(p => {
-        if (!p.afk && !p.afk_maybe) this.hb_room.sendMsgToPlayer(p, `Wybierz graczy do drużyny, wpisz: !wyb @anusiak @czesio @konieczko @maślana @zajkowski`, Colors.BrightGreen, 'bold');
-        else this.hb_room.sendMsgToPlayer(p, "Czy nadal jesteś AFK? Wpisz !afk lub !back by wrócić do gry, !afks by sprawdzić kto afczy!", Colors.DarkRed, 'bold');
+        if (!p.afk && !p.afk_maybe) this.hb_room.sendMsgToPlayer(p, `Wybierz graczy do drużyny, wpisz: !wyb @anusiak @czesio @konieczko @maślana @zajkowski`, Colors.DarkGreen, 'bold');
+        else this.hb_room.sendMsgToPlayer(p, "Jesteś AFK! Chcesz zagrać? Wpisz !afk lub !back by wrócić do gry, !afks by sprawdzić kto afczy!", Colors.BrightGreen, 'bold');
       });
       this.chosingPlayerNextReminder += 60;
+    }
+    if (scores.time > this.adNextReminder) {
+      this.hb_room.sendMsgToAll(`🎉 Kup cieszynkę: !kup |💬Discord: ${config.discordLink} |🌐Strona: ${config.webpageLink}`,
+        Colors.OrangeTangelo, 'small-bold');
+      this.adNextReminder = 9999; // send only once
     }
   }
 
@@ -707,8 +720,8 @@ export class AutoBot {
       }
       if (Math.abs(rl - bl) > 1) {
         // AMLog("Przesuwamy bo 3vs1 albo 2vs0");
-        if (rl > bl) this.moveLastFromTeamToSpec(this.redTeam, true);
-        else this.moveLastFromTeamToSpec(this.blueTeam, true);
+        if (rl > bl) this.movePlayerToBlue(this.redTeam[this.redTeam.length - 1], this.redTeam);
+        else this.movePlayerToRed(this.blueTeam[this.blueTeam.length - 1], this.blueTeam);
         return;
       }
       if (limit === 4 && (rl === limit && bl === limit-1 || rl === limit-1 && bl === limit)) {
