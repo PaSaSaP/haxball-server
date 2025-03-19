@@ -39,13 +39,13 @@ function matchToArray(m: MatchStatsEntry): CacheData {
 }
 
 function getCacheDataFromMatchId(cache: Cache, match_id: number): CacheData[] {
-  const idx = cache.cache.findIndex(e => e[0] == match_id);
+  const idx = cache.cache.findIndex(e => e[0] >= match_id);
   if (idx === -1) return [];
   return cache.cache.slice(idx);
 }
 
 function getCacheDataBetween(cache: Cache, startMatchId: number, endMatchId: number): CacheData[] {
-  const startIdx = cache.cache.findIndex(e => e[0] === startMatchId);
+  const startIdx = cache.cache.findIndex(e => e[0] >= startMatchId);
   if (startIdx === -1) return [];
   const endIdx = cache.cache.findIndex((e, i) => i >= startIdx && e[0] === endMatchId);
   if (endIdx !== -1) return cache.cache.slice(startIdx, endIdx+1);
@@ -73,22 +73,25 @@ async function fetchMatchStats(cache: Cache) {
     console.log(`(${cache.which}) Got ${results.length} new match stats, now there is ${cache.matchStats.length} matches, lastRowId=${cache.lastRowId}, rowId=${rowId}`);
     newRowId = rowId;
 
-    let firstMatchId = -1;
-    if (cache.which === "1vs1") firstMatchId = getFirstMatchId1vs1();
-    else if (cache.which === "3vs3") firstMatchId = getFirstMatchId3vs3();
-    else if (cache.which === "4vs4") firstMatchId = getFirstMatchId4vs4();
-    else throw new Error("invalid selector");
-    if (firstMatchId > 0) {
-      let foundIdx = -1;
-      for (let i = 0; i < cache.matchStats.length; ++i) {
-        let m = cache.matchStats[i];
-        if (m.match_id < firstMatchId) foundIdx = i;
-        else break;
-      }
-      if (foundIdx !== -1) {
-        console.log(`Truncating first ${foundIdx} match stats`);
-        for (let idx = 0; idx <= foundIdx; ++idx) cache.matchStatsByMatchId.delete(cache.matchStats[idx].match_id);
-        cache.matchStats = cache.matchStats.slice(foundIdx + 1);
+    const removeOlderMatches = true; // debug switch
+    if (removeOlderMatches) {
+      let firstMatchId = -1;
+      if (cache.which === "1vs1") firstMatchId = getFirstMatchId1vs1();
+      else if (cache.which === "3vs3") firstMatchId = getFirstMatchId3vs3();
+      else if (cache.which === "4vs4") firstMatchId = getFirstMatchId4vs4();
+      else throw new Error("invalid selector");
+      if (firstMatchId > 0) {
+        let foundIdx = -1;
+        for (let i = 0; i < cache.matchStats.length; ++i) {
+          let m = cache.matchStats[i];
+          if (m.match_id < firstMatchId) foundIdx = i;
+          else break;
+        }
+        if (foundIdx !== -1) {
+          console.log(`Truncating first ${foundIdx} match stats`);
+          for (let idx = 0; idx <= foundIdx; ++idx) cache.matchStatsByMatchId.delete(cache.matchStats[idx].match_id);
+          cache.matchStats = cache.matchStats.slice(foundIdx + 1);
+        }
       }
     }
   } catch (e) { console.error(`Error for match stats: ${e}`) };

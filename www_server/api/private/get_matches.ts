@@ -38,7 +38,7 @@ function matchToArray(m: MatchEntry): CacheData {
 }
 
 function getCacheDataFromMatchId(cache: Cache, match_id: number): CacheData[] {
-  const idx = cache.cache.findIndex(e => e[0] == match_id);
+  const idx = cache.cache.findIndex(e => e[0] >= match_id);
   if (idx === -1) return [];
   return cache.cache.slice(idx);
 }
@@ -64,24 +64,27 @@ async function fetchMatches(cache: Cache) {
       cache.matchByMatchId.set(result.match_id, result);
       cache.matches.push(result);
     }
-    newLastMatchId = cache.matches.at(cache.matches.length-1)?.match_id ?? -1;
+    newLastMatchId = cache.matches.at(-1)?.match_id ?? -1;
     console.log(`Got ${results.length} new matches, now there is ${cache.matches.length} matches, lastMatchId=${cache.lastMatchId}, newLastMatchId=${newLastMatchId}`);
 
-    // also remove matches older than 7 days
-    let currentDate = await matchesDb.getCurrentDate(); // for example 2025-03-12
-    let currentDateObj = new Date(currentDate);
-    currentDateObj.setDate(currentDateObj.getDate() - 6);
-    let weekDate = currentDateObj.toISOString().split('T')[0];
-    let foundIdx = -1;
-    for (let i = 0; i < cache.matches.length; ++i) {
-      let m = cache.matches[i];
-      if (m.date < weekDate) foundIdx = i;
-      else break;
-    }
-    if (foundIdx !== -1) {
-      console.log(`Truncating first ${foundIdx} matches`);
-      for (let idx = 0; idx <= foundIdx; ++idx) cache.matchByMatchId.delete(cache.matches[idx].match_id);
-      cache.matches = cache.matches.slice(foundIdx + 1);
+    const removeOlderMatches = true; // debug switch
+    if (removeOlderMatches) {
+      // also remove matches older than 7 days
+      let currentDate = await matchesDb.getCurrentDate(); // for example 2025-03-12
+      let currentDateObj = new Date(currentDate);
+      currentDateObj.setDate(currentDateObj.getDate() - 6);
+      let weekDate = currentDateObj.toISOString().split('T')[0];
+      let foundIdx = -1;
+      for (let i = 0; i < cache.matches.length; ++i) {
+        let m = cache.matches[i];
+        if (m.date < weekDate) foundIdx = i;
+        else break;
+      }
+      if (foundIdx !== -1) {
+        console.log(`Truncating first ${foundIdx} matches`);
+        for (let idx = 0; idx <= foundIdx; ++idx) cache.matchByMatchId.delete(cache.matches[idx].match_id);
+        cache.matches = cache.matches.slice(foundIdx + 1);
+      }
     }
   } catch (e) { console.error(`Error for matches: ${e}`) };
   cache.lastMatchId = newLastMatchId;

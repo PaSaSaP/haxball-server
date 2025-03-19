@@ -40,8 +40,6 @@ export class PlayerMatchStatsDB extends BaseDB {
       this.db.get(query, [auth_id], (err, row: any) => {
         if (err) {
           reject('Error loading player match stats: ' + err.message);
-        } else if (!row) {
-          return null;
         } else {
           resolve(row);
         }

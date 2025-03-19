@@ -180,7 +180,7 @@ export class AccuStats {
         let playerId = playerIdByAuth.get(s.auth_id)!;
         if (s.team === 1) match.redTeam.push(playerId);
         else if (s.team === 2) match.blueTeam.push(playerId);
-        let stat = match.stat(playerId); // create stat in match data
+        let stat = match.statInMatch(playerId); // create stat in match data
         if (!s.full_time) {
           if (!s.left_state) {
             stat.joinedAt = matchDuration - s.playtime;
@@ -446,7 +446,10 @@ export class AccuStats {
     const todayDate = currentDate;
     let weekAgoDate = this.getDateMinusDays(currentDate);
     if (weekAgoDate < days[0]) weekAgoDate = days[0];
-    const oldestDate = days[0];
+    let oldestDate = days[0];
+    if (oldestDate === undefined) {
+      oldestDate = weekAgoDate;
+    }
     console.log(`matchIds count ${matchIdsByDay.size}, today: ${todayDate}, week ago: ${weekAgoDate}, oldest: ${oldestDate}`);
     for (let day of days) {
     // for (let [day, matchIds] of matchIdsByDay) {
@@ -587,7 +590,7 @@ export class AccuStats {
         let playerId = playerIdByAuth.get(s.auth_id)!;
         if (s.team === 1) match.redTeam.push(playerId);
         else if (s.team === 2) match.blueTeam.push(playerId);
-        let stat = match.stat(playerId); // create stat in match data
+        let stat = match.statInMatch(playerId); // create stat in match data
         if (!s.full_time) {
           if (!s.left_state) {
             stat.joinedAt = matchDuration - s.playtime;

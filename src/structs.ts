@@ -100,6 +100,7 @@ export class PlayerData {
   name: string;
   name_normalized: string;
   id: number;
+  user_id: number; // should be unique in system
   team: number;
   admin: boolean;
   admin_stats: AdminStats | null;
@@ -126,6 +127,7 @@ export class PlayerData {
     this.name = player.name; /// @type string
     this.name_normalized = normalizeNameString(this.name);
     this.id = player.id; /// @type int
+    this.user_id = -1;
     this.team = player.team;
     this.admin = player.admin;
     this.admin_stats = null;
@@ -344,7 +346,7 @@ export class Match {
   endedAt: number;  // Date time, not for statistics
   redTeam: number[]; // player ids
   blueTeam: number[]; // player ids
-  playerStats: Map<number, PlayerStatInMatch>; // player id -> stat
+  private playerStats: Map<number, PlayerStatInMatch>; // player id -> stat
   goals: [number, 1|2][]; // list of tuples (time, team) where time is in seconds, team 1 is red, 2 is blue
   ratingState: RatingProcessingState;
   matchStatsState: MatchStatsProcessingState;
@@ -392,9 +394,16 @@ export class Match {
     }
   }
   isEnded() { return this.endedAt > 0; }
-  stat(id: number): PlayerStatInMatch {
+  statInMatch(id: number): PlayerStatInMatch {
     if (!this.playerStats.has(id)) this.playerStats.set(id, new PlayerStatInMatch(id));
     return this.playerStats.get(id)!;
+  }
+  setPlayerLeftStatusTo(playerExt: PlayerData, at: number, dueTo: PlayerLeavedDueTo) {
+    let pstats = this.playerStats.get(playerExt.id);
+    if (pstats && !pstats.isLeftStatusSet()) {
+      pstats.leftAt = at;
+      pstats.leftDueTo = dueTo;
+    }
   }
 
   getWinnerTeamIds() {
@@ -407,6 +416,10 @@ export class Match {
     if (this.winnerTeam == 2) return this.redTeam;
     if (this.winnerTeam == 1) return this.blueTeam;
     return [];
+  }
+
+  getPlayerInMatchStats() {
+    return this.playerStats;
   }
 }
 

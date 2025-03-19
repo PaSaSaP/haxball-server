@@ -221,11 +221,7 @@ export class AutoBot {
   }
 
   setPlayerLeftStatusTo(playerExt: PlayerData, dueTo: PlayerLeavedDueTo) {
-    let pstats = this.currentMatch.playerStats.get(playerExt.id);
-    if (pstats && !pstats.isLeftStatusSet()) {
-      pstats.leftAt = this.currentScores?.time ?? 0;
-      pstats.leftDueTo = dueTo;
-    }
+    this.currentMatch.setPlayerLeftStatusTo(playerExt, this.currentScores?.time ?? 0, dueTo);
   }
 
   async handlePlayerTeamChange(changedPlayer: PlayerData) {
@@ -363,8 +359,8 @@ export class AutoBot {
     this.currentMatch = new Match(matchType);
     this.currentMatch.redTeam = [...this.redTeam.map(e=>e.id)];
     this.currentMatch.blueTeam = [...this.blueTeam.map(e=>e.id)];
-    for (let id of this.currentMatch.redTeam) this.currentMatch.stat(id);
-    for (let id of this.currentMatch.blueTeam) this.currentMatch.stat(id);
+    for (let id of this.currentMatch.redTeam) this.currentMatch.statInMatch(id);
+    for (let id of this.currentMatch.blueTeam) this.currentMatch.statInMatch(id);
   }
 
   async handleGameStop(byPlayer: PlayerData | null) {
@@ -1023,7 +1019,7 @@ export class AutoBot {
     this.movePlayer(playerExt.id, fromTeam, this.redTeam, playerExt.team, onTop);
     if (!this.isLobbyTime()) { // if match in progress
       this.currentMatch.redTeam.push(playerExt.id);
-      let stat = this.currentMatch.stat(playerExt.id);
+      let stat = this.currentMatch.statInMatch(playerExt.id);
       if (this.currentScores) stat.joinedAt = this.currentScores.time;
     }
   }
@@ -1032,7 +1028,7 @@ export class AutoBot {
     this.movePlayer(playerExt.id, fromTeam, this.blueTeam, playerExt.team, onTop);
     if (!this.isLobbyTime()) { // if match in progress
       this.currentMatch.blueTeam.push(playerExt.id);
-      let stat = this.currentMatch.stat(playerExt.id);
+      let stat = this.currentMatch.statInMatch(playerExt.id);
       if (this.currentScores) stat.joinedAt = this.currentScores.time;
     }
   }

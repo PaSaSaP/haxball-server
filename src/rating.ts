@@ -153,9 +153,9 @@ export class Ratings {
     const oldRatings: Map<number, number> = new Map();
     // if player left at the beginning or player played less than 10 seconds
     const shouldNotRatePlayer = (stat: PlayerStatInMatch) => { return stat.leftAt === 0 || (stat.joinedAt > 0 && matchDuration - stat.joinedAt < 10) };
-    const theOnlyRedTeam = match.redTeam.filter(id => !shouldNotRatePlayer(match.stat(id)));
-    const theOnlyBlueTeam = match.blueTeam.filter(id => !shouldNotRatePlayer(match.stat(id)));
-    const playerIdsInMatch: number[] = theOnlyRedTeam.concat(theOnlyBlueTeam).filter(id => match.stat(id).id == id);
+    const theOnlyRedTeam = match.redTeam.filter(id => !shouldNotRatePlayer(match.statInMatch(id)));
+    const theOnlyBlueTeam = match.blueTeam.filter(id => !shouldNotRatePlayer(match.statInMatch(id)));
+    const playerIdsInMatch: number[] = theOnlyRedTeam.concat(theOnlyBlueTeam).filter(id => match.statInMatch(id).id == id);
     this.results = [];
 
     if (!fullTimeMatchPlayed) {
@@ -163,7 +163,7 @@ export class Ratings {
       this.Log(`Rescaler = ${rescaler} because of ${match.redScore}:${match.blueScore}/${this.limits.score} t:${matchDuration}/${this.limits.time}`);
     }
     for (const playerId of playerIdsInMatch) {
-      const stat = match.stat(playerId);
+      const stat = match.statInMatch(playerId);
       let player = playerStats.get(playerId);
       if (!player || !player.glickoPlayer) {
         throw new Error(`Player ${playerId} has null stat or glickoPlayer during update`); // there HAVE TO be set valid one
@@ -180,7 +180,7 @@ export class Ratings {
 
     for (const playerId of playerIdsInMatch) {
       const player = playerStats.get(playerId)!;
-      const stat = match.stat(playerId);
+      const stat = match.statInMatch(playerId);
       const oldMu = oldRatings.get(playerId)!;
       const newMu = player.glickoPlayer!.getRating();
       const newRd = player.glickoPlayer!.getRd();

@@ -2,6 +2,12 @@ import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
 import { BaseDB } from './base_db';
 
+export interface PlayerNameEntry {
+  id: number;
+  auth_id: string;
+  name: string;
+  claimed: number;
+}
 export class PlayerNamesDB extends BaseDB {
   constructor(db: sqlite3.Database) {
     super(db);
@@ -11,27 +17,32 @@ export class PlayerNamesDB extends BaseDB {
     await this.setupWalAndSync();
     // Tworzenie tabeli player_names, jeśli jeszcze nie istnieje
     const createPlayerNamesTableQuery = `
-        CREATE TABLE IF NOT EXISTS player_names (
-          auth_id TEXT,
-          name TEXT,
-          PRIMARY KEY (auth_id, name)
-        );
-      `;
+      CREATE TABLE IF NOT EXISTS player_names (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        auth_id TEXT,
+        name TEXT,
+        claimed INTEGER DEFAULT 0,
+        UNIQUE (auth_id, name)
+      );
+    `;
     await this.promiseQuery(createPlayerNamesTableQuery, 'player_names');
   }
 
 
-  async insertPlayerName(auth_id: string, name: string): Promise<void> {
+  async insertPlayerName(auth_id: string, name: string): Promise<number> {
     return new Promise((resolve, reject) => {
       const query = `
-          INSERT OR IGNORE INTO player_names (auth_id, name) 
-          VALUES (?, ?);
+        INSERT INTO player_names (auth_id, name) 
+          SELECT ?, ?
+          WHERE NOT EXISTS (
+            SELECT 1 FROM player_names WHERE LOWER(name) = LOWER(?) AND claimed = 1
+          );
         `;
-      this.db.run(query, [auth_id, name], (err) => {
+      this.db.run(query, [auth_id, name], function (err) {
         if (err) {
           reject('Error inserting player name: ' + err.message);
         } else {
-          resolve();
+          resolve(this.lastID);
         }
       });
     });
@@ -43,7 +54,7 @@ export class PlayerNamesDB extends BaseDB {
           SELECT name
           FROM player_names
           WHERE auth_id = ?
-          ORDER BY ROWID DESC
+          ORDER BY id DESC
           LIMIT ?;
         `;
 
@@ -63,8 +74,8 @@ export class PlayerNamesDB extends BaseDB {
       const query = `
           SELECT auth_id, name
           FROM player_names
-          WHERE ROWID IN (
-            SELECT MAX(ROWID) 
+          WHERE (auth_id, claimed) IN (
+            SELECT auth_id, MAX(claimed) 
             FROM player_names 
             GROUP BY auth_id
           );
@@ -84,28 +95,24 @@ export class PlayerNamesDB extends BaseDB {
     });
   }
 
-  async getAllPlayerNamesAfter(lastRowId: number): Promise<[Map<string, string>, number]> {
+  async getAllPlayerNamesAfter(lastId: number): Promise<PlayerNameEntry[]> {
     return new Promise((resolve, reject) => {
       const query = `
-      SELECT ROWID, auth_id, name
-        FROM player_names
-        WHERE ROWID > ?
-        ORDER BY ROWID ASC;
+        SELECT id, auth_id, name, claimed
+          FROM player_names
+          WHERE id > ?
+          AND (auth_id, claimed) IN (
+            SELECT auth_id, MAX(claimed)
+            FROM player_names
+            GROUP BY auth_id
+          )
+        ORDER BY id ASC;
       `;
-    
-      this.db.all(query, [lastRowId], (err, rows: any[]) => {
+      this.db.all(query, [lastId], (err, rows: PlayerNameEntry[]) => {
         if (err) {
           reject('Error fetching new player names: ' + err.message);
         } else {
-          const result = new Map<string, string>();
-          let maxRowId = lastRowId;
-          for (const row of rows) {
-            result.set(row.auth_id, row.name);
-            if (row.rowid > maxRowId) {
-              maxRowId = row.rowid;
-            }
-          }
-          resolve([result, maxRowId]);
+          resolve(rows ? rows : []);
         }
       });
     });

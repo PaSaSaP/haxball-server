@@ -1,9 +1,9 @@
 import express, { Request, Response } from "express";
 import sqlite3 from 'sqlite3';
-import { PlayerNamesDB } from "../../../src/db/player_names";
+import { PlayerNameEntry, PlayerNamesDB } from "../../../src/db/player_names";
 import * as config from "../../../src/config";
 import * as secrets from "../../../src/secrets";
-import { getTimestampHM } from "../../../src/utils";
+import { getTimestampHM, normalizeNameString } from "../../../src/utils";
 
 const router = express.Router();
 
@@ -11,12 +11,24 @@ let roomConfig = config.getRoomConfig("3vs3");
 
 interface Cache {
   which: "global";
-  playerNames: Map<string, string>;
-  cache: Record<string, string>;
-  lastRowId: number;
+  playerNames: PlayerNameEntry[];
+  playerNamesByAuth: Map<string, string>;
+  playerIdsByNormalizedName: Map<string, number>;
+  playerEntryByAuth: Map<string, PlayerNameEntry>;
+  playerEntryById: Map<number, PlayerNameEntry>;
+  cache: Record<string, string>; // authId -> playerName
+  cacheAll: Record<string, [number, string]>; // authId -> [userId, playerName]
+  lastPlayerGlobalId: number;
   lastFetchTime: number;
 }
-let globalCache: Cache = { which: "global", playerNames: new Map<string, string>(), cache: {}, lastRowId: -1, lastFetchTime: 0 };
+let globalCache: Cache = {
+  which: "global", playerNames: [],
+  playerNamesByAuth: new Map(),
+  playerIdsByNormalizedName: new Map(),
+  playerEntryByAuth: new Map(),
+  playerEntryById: new Map(),
+  cache: {}, cacheAll: {}, lastPlayerGlobalId: -1, lastFetchTime: 0
+};
 
 const CACHE_DURATION = 3 * 60 * 1000; // 3 minutes
 
@@ -25,25 +37,34 @@ async function fetchPlayerNames(cache: Cache) {
   let playersDb = new sqlite3.Database(roomConfig.playersDbFile, (err) => {
     if (err) console.error('Error opening database:', err.message);
   });
-  let newRowId = -1;
+  let newLastPlayerGlobalId = -1;
   if (cache.which === "global") {
     try {
       let playerNamesDb = new PlayerNamesDB(playersDb);
-      let [results, rowId] = await playerNamesDb.getAllPlayerNamesAfter(cache.lastRowId);
-      for (let [authId, playerName] of results) {
-        cache.playerNames.set(authId, playerName);
+      let results = await playerNamesDb.getAllPlayerNamesAfter(cache.lastPlayerGlobalId);
+      for (let playerNameEntry of results) {
+        // TODO add some preprocessing to disallow name claiming
+        cache.playerNamesByAuth.set(playerNameEntry.auth_id, playerNameEntry.name);
+        cache.playerIdsByNormalizedName.set(normalizeNameString(playerNameEntry.name), playerNameEntry.id);
+        cache.playerEntryByAuth.set(playerNameEntry.auth_id, playerNameEntry);
+        cache.playerEntryById.set(playerNameEntry.id, playerNameEntry);
       }
-      console.log(`Got ${results.size} new names, now there is ${cache.playerNames.size} names, lastRowId=${cache.lastRowId}, rowId=${rowId}`);
-      newRowId = rowId;
+      newLastPlayerGlobalId = cache.playerNames.at(-1)?.id ?? -1;
+      console.log(`Got ${results.length} new names, now there is ${cache.playerNamesByAuth.size} names, lastId=${cache.lastPlayerGlobalId}, newId=${newLastPlayerGlobalId}`);
     } catch (e) { console.error(`Error for player names: ${e}`) };
   }
-  cache.lastRowId = newRowId;
-  cache.cache = Object.fromEntries(cache.playerNames);
+  cache.lastPlayerGlobalId = newLastPlayerGlobalId;
+  let cacheAllMap: Map<string, [number, string]> = new Map();
+  for (let p of cache.playerNames) {
+    cacheAllMap.set(p.auth_id, [p.id, p.name]);
+  }
+  cache.cache = Object.fromEntries(cache.playerNamesByAuth);
+  cache.cacheAll = Object.fromEntries(cacheAllMap);
   cache.lastFetchTime = Date.now();
 }
 
 async function getPlayerNamesCached(cache: Cache) {
-  if (cache.playerNames.size === 0 || Date.now() - cache.lastFetchTime > CACHE_DURATION) {
+  if (cache.playerNamesByAuth.size === 0 || Date.now() - cache.lastFetchTime > CACHE_DURATION) {
     await fetchPlayerNames(cache);
   }
   return cache;
@@ -65,16 +86,41 @@ router.get("/", async (req: any, res: any) => {
   let cached = await getAllPlayerNamesCached();
   res.json(cached.cache);
 });
+router.get("/all", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  let cached = await getAllPlayerNamesCached();
+  res.json(cached.cacheAll);
+});
 
-router.get("/:authId", async (req: any, res: any) => {
+router.get("/auth/:authId", async (req: any, res: any) => {
   if (!verify(req, res)) return;
   const { authId } = req.params;
   let cached = await getAllPlayerNamesCached();
-  let playerName = cached.playerNames.get(authId);
+  let playerName = cached.playerNamesByAuth.get(authId);
   if (playerName === undefined) {
     return res.status(400).send('No data');
   }
   res.json({[authId]: playerName});
+});
+router.get("/id_by_nname/:nname", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const nname: string = normalizeNameString(String(req.params.nname));
+  let cached = await getAllPlayerNamesCached();
+  let playerId = cached.playerIdsByNormalizedName.get(nname);
+  if (playerId === undefined) {
+    return res.status(400).send('No data');
+  }
+  res.json({[nname]: playerId});
+});
+router.get("/id_by_auth/:authId", async (req: any, res: any) => {
+  if (!verify(req, res)) return;
+  const { authId } = req.params;
+  let cached = await getAllPlayerNamesCached();
+  let entry = cached.playerEntryByAuth.get(authId);
+  if (entry === undefined) {
+    return res.status(400).send('No data');
+  }
+  res.json({[authId]: entry.id});
 });
 
 export default router;

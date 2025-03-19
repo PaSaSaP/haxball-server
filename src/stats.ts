@@ -222,6 +222,7 @@ export class MatchStats {
   private handleLineupChangeTeamChange(changedPlayer: PlayerData, redTeam: number[], blueTeam: number[]) {
     let currentGameTime = this.game.scores?.time ?? 0;
     if (changedPlayer.team == Team.RED) {
+      STLog(`handleLineupChangeTeamChange ${changedPlayer.name} goes into RED at ${currentGameTime}`);
       // player gets in red team
       let idx = this.game.redCompositions.findIndex(c => c.player.auth_id == changedPlayer.auth_id);
       if (idx != -1) {
@@ -238,6 +239,7 @@ export class MatchStats {
       }
     } else if (changedPlayer.team == Team.BLUE) {
       // player gets in blue team
+      STLog(`handleLineupChangeTeamChange ${changedPlayer.name} goes into BLUE at ${currentGameTime}`);
       let idx = this.game.blueCompositions.findIndex(c => c.player.auth_id == changedPlayer.auth_id);
       if (idx != -1) {
         // Player goes back in
@@ -251,38 +253,43 @@ export class MatchStats {
       } else {
         this.game.blueCompositions.push(new PlayerComposition(changedPlayer, currentGameTime));
       }
-    }
-    if (redTeam.includes(changedPlayer.id)) {
-      // player leaves red team
-      let compositionIndex = this.game.redCompositions.findIndex(e => e.player.auth_id == changedPlayer.auth_id);
-      if (compositionIndex != -1) {
-        let composition = this.game.redCompositions[compositionIndex];
-        if (composition.timeEntry.includes(currentGameTime)) {
-          // gets subbed off then in at the exact same time -> no sub
-          if (currentGameTime == 0) {
-            this.game.redCompositions.splice(compositionIndex, 1);
+    } else { // changedPlayer in spec team
+      if (redTeam.includes(changedPlayer.id)) {
+        // player leaves red team
+        STLog(`handleLineupChangeTeamChange ${changedPlayer.name} goes into SPEC from RED at ${currentGameTime}`);
+        let compositionIndex = this.game.redCompositions.findIndex(e => e.player.auth_id == changedPlayer.auth_id);
+        if (compositionIndex != -1) {
+          let composition = this.game.redCompositions[compositionIndex];
+          if (composition.timeEntry.includes(currentGameTime)) {
+            // gets subbed off then in at the exact same time -> no sub
+            if (currentGameTime == 0) {
+              this.game.redCompositions.splice(compositionIndex, 1);
+            } else {
+              composition.timeEntry = composition.timeEntry.filter(e => e != currentGameTime);
+            }
           } else {
-            composition.timeEntry = composition.timeEntry.filter(e => e != currentGameTime);
+            composition.timeExit.push(currentGameTime);
           }
-        } else {
-          composition.timeExit.push(currentGameTime);
         }
-      }
-    } else if (blueTeam.includes(changedPlayer.id)) {
-      // player leaves blue team
-      let compositionIndex = this.game.blueCompositions.findIndex(e => e.player.auth_id == changedPlayer.auth_id);
-      if (compositionIndex != -1) {
-        let composition = this.game.blueCompositions[compositionIndex];
-        if (composition.timeEntry.includes(currentGameTime)) {
-          // gets subbed off then in at the exact same time -> no sub
-          if (currentGameTime == 0) {
-            this.game.blueCompositions.splice(compositionIndex, 1);
+      } else if (blueTeam.includes(changedPlayer.id)) {
+        // player leaves blue team
+        STLog(`handleLineupChangeTeamChange ${changedPlayer.name} goes into SPEC from BLUE at ${currentGameTime}`);
+        let compositionIndex = this.game.blueCompositions.findIndex(e => e.player.auth_id == changedPlayer.auth_id);
+        if (compositionIndex != -1) {
+          let composition = this.game.blueCompositions[compositionIndex];
+          if (composition.timeEntry.includes(currentGameTime)) {
+            // gets subbed off then in at the exact same time -> no sub
+            if (currentGameTime == 0) {
+              this.game.blueCompositions.splice(compositionIndex, 1);
+            } else {
+              composition.timeEntry = composition.timeEntry.filter(e => e != currentGameTime);
+            }
           } else {
-            composition.timeEntry = composition.timeEntry.filter(e => e != currentGameTime);
+            composition.timeExit.push(currentGameTime);
           }
-        } else {
-          composition.timeExit.push(currentGameTime);
         }
+      } else {
+        STLog(`handleLineupChangeTeamChange ${changedPlayer.name} goes into SPEC from SPEC?!?! at ${currentGameTime}`);
       }
     }
   }

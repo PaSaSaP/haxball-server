@@ -65,7 +65,7 @@ class AggregatedCache {
     let otherDb = new sqlite3.Database(cache.dbFile, (err) => {
       if (err) console.error('Error opening database:', err.message);
     });
-    let playerNames = (await getAllPlayerNamesCached()).playerNames;
+    let playerNames = (await getAllPlayerNamesCached()).playerNamesByAuth;
   
     let match: MatchEntry|null = null;
     await getMatchBySelectorAndMatchId(cache.which, matchId).then((result) => {

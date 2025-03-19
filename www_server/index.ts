@@ -7,7 +7,8 @@ import apiStripeTransaction from './api/stripe_transaction';
 import apiPrivateGetPlayers from './api/private/get_player_names';
 import apiPrivateGetMatches from './api/private/get_matches';
 import apiPrivateGetMatchStats from './api/private/get_match_stats';
-import apiGetAggStats from './api/get_agg_match_stats';
+import apiGetMatchAggStats from './api/get_agg_match_stats';
+import apiGetPlayerAggStats from './api/get_agg_player_stats';
 import apiGetHallOfFame from './api/get_hall_of_fame';
 import apiGetServersTimeline from './api/get_servers_timeline';
 import stripeRedirect from './api/stripe_redirect';
@@ -32,7 +33,9 @@ app.use("/stripe", stripeRedirect);
 app.use("/api/private/player_names", apiPrivateGetPlayers);
 app.use("/api/private/matches", apiPrivateGetMatches);
 app.use("/api/private/match_stats", apiPrivateGetMatchStats);
-app.use("/api/agg_stats", apiGetAggStats);
+app.use("/api/agg_stats", apiGetMatchAggStats); // TODO remove
+app.use("/api/match_agg_stats", apiGetMatchAggStats);
+app.use("/api/player_agg_stats", apiGetPlayerAggStats);
 app.use("/api/hall_of_fame", apiGetHallOfFame);
 app.use("/api/servers_timeline", apiGetServersTimeline);
 

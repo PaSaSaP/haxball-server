@@ -9,10 +9,11 @@ container_state() {
 
 check() {
     SELECTOR="$1"
-    SERVER_FILE="$DDIR/server_active_${SELECOR}.txt"
+    SERVER_FILE="$DDIR/server_active_${SELECTOR}.txt"
     CONTAINER="haxball-server-futsal-${SELECTOR/_/-}"
     COUNTERS="$DDIR/current_players_number_${SELECTOR}.csv"
     if [[ -e "$SERVER_FILE" && "$(container_state "$CONTAINER")" == "false" ]]; then
+        echo "$(date +"%Y-%m-%d,%H:%M:%S"),-3,0" >>$COUNTERS
         docker start "$CONTAINER"
         exit 0
     fi

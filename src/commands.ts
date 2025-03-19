@@ -947,6 +947,8 @@ class Commander {
     let winRate = stat.fullGames > 0 ? ((stat.fullWins / stat.fullGames) * 100).toFixed(1) : 0;
     let msg = `${cmdPlayerExt.name}➡️ 🔝${rank} ⭐${rating} ±${rd} ⚽${stat.goals} 🤝${stat.assists} ❌${stat.ownGoals} 🧤${stat.cleanSheets} ⏱️${playtimeMin}m`
       + ` 🎮Pełne: ${stat.fullWins}/${stat.fullGames} 🔲Wszystkie: ${stat.wins}/${stat.games} (WR: ${winRate}%)`;
+    if (player.id === cmdPlayerExt.id && cmdPlayerExt.user_id !== -1)
+      this.sendMsgToPlayer(player, `🎮 Hej! Sprawdź swój profil na stronie: ${config.webpageLink}/i/${cmdPlayerExt.user_id} 📊`, Colors.Stats, 'small-italic');
     this.sendMsgToPlayer(player, msg, Colors.Stats);
   }
 

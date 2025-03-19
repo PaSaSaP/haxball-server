@@ -640,7 +640,7 @@ export class HaxballRoom {
   }
 
   updatePlayerLeftState(matchPlayerStats: Map<number, PlayerMatchStatsData>, currentMatch: Match) {
-    for (let [playerId, statInMatch] of currentMatch.playerStats) {
+    for (let [playerId, statInMatch] of currentMatch.getPlayerInMatchStats()) {
       let stat = this.player_stats.get(playerId);
       if (!stat) continue;
       let p = matchPlayerStats.get(playerId);
@@ -863,7 +863,9 @@ export class HaxballRoom {
       this.player_ids_by_auth.set(playerExt.auth_id, playerExt.id);
       this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
       this.player_ids_by_normalized_name.set(playerExt.name_normalized, playerExt.id);
-      this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name);
+      this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name).then((userId) => {
+        playerExt.user_id = userId;
+      }).catch((e) => { hb_log(`!! insertPlayerName error: $${e}`) });
       this.updateAdmins(null);
       this.loadPlayerStat(playerExt);
       if (this.auto_mode) this.delay_joiner.handlePlayerJoin(playerExt);

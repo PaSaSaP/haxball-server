@@ -12,7 +12,6 @@ const express = require('express');
 import { tokenDatabase } from '../src/token_database';
 import * as secrets from "../src/secrets";
 import { getTimestampHMS } from "../src/utils";
-import { crc32 } from 'zlib';
 
 interface PlayersCount {
   all: number;
@@ -27,7 +26,7 @@ class ServerMonitor {
   private userId = '1345319721863741515';
   private csvDir = './dynamic';
   private checkInterval = 5 * 1000;
-  private lastPlayerNum: Map<string, number>;
+  private lastPlayerNum: Map<string, PlayersCount>;
   // configurable options
   private scaleUpThreshold = 10;
   private scaleDownThreshold = 3;
@@ -42,7 +41,7 @@ class ServerMonitor {
 
   constructor() {
     this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
-    this.lastPlayerNum = new Map<string, number>();
+    this.lastPlayerNum = new Map();
     this.client.once('ready', () => {
       MLog(`Bot zalogowany jako ${this.client.user?.tag}`);
     });
@@ -118,6 +117,7 @@ class ServerMonitor {
               MLog(`Timeout dla serwera: ${fullSelector}`);
               this.handleServerTimeout(fullSelector);
               this.lastDiscordMsgSent.set(fullSelector, currentTime);
+              this.updatePlayerCounts(fullSelector, -2, undefined);
             }
           }
         }
@@ -152,7 +152,7 @@ class ServerMonitor {
       let activeServers = await this.getActiveServers(selectorKey);
       // if monitoring just started then set cooldown just like it started some time ago
       activeServers.forEach(sselector => {
-        if (sselector && !this.lastScaleAction.has(sselector)) this.lastScaleAction.set(sselector, now - (2/3)*this.cooldownTime);
+        if (sselector && !this.lastScaleAction.has(sselector)) this.lastScaleAction.set(sselector, now - (2 / 3) * this.cooldownTime);
       });
 
       let activePlayerCount = 0;
@@ -174,8 +174,9 @@ class ServerMonitor {
         this.lastScaleAction.set(selectorKey, now);
         for (let i = 1; i <= activeServers.length; ++i) {
           const serverSelector = `${selectorKey}_${i}`;
-          this.sendGodCommand(serverSelector, `!anno Wiele Was tutaj, za parę chwil pojawi się nowy serwer #${activeServers.length+1}`);
+          this.sendGodCommand(serverSelector, `!anno Wiele Was tutaj, za parę chwil pojawi się nowy serwer #${activeServers.length + 1}`);
         }
+        this.updatePlayerCounts(newServerFullSelector, -3, -3);
         return;
       } else if (averagePlayers <= this.scaleDownThreshold && activeServers.length > 1) {
         const lastServerFullSelector = activeServers[activeServers.length - 1]!;
@@ -228,7 +229,7 @@ class ServerMonitor {
       let pc2 = this.playerCounts.get(s2);
       let pc3 = this.playerCounts.get(s3);
       if (!pc1 || !pc2 || !pc1.length || !pc2.length) continue;
-      let limit = selectorKey === '4vs4' ? 4*2 : 3*2;
+      let limit = selectorKey === '4vs4' ? 4 * 2 : 3 * 2;
       let c1 = pc1.at(-1)!;
       let c2 = pc2.at(-1)!;
       const check = (a: PlayersCount, b: PlayersCount, ssA: string, ssB: string) => {
@@ -253,82 +254,60 @@ class ServerMonitor {
     }
   }
 
+  private updatePlayerCounts(fullSelector: string, currentPlayers: number | undefined, afkPlayers: number | undefined) {
+    // Jeśli nie ma danych o liczbie graczy, zainicjuj je
+    if (!this.playerCounts.has(fullSelector)) {
+      this.playerCounts.set(fullSelector, []);
+    }
+    const playerCount = this.playerCounts.get(fullSelector)!;
+    const prevCurPlayers = playerCount.at(-1)?.all ?? -1;
+    const prevAfkPlayers = playerCount.at(-1)?.afk ?? -1;
+    if (currentPlayers === undefined) currentPlayers = prevCurPlayers;
+    if (afkPlayers === undefined) afkPlayers = prevAfkPlayers;
+    if (currentPlayers === prevCurPlayers && afkPlayers === prevAfkPlayers) {
+      if (this.pingLogs) MLog(`Got c: ${currentPlayers} a: ${afkPlayers} so no update`);
+      return;
+    }
+    // Dodaj liczbę graczy do historii
+    playerCount.push({ all: currentPlayers, afk: afkPlayers });
+    // Zapisz dane do pliku CSV, jeśli liczba graczy się zmienia
+    let lastCounts = this.lastPlayerNum.get(fullSelector);
+    if (lastCounts !== undefined && (currentPlayers !== lastCounts.all || afkPlayers !== lastCounts.afk)) {
+      const filePath = `${this.csvDir}/current_players_number_${fullSelector}.csv`;
+      const timestamp = new Date().toISOString().replace('T', ',').split('.')[0]; // TODO do not split here by T
+      fs.appendFile(filePath, `${timestamp},${currentPlayers},${afkPlayers}\n`);
+    }
+    this.lastPlayerNum.set(fullSelector, { all: currentPlayers, afk: afkPlayers });
+  }
+
   public startExpressServer() {
     const app = express();
     const port = 80;
 
-    app.get('/ping/:selector/:currentPlayers', (req: any, res: any) => {
-      // TODO remove handler
-      const selector = req.params.selector;  // np. '1vs1_1', '3vs3_2'
-      const currentPlayers = parseInt(req.params.currentPlayers, 10);
-      if (this.pingLogs) MLog(`Got ping from ${selector} with ${currentPlayers}`);
-
-      // Zaktualizuj status serwera w mapie
-      this.serverStatus.set(selector, Date.now());
-
-      // Jeśli nie ma danych o liczbie graczy, zainicjuj je
-      if (!this.playerCounts.has(selector)) {
-        this.playerCounts.set(selector, []);
-      }
-
-      // Dodaj liczbę graczy do historii
-      const playerCount = this.playerCounts.get(selector) || [];
-      playerCount.push({all: currentPlayers, afk: 0});
-      this.playerCounts.set(selector, playerCount);
-
-      // Zapisz dane do pliku CSV, jeśli liczba graczy się zmienia
-      let lastPlayerCount = this.lastPlayerNum.get(selector);
-      if (lastPlayerCount !== undefined && currentPlayers !== lastPlayerCount) {
-        const filePath = `${this.csvDir}/current_players_number_${selector}.csv`;
-        const timestamp = new Date().toISOString().replace('T', ',').split('.')[0];
-        fs.appendFile(filePath, `${timestamp},${currentPlayers}\n`);
-      }
-
-      this.lastPlayerNum.set(selector, currentPlayers);
-      res.send('');
-    });
-
     app.get('/ping/:selector/:currentPlayers/:afkPlayers', (req: any, res: any) => {
-      const selector = req.params.selector;  // np. '1vs1_1', '3vs3_2'
+      const fullSelector = req.params.selector;  // np. '1vs1_1', '3vs3_2'
       const currentPlayers = parseInt(req.params.currentPlayers, 10);
       const afkPlayers = parseInt(req.params.afkPlayers, 10);
-      if (this.pingLogs) MLog(`Got ping from ${selector} with ${currentPlayers} players, ${afkPlayers} AFKs`);
+      if (this.pingLogs) MLog(`Got ping from ${fullSelector} with ${currentPlayers} players, ${afkPlayers} AFKs`);
 
       // Zaktualizuj status serwera w mapie
-      this.serverStatus.set(selector, Date.now());
-
-      // Jeśli nie ma danych o liczbie graczy, zainicjuj je
-      if (!this.playerCounts.has(selector)) {
-        this.playerCounts.set(selector, []);
-      }
-
-      // Dodaj liczbę graczy do historii
-      const playerCount = this.playerCounts.get(selector) || [];
-      playerCount.push({all: currentPlayers, afk: afkPlayers});
-      this.playerCounts.set(selector, playerCount);
-
-      // Zapisz dane do pliku CSV, jeśli liczba graczy się zmienia
-      let lastPlayerCount = this.lastPlayerNum.get(selector);
-      if (lastPlayerCount !== undefined && currentPlayers !== lastPlayerCount) {
-        const filePath = `${this.csvDir}/current_players_number_${selector}.csv`;
-        const timestamp = new Date().toISOString().replace('T', ',').split('.')[0];
-        fs.appendFile(filePath, `${timestamp},${currentPlayers},${afkPlayers}\n`);
-      }
+      this.serverStatus.set(fullSelector, Date.now());
+      this.updatePlayerCounts(fullSelector, currentPlayers, afkPlayers);
       this.checkPlayerCounts();
-      this.lastPlayerNum.set(selector, currentPlayers);
-      res.send('');
+      res.send('[]');
     });
 
 
     app.get('/healthcheck/:selector', (req: any, res: any) => {
-      const selector = req.params.selector;
-      if (this.pingLogs) MLog(`Got chealtcheck from ${selector}`);
-      const lastRequestTime = this.serverStatus.get(selector) || 0;
+      const fullSelector = req.params.selector;
+      if (this.pingLogs) MLog(`Got chealtcheck from ${fullSelector}`);
+      const lastRequestTime = this.serverStatus.get(fullSelector) || 0;
       const currentTime = Date.now();
       if (currentTime - lastRequestTime > 30000) {
-        res.status(404).send(`Serwer ${selector} nie odpowiada`);
+        res.status(404).send(`Serwer ${fullSelector} nie odpowiada`);
+        this.updatePlayerCounts(fullSelector, -2, undefined);
       } else {
-        res.send(`Serwer ${selector} działa`);
+        res.send(`Serwer ${fullSelector} działa`);
       }
     });
 
