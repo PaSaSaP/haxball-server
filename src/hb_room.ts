@@ -168,6 +168,10 @@ export class HaxballRoom {
     this.delay_joiner = new DelayJoiner((player: PlayerData) => { this.auto_bot.handlePlayerJoin(player); },
       () => { return !this.auto_bot.isLobbyTime(); },
       this.auto_mode);
+    this.ratings.isEnabledPenaltyFor = (playerId: number) => {
+      let playerExt = this.Pid(playerId);
+      return playerExt.trust_level === 0 || (playerExt.trust_level > 0 && playerExt.penalty_counter >= 3);
+    };
     this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
@@ -1253,6 +1257,15 @@ export class HaxballRoom {
           this.updateTop10();
           hb_log(`Aktualizujemy - zrobione (${saved}/${this.ratings.results.length})!`);
         } catch (e) { hb_log(`!! updateRatingsAndTop10 error: ${e}`) };
+        // inc penalty counter
+        try {
+          this.ratings.penaltySavedFor.forEach(playerId => {
+            let playerExt = this.Pid(playerId);
+            hb_log(`PenaltyCounter inc ${playerExt.name}`);
+            this.game_state.incrementPenaltyCounterFor(playerExt.auth_id)
+              .catch((e) => hb_log(`!! incrementPenaltyCounterFor ${playerExt.name} error: ${e}`));
+          })
+        } catch (e) { hb_log(`!! incrementPenaltyCounterFor error ${e}`) };
       }
     }
   }
@@ -1260,14 +1273,16 @@ export class HaxballRoom {
   private async gePlayersRatingWhichPlayedInMatch(inMatch: Match) {
     const selector = this.getSelectorFromMatch(inMatch);
     for (let playerId of inMatch.redTeam.concat(inMatch.blueScore)) {
+      let playerExt = this.Pid(playerId);
+      if (!playerExt.trust_level) continue;
       try {
-        let playerExt = this.Pid(playerId);
-        if (playerExt.trust_level) {
           let rating = await this.game_state.loadPlayerRating(selector, playerExt.auth_id);
           rating && this.assignPlayerRating(playerExt, rating);
           // hb_log(`RATING get ${playerExt.name} (${rating.mu}, ${rating.rd})`);
-        }
       } catch (e) { hb_log(`!! loadPlayerRating in match error s: ${selector} (${inMatch.redTeam.join(', ')}): ${e}`) };
+      try {
+        playerExt.penalty_counter = await this.game_state.getPenaltyCounterFor(playerExt.auth_id);
+      } catch (e) { hb_log(`!! getPenaltyCounterFor error: ${e}`) };
     }
   }
 

@@ -1,5 +1,5 @@
 {
-  "maxServers": { "4vs4": 0, "3vs3": 2, "1vs1": 1 },
+  "maxServers": { "4vs4": 1, "3vs3": 2, "1vs1": 1 },
   "scaleUpThreshold": 9,
   "scaleDownThreshold": 4,
   "scaleCheckDuration": 180000,

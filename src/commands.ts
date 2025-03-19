@@ -932,8 +932,10 @@ class Commander {
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
     let stat = cmdPlayerExt.stat;
     let shameStr = playerExt.admin_level ? ` A:${stat.counterAfk},L:${stat.counterLeftServer},V:${stat.counterVoteKicked}` : '';
+    let afkStr = playerExt.admin_level ? ` AFK:${getTimestampHM(playerExt.afk_switch_time)}` : '';
     let dateStr = getTimestampHM(cmdPlayerExt.join_time);
-    this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr}${shameStr} od:${dateStr}`);
+    let penaltyStr = playerExt.penalty_counter > 0 ? ` P:${playerExt.penalty_counter}` : '';
+    this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr}${shameStr}${penaltyStr} od:${dateStr}${afkStr}`);
   }
 
   async commandStat(player: PlayerObject, cmds: string[]) {

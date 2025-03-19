@@ -687,7 +687,7 @@ export class AutoBot {
       // mix a little bit if under limit
       this.shuffleIfNeeded();
       this.updateLimit();
-      const limit = this.limit();
+      let limit = this.limit();
       let rl = this.redTeam.length;
       let bl = this.blueTeam.length;
       let added = false;
@@ -724,14 +724,19 @@ export class AutoBot {
         if (rl < bl) {
           this.movePlayerToSpec(this.blueTeam[-1], this.blueTeam);
         } else this.movePlayerToSpec(this.redTeam[-1], this.redTeam, true);
+        rl = 3;
+        bl = 3;
         this.currentLimit = 3;
+        limit = this.currentLimit;
         // and no return because we are going to play ranked 3vs3
       }
       // just in case
       if (rl > limit) {
         this.moveLastFromTeamToSpec(this.redTeam, true);
+        rl--;
       } else if (bl > limit) {
         this.moveLastFromTeamToSpec(this.blueTeam, true);
+        bl--;
       }
       
       // if no more players then go below

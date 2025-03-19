@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
 import { BaseDB } from './base_db';
+import { normalizeNameString } from '../utils';
 
 export interface PlayerNameEntry {
   id: number;
@@ -32,13 +33,14 @@ export class PlayerNamesDB extends BaseDB {
   async insertPlayerName(auth_id: string, name: string): Promise<number> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO player_names (auth_id, name) 
+        INSERT OR IGNORE INTO player_names (auth_id, name) 
           SELECT ?, ?
           WHERE NOT EXISTS (
-            SELECT 1 FROM player_names WHERE LOWER(name) = LOWER(?) AND claimed = 1
+            SELECT 1 FROM player_names WHERE LOWER(name) = ? AND claimed = 1
           );
         `;
-      this.db.run(query, [auth_id, name], function (err) {
+      const normalizedName = normalizeNameString(name);
+      this.db.run(query, [auth_id, name, normalizedName], function (err) {
         if (err) {
           reject('Error inserting player name: ' + err.message);
         } else {

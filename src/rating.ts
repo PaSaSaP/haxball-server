@@ -23,11 +23,15 @@ export class Ratings {
   limits: RatingLimitsEntry;
   expectedScoreRed: number;
   results: [number, number, number, number, number][];
+  penaltySavedFor: number[];
+  isEnabledPenaltyFor: (playerId: number) => boolean;
 
   constructor(glicko: Glicko2.Glicko2, options: Partial<RatingsOptions> = {}) {
     this.glicko = glicko;
     this.expectedScoreRed = 0;
     this.results = [];
+    this.penaltySavedFor = [];
+    this.isEnabledPenaltyFor = () => true;
     Ratings.options = { 
       limits: {
         "1vs1": {
@@ -157,6 +161,7 @@ export class Ratings {
     const theOnlyBlueTeam = match.blueTeam.filter(id => !shouldNotRatePlayer(match.statInMatch(id)));
     const playerIdsInMatch: number[] = theOnlyRedTeam.concat(theOnlyBlueTeam).filter(id => match.statInMatch(id).id == id);
     this.results = [];
+    this.penaltySavedFor = [];
 
     if (!fullTimeMatchPlayed) {
       rescaler = Ratings.calculateInterruptedMatchWeight(match.redScore, match.blueScore, this.limits.score, matchDuration, this.limits.time);
@@ -216,10 +221,14 @@ export class Ratings {
               penaltyPercent = 0.05 * (1 - timeFraction);
               break;
           }
-          if (!isLoser) penaltyPercent /= 2;
-          penalty = Math.floor(newMu * penaltyPercent); // newMu or adjustedRating?
-          adjustedRating = Math.max(adjustedRating - penalty, 0);
-          this.Log(`Player ${playerId} penalized: reason=${stat.leftDueTo}, penaltyPercent=${penaltyPercent}, penalty=${penalty}, newRating=${adjustedRating}`);
+          if (penaltyPercent > 0) {
+            if (this.isEnabledPenaltyFor(playerId)) {
+              if (!isLoser) penaltyPercent /= 2;
+              penalty = Math.floor(newMu * penaltyPercent); // newMu or adjustedRating?
+              adjustedRating = Math.max(adjustedRating - penalty, 0);
+              this.Log(`Player ${playerId} penalized: reason=${stat.leftDueTo}, penaltyPercent=${penaltyPercent}, penalty=${penalty}, newRating=${adjustedRating}`);
+            } else this.penaltySavedFor.push(playerId);
+          }
         }
       }
 

@@ -20,6 +20,7 @@ import { PaymentsDB } from './db/payments';
 import { PaymentLinksDB } from './db/payment_links';
 import { PaymentLinksWatcher } from './db/payment_links_watcher';
 import { TopRatingsDailyDB, TopRatingsWeeklyDB } from './db/top_day_ratings';
+import { PenaltyCounterDB } from './db/penalty_saver';
 import { hb_log } from './log';
 import { OtherDbFiles } from './config';
 
@@ -34,6 +35,7 @@ interface DBHandlerOtherType {
   networksState: NetworksStateDB;
   reports: ReportsDB;
   ratings: PlayerRatingsDB;
+  penaltyCounter: PenaltyCounterDB;
   topRatings: TopRatingsDB;
   topRatingsDaily: TopRatingsDailyDB;
   topRatingsWeekly: TopRatingsWeeklyDB;
@@ -57,6 +59,7 @@ export class DBHandler {
   playerState: PlayersStateDB;
   networksState: NetworksStateDB;
   reports: ReportsDB;
+  penaltyCounter: PenaltyCounterDB;
   topRatings: TopRatingsDB;
   topRatingsDaily: TopRatingsDailyDB;
   topRatingsWeekly: TopRatingsWeeklyDB;
@@ -91,6 +94,7 @@ export class DBHandler {
     this.playerState = this.otherDb[this.mainMode]!.playerState;
     this.networksState = this.otherDb[this.mainMode]!.networksState;
     this.reports = this.otherDb[this.mainMode]!.reports;
+    this.penaltyCounter = this.otherDb[this.mainMode]!.penaltyCounter;
     this.topRatings = this.otherDb[this.mainMode]!.topRatings;
     this.topRatingsDaily = this.otherDb[this.mainMode]!.topRatingsDaily;
     this.topRatingsWeekly = this.otherDb[this.mainMode]!.topRatingsWeekly;
@@ -122,6 +126,7 @@ export class DBHandler {
     let playerState = new PlayersStateDB(otherDb);
     let networksState = new NetworksStateDB(otherDb);
     let reports = new ReportsDB(otherDb);
+    let penaltyCounter = new PenaltyCounterDB(otherDb);
     let ratings = new PlayerRatingsDB(otherDb);
     let topRatings = new TopRatingsDB(otherDb);
     let topRatingsDaily = new TopRatingsDailyDB(otherDb);
@@ -135,6 +140,7 @@ export class DBHandler {
       playerState: playerState,
       networksState: networksState,
       reports: reports,
+      penaltyCounter: penaltyCounter,
       ratings: ratings,
       topRatings: topRatings,
       topRatingsDaily: topRatingsDaily,
@@ -186,6 +192,7 @@ export class DBHandler {
       await otherDb.playerState.setupDatabase();
       await otherDb.networksState.setupDatabase();
       await otherDb.reports.setupDatabase();
+      await otherDb.penaltyCounter.setupDatabase();
       await otherDb.ratings.setupDatabase();
       await otherDb.topRatings.setupDatabase();
       await otherDb.topRatingsDaily.setupDatabase();
@@ -251,6 +258,14 @@ export class GameState {
 
   addReport(player_name: string, auth_id: string, report: string) {
     return this.dbHandler.reports.addReport(player_name, auth_id, report);
+  }
+
+  getPenaltyCounterFor(auth_id: string) {
+    return this.dbHandler.penaltyCounter.getPenaltyCounterFor(auth_id);
+  }
+
+  incrementPenaltyCounterFor(auth_id: string) {
+    return this.dbHandler.penaltyCounter.incrementPenaltyCounterFor(auth_id);
   }
 
   voteUp(voter_auth_id: string, target_auth_id: string) {

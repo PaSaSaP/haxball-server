@@ -114,6 +114,7 @@ export class PlayerData {
   connected: boolean;
   trust_level: number;
   admin_level: number;
+  penalty_counter: number;
   join_time: number;
   timer_give_back_admin: any;
   verify_link_requested: boolean;
@@ -141,6 +142,7 @@ export class PlayerData {
     this.connected = true;
     this.trust_level = 0; // based on player auth from DB
     this.admin_level = 0; // based on player auth from DB
+    this.penalty_counter = 0;
     this.join_time = Date.now();
     this.timer_give_back_admin = null;
     this.verify_link_requested = false;
