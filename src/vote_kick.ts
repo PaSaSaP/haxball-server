@@ -98,8 +98,9 @@ export class VoteKicker implements AutoVoter {
     if (y >= n + this.RequiredVotes) {
       this.autobot.hb_room.sendMsgToAll(`(!votekick) Wniosek o szkalowanie gracza ${this.voted.name} przyjęty (${y}/${n})`, Colors.BrightBlue, 'italic');
       this.autobot.setPlayerLeftStatusTo(this.voted, PlayerLeavedDueTo.voteKicked);
-      this.autobot.movePlayerToSpec(this.voted, this.team == 1 ? this.autobot.R() : this.autobot.B());
-      this.autobot.fillByPreparedSelection();
+      this.autobot.hb_room.room.kickPlayer(this.voted.id, "VoteKicked!", false);
+      // this.autobot.movePlayerToSpec(this.voted, this.team == 1 ? this.autobot.R() : this.autobot.B());
+      // this.autobot.fillByPreparedSelection();
       this.reset();
       return;
     }

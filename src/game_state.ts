@@ -21,6 +21,7 @@ import { PaymentLinksDB } from './db/payment_links';
 import { PaymentLinksWatcher } from './db/payment_links_watcher';
 import { TopRatingsDailyDB, TopRatingsWeeklyDB } from './db/top_day_ratings';
 import { PenaltyCounterDB } from './db/penalty_saver';
+import { ProbableBotsDB } from './db/probable_bots';
 import { hb_log } from './log';
 import { OtherDbFiles } from './config';
 
@@ -55,6 +56,7 @@ export class DBHandler {
   players: PlayersDB;
   playerNames: PlayerNamesDB;
   votes: VotesDB;
+  probableBots: ProbableBotsDB;
 
   playerState: PlayersStateDB;
   networksState: NetworksStateDB;
@@ -85,6 +87,7 @@ export class DBHandler {
     this.players = new PlayersDB(this.playersDb);
     this.playerNames = new PlayerNamesDB(this.playersDb);
     this.votes = new VotesDB(this.playersDb);
+    this.probableBots = new ProbableBotsDB(this.playersDb);
     // and second table
     this.otherDb = { '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null };
     for (let selector of DBHandler.GameModes) {
@@ -181,6 +184,7 @@ export class DBHandler {
     await this.players.setupDatabase();
     await this.playerNames.setupDatabase();
     await this.votes.setupDatabase();
+    await this.probableBots.setupDatabase();
 
     for (let selector of DBHandler.GameModes) {
       let otherDb = this.otherDb[selector];
@@ -248,12 +252,28 @@ export class GameState {
     return this.dbHandler.playerNames.insertPlayerName(auth_id, name);
   }
 
+  getPlayerNameInfo(auth_id: string) {
+    return this.dbHandler.playerNames.getPlayerNameInfo(auth_id);
+  }
+
   getPlayerNames(auth_id: string, n: number = 5): Promise<string[]> {
     return this.dbHandler.playerNames.getLastPlayerNames(auth_id, n);
   }
 
   getAllPlayerNames() {
     return this.dbHandler.playerNames.getAllPlayerNames();
+  }
+
+  addProbableBot(auth_id: string, conn_id: string) {
+    return this.dbHandler.probableBots.addProbableBot(auth_id, conn_id);
+  }
+
+  removeProbableBotByAuthId(auth_id: string) {
+    return this.dbHandler.probableBots.removeProbableBotByAuthId(auth_id);
+  }
+
+  probableBotExists(auth_id: string, conn_id: string) {
+    return this.dbHandler.probableBots.probableBotExists(auth_id, conn_id);
   }
 
   addReport(player_name: string, auth_id: string, report: string) {

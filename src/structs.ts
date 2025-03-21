@@ -101,6 +101,7 @@ export class PlayerData {
   name_normalized: string;
   id: number;
   user_id: number; // should be unique in system
+  claimed: number;
   team: number;
   admin: boolean;
   admin_stats: AdminStats | null;
@@ -123,12 +124,15 @@ export class PlayerData {
   chosen_player_names: string[];
   pendingTransaction: TransactionByPlayerInfo | null;
 
+  bot = false;
+
   constructor(player: PlayerObject|PPP) {
     // this.player = player;
     this.name = player.name; /// @type string
     this.name_normalized = normalizeNameString(this.name);
     this.id = player.id; /// @type int
     this.user_id = -1;
+    this.claimed = 0;
     this.team = player.team;
     this.admin = player.admin;
     this.admin_stats = null;
@@ -164,6 +168,10 @@ export class PlayerData {
       clearInterval(this.timer_give_back_admin);
       this.timer_give_back_admin = null;
     }
+  }
+
+  R() {
+    return this.stat.glickoPlayer?.getRating() ?? PlayerStat.DefaultRating;
   }
 
   // admin stats related

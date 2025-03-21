@@ -50,6 +50,25 @@ export class PlayerNamesDB extends BaseDB {
     });
   }
 
+  async getPlayerNameInfo(auth_id: string): Promise<PlayerNameEntry|null> {
+    return new Promise((resolve, reject) => {
+      const query = `
+          SELECT id, auth_id, name, claimed
+          FROM player_names
+          WHERE auth_id = ?
+          ORDER BY id ASC
+          LIMIT 1;
+        `;
+      this.db.get(query, [auth_id], (err, rows: PlayerNameEntry|any) => {
+        if (err) {
+          reject('Error fetching last player names: ' + err.message);
+        } else {
+          resolve(rows ?? null);
+        }
+      });
+    });
+  }
+
   async getLastPlayerNames(auth_id: string, n = 5): Promise<string[]> {
     return new Promise((resolve, reject) => {
       const query = `

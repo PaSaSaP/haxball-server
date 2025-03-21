@@ -1,0 +1,9 @@
+{
+  "strategy": "percentile",
+  "minRank": 1500,
+  "percentile": 10,
+  "minPlayers": 7,
+  "minTrustLevel": 0,
+  "kickBelowRank": 1300,
+  "enabled": false
+}

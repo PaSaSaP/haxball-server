@@ -32,6 +32,8 @@ import Pinger from './pinger';
 import { MatchRankChangesEntry } from './db/match_rank_changes';
 import GodCommander from './god_commander';
 import { DelayJoiner } from './delay_join';
+import { PlayerGatekeeper } from './gatekeeper/player_gatekeeper';
+import { PlayerJoinLogger } from './ip_logger';
 
 
 export class HaxballRoom {
@@ -101,6 +103,9 @@ export class HaxballRoom {
   pinger: Pinger;
   god_commander: GodCommander;
   delay_joiner: DelayJoiner;
+  gatekeeper: PlayerGatekeeper;
+  pl_logger: PlayerJoinLogger;
+  bot_stopping_enabled = false;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -168,6 +173,9 @@ export class HaxballRoom {
     this.delay_joiner = new DelayJoiner((player: PlayerData) => { this.auto_bot.handlePlayerJoin(player); },
       () => { return !this.auto_bot.isLobbyTime(); },
       this.auto_mode);
+    this.gatekeeper = new PlayerGatekeeper(this);
+    this.pl_logger = new PlayerJoinLogger(this);
+
     this.ratings.isEnabledPenaltyFor = (playerId: number) => {
       let playerExt = this.Pid(playerId);
       return playerExt.trust_level === 0 || (playerExt.trust_level > 0 && playerExt.penalty_counter >= 3);
@@ -348,6 +356,7 @@ export class HaxballRoom {
     let delta_time = current_tick - this.last_tick;
     this.last_tick = current_tick;
     const ball_position = this.room.getDiscProperties(0);
+    this.pl_logger.handleGameTick(players);
 
     if (this.feature_pressure) {
 
@@ -524,6 +533,7 @@ export class HaxballRoom {
 
   async handleGameStart(byPlayer: PlayerObject | null) {
     this.pinger.stop();
+    this.pl_logger.handleGameStart();
     this.last_winner_team = 0;
     this.last_discs_update_time = 0;
     this.time_limit_reached = false;
@@ -533,6 +543,10 @@ export class HaxballRoom {
     const now = Date.now();
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
+
+      if (!p.trust_level) { // TODO Debug
+        this.room.setPlayerAvatar(p.id, '<0');
+      }
     }
     this.gameStopTimerReset();
     this.ball_possesion_tracker.resetPossession();
@@ -586,6 +600,7 @@ export class HaxballRoom {
 
   async handleGameStop(byPlayer: PlayerObject | null) {
     this.pinger.start();
+    this.pl_logger.handleGameStop();
     if (byPlayer) this.Pid(byPlayer.id).admin_stat_start_stop();
     const MaxAllowedGameStopTime = 20.0 * 1000; // [ms]
     const now = Date.now();
@@ -594,6 +609,7 @@ export class HaxballRoom {
     this.gameStopTimerReset();
     this.matchStatsTimerReset();
     this.rejoice_maker.handleGameStop();
+    this.gatekeeper.handleGameStop();
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
     }
@@ -841,12 +857,13 @@ export class HaxballRoom {
     hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}]`);
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
+    let playerExt = this.Pid(player.id);
+    this.pl_logger.handlePlayerJoin(playerExt);
     if (this.players_game_state_manager.checkIfPlayerIsNotTimeKicked(player)) return;
     if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
     if (this.checkIfDotPlayerIsHost(player)) return;
     if (this.checkForPlayerDuplicate(player)) return;
     try {
-      let playerExt = this.P(player);
       let result = await this.game_state.getTrustAndAdminLevel(playerExt);
       playerExt.trust_level = result.trust_level;
       playerExt.admin_level = result.admin_level;
@@ -867,11 +884,17 @@ export class HaxballRoom {
       this.player_ids_by_auth.set(playerExt.auth_id, playerExt.id);
       this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
       this.player_ids_by_normalized_name.set(playerExt.name_normalized, playerExt.id);
-      this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name).then((userId) => {
-        playerExt.user_id = userId;
+      this.game_state.insertPlayerName(playerExt.auth_id, playerExt.name).then(() => {
+        this.game_state.getPlayerNameInfo(playerExt.auth_id).then((entry) => {
+          if (entry) {
+            playerExt.user_id = entry.id;
+            playerExt.claimed = entry.claimed;
+          }
+        }).catch((e) => hb_log(`!! getPlayerNameInfo error: ${e}`));
       }).catch((e) => { hb_log(`!! insertPlayerName error: $${e}`) });
       this.updateAdmins(null);
-      this.loadPlayerStat(playerExt);
+      await this.loadPlayerStat(playerExt);
+      if (this.gatekeeper.handlePlayerJoin(playerExt)) return;
       if (this.auto_mode) this.delay_joiner.handlePlayerJoin(playerExt);
       this.rejoice_maker.handlePlayerJoin(playerExt);
       this.welcome_message.sendWelcomeMessage(playerExt);
@@ -880,6 +903,9 @@ export class HaxballRoom {
       if (this.anti_spam.enabled && initialMute) {
         this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
       }
+      if (!playerExt.trust_level) {
+        this.room.setPlayerAvatar(playerExt.id, '<0');
+      }
       // this.sendOnlyTo(player, `Mozesz aktywować sterowanie przyciskami (Link: https://tinyurl.com/HaxballKeyBinding): Lewy Shift = Sprint, A = Wślizg`, 0x22FF22);
       this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb !sklep`, Colors.Help);
     } catch (e) {
@@ -887,7 +913,7 @@ export class HaxballRoom {
     }
   }
 
-  loadPlayerStat(playerExt: PlayerData) {
+  async loadPlayerStat(playerExt: PlayerData) {
     this.player_stats.set(playerExt.id, playerExt.stat);
     let glickoPlayer: Glicko2.Player|undefined = this.glicko_players.get(playerExt.auth_id);
     if (glickoPlayer) { // get cached data
@@ -911,12 +937,14 @@ export class HaxballRoom {
     this.player_stats_auth.set(playerExt.auth_id, playerExt.id);
     playerExt.stat.updatePlayer(glickoPlayer);
     if (playerExt.trust_level) {
-      this.game_state.loadPlayerRating(this.room_config.selector, playerExt.auth_id).then(result => { // load stats
-        result && this.assignPlayerRating(playerExt, result);
-      }).catch((e) => hb_log(`!! loadPlayerRating: ${e}`));
-      this.game_state.loadTotalPlayerMatchStats(this.room_config.selector, playerExt.auth_id).then(result => {
-        result && this.assignPlayerMatchStats(playerExt.stat, result);
-      }).catch((e) => hb_log(`!! loadPlayerMatchStats error ${e}`));
+      let rating = await this.game_state.loadPlayerRating(this.room_config.selector, playerExt.auth_id);
+      if (rating) {
+        this.assignPlayerRating(playerExt, rating);
+      }
+      let stats = await this.game_state.loadTotalPlayerMatchStats(this.room_config.selector, playerExt.auth_id)
+      if (stats) {
+        this.assignPlayerMatchStats(playerExt.stat, stats);
+      }
     }
   }
 
@@ -1239,7 +1267,7 @@ export class HaxballRoom {
 
             let stat = this.player_stats.get(playerExt.id)!;
             if (!playerExt.trust_level) {
-              this.autoTrustByPlayerGames(playerExt, stat);
+              // this.autoTrustByPlayerGames(playerExt, stat);
               continue;
             }
             let g = stat.glickoPlayer!;
@@ -1354,8 +1382,12 @@ export class HaxballRoom {
     if (this.auto_mode) this.auto_bot.handlePositionsReset();
     this.match_stats.handlePositionsReset();
     this.rejoice_maker.handlePositionsReset();
+    this.players_ext.forEach(p => {
+      if (!p.trust_level) { // TODO Debug
+        this.room.setPlayerAvatar(p.id, '<0');
+      }
+    })
   }
-
 
   handlePlayerChat(player: PlayerObject, message: string): boolean {
     message = message.trim();
@@ -1741,7 +1773,11 @@ export class HaxballRoom {
   }
 
   isPlayerHost(player: PlayerObject) {
-    let p = this.Pid(player.id);
+    return this.isPlayerIdHost(player.id);
+  }
+
+  isPlayerIdHost(playerId: number) {
+    let p = this.Pid(playerId);
     if (p.auth_id == '' || p.auth_id == config.hostAuthId)
       return true;
     return false;

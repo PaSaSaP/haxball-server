@@ -7,6 +7,7 @@ import { generateVerificationLink } from "./verification";
 import { Colors } from "./colors";
 import * as config from './config';
 import { hb_log } from "./log";
+import e from "express";
 
 class Commander {
   hb_room: HaxballRoom;
@@ -220,6 +221,18 @@ class Commander {
       site: this.commandShowDiscordAndWebpage,
       home: this.commandShowDiscordAndWebpage,
       url: this.commandShowDiscordAndWebpage,
+
+      not_bots: this.commandWhoIsNotBot,
+      bots: this.commandCheckBots,
+      bot: this.commandMarkBot,
+      "bot-": this.commandUnmarkBot,
+      kick_bots: this.commandKickBots,
+      tkick_bots: this.commandTKickBots,
+      nkick_bots: this.commandNKickBots,
+      ban_reload: this.commandBanReload,
+      bot_info: this.commandPrintShortInfo,
+      botradius: this.commandBotSetRadius,
+      botstop: this.commandSwitchBotStoppingFlag,
 
       god: this.commandGodTest,
 
@@ -1216,9 +1229,10 @@ class Commander {
       this.sendMsgToPlayer(player, `Musisz mieć co najmniej drugi poziom by móc nadawać poziom zaufania!`);
       return;
     }
+    const amIhost = this.hb_room.isPlayerIdHost(player.id);
     let trust_level = parseInt(cmds[1] ?? 1, 10);
     trust_level = isNaN(trust_level) ? 0 : trust_level;
-    if (trust_level <= 0) {
+    if (!amIhost && trust_level <= 0) {
       this.sendMsgToPlayer(player, `Wartość nie moze być mniejsza ani równa zero: ${trust_level}`);
       return;
     } else if (trust_level >= caller_ext.trust_level) {
@@ -1466,6 +1480,111 @@ class Commander {
     let cmd = cmds.join(" ");
     this.sendMsgToPlayer(player, `trying to exec: ${cmd}`);
     this.r().onPlayerChat(this.hb_room.god_player, cmd);
+  }
+
+  async commandSwitchBotStoppingFlag(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+    this.hb_room.bot_stopping_enabled = !this.hb_room.bot_stopping_enabled;
+      this.sendMsgToPlayer(player, `Obecny stan: ${this.hb_room.bot_stopping_enabled}`);
+  }
+
+  async commandPrintShortInfo(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+    let players = this.r().getPlayerList();
+    let txt = '';
+    for (let e of players) {
+      let p = this.hb_room.Pid(e.id);
+      txt += ` ${p.name}=T${p.trust_level},B${p.bot?1:0}`;
+    }
+    this.sendMsgToPlayer(player,txt);
+  }
+
+  async commandBotSetRadius(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'botmin')) return;
+    let newRadius = Number.parseFloat(cmds[0]);
+    if (isNaN(newRadius)) newRadius = 15;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
+      bots.forEach(bot => {
+        this.r().setPlayerDiscProperties(bot.id, { "radius": newRadius });
+      })
+  }
+
+  async commandCheckBots(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot).map(e => e.name);
+    if (bots.length)
+      this.sendMsgToPlayer(player, `Boty: ${bots.join(', ')}`);
+    else
+      this.sendMsgToPlayer(player, `Nie znalazłem botów`);
+  }
+
+  async commandWhoIsNotBot(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => !e.bot).map(e => e.name);
+    if (bots.length)
+      this.sendMsgToPlayer(player, `Raczej ludzie: ${bots.join(', ')}`);
+    else
+      this.sendMsgToPlayer(player, `Nie znalazłem Człowieka`);
+  }
+
+  async commandMarkBot(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'bot')) return;
+    let txt = '';
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, player);
+      if (!cmdPlayer) continue;
+      if (cmdPlayer.id == player.id) continue;
+      cmdPlayer.bot = true;
+      this.hb_room.game_state.addProbableBot(cmdPlayer.auth_id, cmdPlayer.conn_id).catch((e) => hb_log(`!! addProbableBot error ${e}`));
+      txt += `${cmdPlayer.name} `;
+    }
+    this.sendMsgToPlayer(player, `BOT dodałem ${txt}`);
+  }
+
+  async commandUnmarkBot(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'bot')) return;
+    let txt = '';
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, player);
+      if (!cmdPlayer) continue;
+      if (cmdPlayer.id == player.id) continue;
+      cmdPlayer.bot = false;
+      this.hb_room.game_state.removeProbableBotByAuthId(cmdPlayer.auth_id).catch((e) => hb_log(`!! removeProbableBot error ${e}`));
+      txt += `${cmdPlayer.name} `;
+    }
+    this.sendMsgToPlayer(player, `BOT usunąłem ${txt}`);
+  }
+
+  async commandKickBots(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
+    for (let bot of bots) {
+      this.hb_room.room.kickPlayer(bot.id, '', false);
+    }
+  }
+
+  async commandTKickBots(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'tkick_bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
+    for (let bot of bots) {
+      this.hb_room.room.kickPlayer(bot.id, '', false);
+      this.hb_room.players_game_state_manager.setPlayerTimeKicked(bot, 365*24*60*60*1000, false);
+    }
+  }
+
+  async commandNKickBots(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'nkick_bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
+    for (let bot of bots) {
+      this.hb_room.room.kickPlayer(bot.id, '', false);
+      this.hb_room.players_game_state_manager.setNetworkTimeKicked(bot, 365*24*60*60*1000, false);
+    }
+  }
+
+  async commandBanReload(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'ban_reload')) return;
+    this.hb_room.players_game_state_manager.initAllGameState();
+    this.sendMsgToPlayer(player, `Przeładowałem network players state`);
   }
 
   async keyboardLShiftDown(player: PlayerObject) {

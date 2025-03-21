@@ -154,16 +154,16 @@ export class RollingRatingsDB extends BaseDB {
     });
   }
 
-  async getRollingRatingsAfterMatchId(match_id: number): Promise<RollingRatingsData[]> {
+  async getRollingRatingsBetweenMatchIds(start_match_id: number, end_match_id: number): Promise<RollingRatingsData[]> {
     return new Promise((resolve, reject) => {
       const query = `
         SELECT DISTINCT rr.*
         FROM rolling_ratings rr
         INNER JOIN match_stats ms ON rr.auth_id = ms.auth_id
-        WHERE ms.match_id > ?
+        WHERE ms.match_id >= ? AND ms.match_id <=  ?
         ORDER BY date ASC;
       `;
-      this.db.all(query, [match_id], (err: any, rows: RollingRatingsData[]) => {
+      this.db.all(query, [start_match_id, end_match_id], (err: any, rows: RollingRatingsData[]) => {
         if (err) return reject(`Error fetching from rolling_ratings: ${err.message}`);
         resolve(rows? rows as RollingRatingsData[]: []);
       });

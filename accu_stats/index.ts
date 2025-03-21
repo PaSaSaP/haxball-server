@@ -392,9 +392,10 @@ export class AccuStats {
     let lastProcessedMatchId = await this.rollingRatings.getRollingRatingsMaxMatchId();
     let rollingDaysArray = await this.rollingRatings.getRollingRatingAllDays();
     let matches = await this.getMatchesFrom(lastProcessedMatchId+1);
-    let matchStats = await this.getMatchStatsFrom(lastProcessedMatchId+1);
+    const lastMatchId = matches.at(-1)?.match_id ?? lastProcessedMatchId + 2;
+    let matchStats = await this.getMatchStatsBetween(lastProcessedMatchId+1, lastMatchId);
     let settings = await this.getSettings();
-    let rollingData = await this.getRollingRatingsAfterMatchId(lastProcessedMatchId);
+    let rollingData = await this.getRollingRatingsBetweenMatchIds(lastProcessedMatchId+1, lastMatchId);
     if (!rollingData) {
       console.log("rollingData is null");
       return;
@@ -505,8 +506,8 @@ export class AccuStats {
     await this.updateTopRankingWith(playerNames, day, settings.min_full_games_daily, 10, playerRatingsArray, this.topRatingsHistory);
   }
 
-  async getRollingRatingsAfterMatchId(matchId: number) {
-    return await this.rollingRatings.getRollingRatingsAfterMatchId(matchId);
+  async getRollingRatingsBetweenMatchIds(matchId: number, endMatchId: number) {
+    return await this.rollingRatings.getRollingRatingsBetweenMatchIds(matchId, endMatchId);
   }
 
   getDateMinusDays(dateStr: string, days: number = 6): string {
@@ -536,6 +537,10 @@ export class AccuStats {
     for (let rr of rollingRatings) {
       let playerId = getPlayerIdByAuth(rr.auth_id);
       playerTopRatings.set(playerId, rr);
+      let g = playerStats.get(playerId)!.glickoPlayer!;
+      g.setRating(rr.mu);
+      g.setRd(rr.rd);
+      g.setVol(rr.vol);
     }
 
     console.log(`affcetedMatchIds count: ${affectedMatchIds.size}`);
