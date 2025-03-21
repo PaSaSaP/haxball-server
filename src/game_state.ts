@@ -309,10 +309,10 @@ export class GameState {
     return this.dbHandler.getTotalPlayerMatchStats(this.dbHandler.mainMode).loadTotalPlayerMatchStats(auth_id);
   }
 
-  saveTotalPlayerMatchStats(selector: GameModeType, auth_id: string, stat: PlayerStat) {
-    if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
-    return this.dbHandler.getTotalPlayerMatchStats(selector).saveTotalPlayerMatchStats(auth_id, stat);
-  }
+  // saveTotalPlayerMatchStats(selector: GameModeType, auth_id: string, stat: PlayerStat) {
+  //   if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
+  //   return this.dbHandler.getTotalPlayerMatchStats(selector).saveTotalPlayerMatchStats(auth_id, stat);
+  // }
 
   updateTotalPlayerMatchStats(selector: GameModeType, auth_id: string, stat: PlayerStat, playerMatchStats: PlayerMatchStatsData): Promise<void> {
     if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve();

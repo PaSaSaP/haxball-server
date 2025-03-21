@@ -1267,7 +1267,7 @@ export class HaxballRoom {
 
             let stat = this.player_stats.get(playerExt.id)!;
             if (!playerExt.trust_level) {
-              // this.autoTrustByPlayerGames(playerExt, stat);
+              this.autoTrustByPlayerGames(playerExt, stat);
               continue;
             }
             let g = stat.glickoPlayer!;

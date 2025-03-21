@@ -420,7 +420,7 @@ export class AccuStats {
     let daysSet: Set<string> = new Set(matchIdsByDay.keys());
     rollingDaysArray.forEach(day => daysSet.add(day));
     let days = Array.from(daysSet).sort((lhs: string, rhs: string) => lhs < rhs ? -1 : 1);
-    if (days.length > 8) {
+    if (lastProcessedMatchId > 0 && days.length > 8) { // calc for all days on first calculations
       // there is at least 9 days, so we are interested in the oldest one and last 7 days
       days = [days[0], ...days.slice(-7)];
     }
@@ -461,13 +461,13 @@ export class AccuStats {
       }
       let rr = rrByDate.get(day) ?? [];
       await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId, true);
-      if (day == todayDate) {
+      if (day === todayDate) {
         await this.updateTopRanking(playerNames, day, settings.min_full_games_daily, settings.players_limit, this.topRatingsDaily);
       }
-      if (day == weekAgoDate) {
+      if (day === weekAgoDate) {
         await this.updateTopRanking(playerNames, day, settings.min_full_games_weekly, settings.players_limit, this.topRatingsWeekly);
       }
-      if (day == oldestDate) {
+      if (day === oldestDate) {
         await this.updateTopRanking(playerNames, day, settings.min_full_games, settings.players_limit, this.topRatingsTotal);
       }
     }

@@ -144,6 +144,7 @@ class Commander {
 
       votekick: this.commandVoteKick,
       votemute: this.commandVoteMute,
+      votebot: this.commandVoteBotKick,
       votev4: this.commandVoteV4,
       "4": this.commandVoteV4,
       votereset: this.commandVoteReset,
@@ -901,6 +902,15 @@ class Commander {
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     let byPlayerExt = this.Pid(player.id);
     this.hb_room.auto_bot.autoVoter.requestVoteMute(cmdPlayerExt, byPlayerExt);
+  }
+
+  async commandVoteBotKick(player: PlayerObject, cmds: string[]) {
+    if (!cmds.length) return this.commandVoteYes(player, cmds); // no param means vote yes
+    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+    if (!cmdPlayer || cmdPlayer.id == player.id) return;
+    let cmdPlayerExt = this.Pid(cmdPlayer.id);
+    let byPlayerExt = this.Pid(player.id);
+    this.hb_room.auto_bot.autoVoter.requestVoteBotKick(cmdPlayerExt, byPlayerExt);
   }
 
   async commandVoteV4(player: PlayerObject, cmds: string[]) {
