@@ -458,7 +458,7 @@ export class AutoBot {
       this.chosingPlayerNextReminder += 60;
     }
     if (scores.time > this.adNextReminder) {
-      this.hb_room.sendMsgToAll(`🎉 Kup cieszynkę: !kup |💬Discord: ${config.discordLink} |🌐Strona: ${config.webpageLink}`,
+      this.hb_room.sendMsgToAll(`🎉 Kup cieszynkę: !kup lub !vip |💬Discord: ${config.discordLink} |🌐Strona: ${config.webpageLink}`,
         Colors.OrangeTangelo, 'small-bold');
       this.adNextReminder = 9999; // send only once
     }
@@ -987,8 +987,9 @@ export class AutoBot {
 
   moveAllTeamToSpec(inTeam: PlayerData[], inFavor: number[]) {
     // move AFK to the end of spec list!
-    let specAfk = this.specTeam.filter(e => e.afk || e.afk_maybe);
-    let specNonAfk = this.specTeam.filter(e => !e.afk && !e.afk_maybe);
+    const afkFilter = (e: PlayerData) => { return !e.vip_data.afk_mode || e.afk || e.afk_maybe };
+    let specAfk = this.specTeam.filter(e => afkFilter(e));
+    let specNonAfk = this.specTeam.filter(e => !afkFilter(e));
     this.specTeam = [...specNonAfk, ...specAfk];
 
     // anyway make that check to get insert idx

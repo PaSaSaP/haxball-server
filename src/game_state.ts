@@ -16,6 +16,9 @@ import { NetworksStateDB } from './db/networks_state';
 import { RejoiceDB } from './db/rejoice';
 import { RejoiceTransactionsDB } from './db/rejoice_transactions';
 import { RejoicePricesDB } from './db/rejoice_prices';
+import { VipOptionsDB } from './db/vip_options';
+import { VipTransactionsDB } from './db/vip_transactions';
+import { VipOptionsPricesDB } from './db/vip_options_prices';
 import { PaymentsDB } from './db/payments';
 import { PaymentLinksDB } from './db/payment_links';
 import { PaymentLinksWatcher } from './db/payment_links_watcher';
@@ -69,6 +72,9 @@ export class DBHandler {
   rejoice: RejoiceDB;
   rejoiceTransactions: RejoiceTransactionsDB;
   rejoicePrices: RejoicePricesDB;
+  vipOptions: VipOptionsDB;
+  vipTransactions: VipTransactionsDB;
+  vipPrices: VipOptionsPricesDB;
   payments: PaymentsDB;
   paymentLinks: PaymentLinksDB;
   paymentLinksWatcher: PaymentLinksWatcher;
@@ -105,6 +111,9 @@ export class DBHandler {
     this.rejoice = new RejoiceDB(this.vipDb);
     this.rejoiceTransactions = new RejoiceTransactionsDB(this.vipDb);
     this.rejoicePrices = new RejoicePricesDB(this.vipDb);
+    this.vipOptions = new VipOptionsDB(this.vipDb);
+    this.vipTransactions = new VipTransactionsDB(this.vipDb);
+    this.vipPrices = new VipOptionsPricesDB(this.vipDb);
     this.payments = new PaymentsDB(this.vipDb);
     this.paymentLinks = new PaymentLinksDB(this.vipDb);
     this.paymentLinksWatcher = new PaymentLinksWatcher(this.vipDb);
@@ -206,6 +215,9 @@ export class DBHandler {
     await this.rejoice.setupDatabase();
     await this.rejoiceTransactions.setupDatabase();
     await this.rejoicePrices.setupDatabase();
+    await this.vipOptions.setupDatabase();
+    await this.vipTransactions.setupDatabase();
+    await this.vipPrices.setupDatabase();
     await this.payments.setupDatabase();
     await this.paymentLinks.setupDatabase();
     await this.paymentLinksWatcher.setupDatabase();
@@ -413,16 +425,32 @@ export class GameState {
     return this.dbHandler.rejoiceTransactions.insertRejoiceTransaction(auth_id, rejoice_id, at_time, for_days, selector);
   }
 
+  getRejoicePrices() {
+    return this.dbHandler.rejoicePrices.getRejoicePrices();
+  }
+
+  getVipOptionsForPlayer(auth_id: string) {
+    return this.dbHandler.vipOptions.getVipOptionsForPlayer(auth_id);
+  }
+
+  updateOrInsertVipOption(auth_id: string, option: string, time_from: number, time_to: number) {
+    return this.dbHandler.vipOptions.updateOrInsertVipOption(auth_id, option, time_from, time_to);
+  }
+
+  insertVipTransaction(auth_id: string, option: string, at_time: number, for_days: number, selector: string) {
+    return this.dbHandler.vipTransactions.insertVipTransaction(auth_id, option, at_time, for_days, selector);
+  }
+
+  async getVipOpionPrices() {
+    return this.dbHandler.vipPrices.getVipOpionPrices();
+  }
+
   getPaymentLink(auth_id: string, transaction_id: number) {
     return this.dbHandler.paymentLinks.getPaymentLink(auth_id, transaction_id);
   }
 
   getPaymentStatus(transaction_id: number) {
     return this.dbHandler.payments.getPaymentStatus(transaction_id);
-  }
-
-  getRejoicePrices() {
-    return this.dbHandler.rejoicePrices.getRejoicePrices();
   }
 
   logMessage(user_name: string, action: string, text: string, for_discord: boolean) {

@@ -39,7 +39,7 @@ async function createCheckoutSession() {
   // await cancelCheckoutSession(session.id);
   // console.log(session.id);
 
-  let sessionId = 'cs_live_a1uHxOlR4Y9SrpazqFXTOpvra2rAHeqJeyExvC4Gmd0QC4XWCE4BdaL7cz';
+  let sessionId = 'cs_live_a1SVg7ztiFSnoMW9rw2Z3X95MO8axDByqtFcjhUwCqO5nTjA8rja1S0Ime';
   await cancelCheckoutSession(sessionId);
 }
 

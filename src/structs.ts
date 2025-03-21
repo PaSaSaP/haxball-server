@@ -96,6 +96,10 @@ export class TransactionByPlayerInfo {
   }
 }
 
+export class PlayerVipData {
+  afk_mode = 0;
+}
+
 export class PlayerData {
   name: string;
   name_normalized: string;
@@ -122,7 +126,9 @@ export class PlayerData {
   afk_avatar: string|null;
   afk_switch_time: number;
   chosen_player_names: string[];
-  pendingTransaction: TransactionByPlayerInfo | null;
+  pendingRejoiceTransaction: TransactionByPlayerInfo | null;
+  pendingVipOptionTransaction: TransactionByPlayerInfo | null;
+  vip_data: PlayerVipData;
 
   bot = false;
 
@@ -153,7 +159,9 @@ export class PlayerData {
     this.afk_avatar = null;
     this.afk_switch_time = Date.now();
     this.chosen_player_names = [];
-    this.pendingTransaction = null;
+    this.pendingRejoiceTransaction = null;
+    this.pendingVipOptionTransaction = null;
+    this.vip_data = new PlayerVipData();
   }
 
   update(player: PlayerObject) {

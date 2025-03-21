@@ -6,6 +6,7 @@ export interface PaymentLinkEntry {
   auth_id: string;
   transaction_id: number;
   link: string;
+  name: string;
 }
 
 export class PaymentLinksDB extends BaseDB {
@@ -21,6 +22,7 @@ export class PaymentLinksDB extends BaseDB {
         transaction_id INTEGER NOT NULL,
         link TEXT NOT NULL,
         selector TEXT NOT NULL,
+        name TEXT DEFAULT '',
         PRIMARY KEY (auth_id, transaction_id)
       );
     `;
@@ -28,27 +30,27 @@ export class PaymentLinksDB extends BaseDB {
     await this.promiseQuery(createTableQuery, 'payment_links');
   }
 
-  async insertPaymentLink(authId: string, paymentTransactionId: number, link: string, selector: string): Promise<void> {
+  async insertPaymentLink(authId: string, paymentTransactionId: number, link: string, selector: string, name: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO payment_links (auth_id, transaction_id, link, selector)
-        VALUES (?, ?, ?, ?);
+        INSERT INTO payment_links (auth_id, transaction_id, link, selector, name)
+        VALUES (?, ?, ?, ?, ?);
       `;
 
-      this.db.run(query, [authId, paymentTransactionId, link, selector], (err) => {
+      this.db.run(query, [authId, paymentTransactionId, link, selector, name], (err) => {
         if (err) return reject('Error inserting payment link: ' + err.message);
         resolve();
       });
     });
   }
 
-  async getPaymentLink(authId: string, paymentTransactionId: number): Promise<string | null> {
+  async getPaymentLink(authId: string, paymentTransactionId: number): Promise<PaymentLinkEntry | null> {
     return new Promise((resolve, reject) => {
-      const query = `SELECT link FROM payment_links WHERE auth_id = ? AND transaction_id = ?;`;
+      const query = `SELECT link, name FROM payment_links WHERE auth_id = ? AND transaction_id = ?;`;
 
-      this.db.get(query, [authId, paymentTransactionId], (err, row: ({ link: string } | undefined)) => {
+      this.db.get(query, [authId, paymentTransactionId], (err, row: PaymentLinkEntry|null) => {
         if (err) return reject('Error fetching payment link: ' + err.message);
-        resolve(row ? row.link : null);
+        resolve(row ?? null);
       });
     });
   }

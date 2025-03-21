@@ -10,6 +10,9 @@ export class Colors {
   static Warning = 0xFF1111;
   static PlayerNotFound = 0xB0BF1A;
   static TrustZero = 0x9c9c9c;
+  static TrustOne = 0xC4C4C4;
+  static TrustTwo = 0xE6E6E6;
+  static TrustClaimed = 0xE6E6C5;
   static DarkRed = 0xD3212D;
   static BrightGreen = 0x95FA02;
   static DarkGreen = 0x66AB01;

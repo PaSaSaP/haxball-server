@@ -179,10 +179,12 @@ class Commander {
       buy: this.commandBuyRejoice,
       sklep: this.commandBuyRejoice,
       shop: this.commandBuyRejoice,
+      vip: this.commandVip,
       trust: this.commandTrust,
       verify: this.commandVerify,
       t: this.commandTrust,
       tt: this.commandAutoTrust,
+      ttt: this.commandShowTrust,
 
       check_transaction: this.commandCheckPlayerTransaction,
       check_tr: this.commandCheckPlayerTransaction,
@@ -1105,6 +1107,71 @@ class Commander {
     }
   }
 
+  async commandVip(player: PlayerObject, cmds: string[]) {
+    let playerExt = this.Pid(player.id);
+    if (cmds.length === 0) {
+      let all_option_names = Array.from(this.hb_room.vip_option_prices.keys());
+      let option_names = this.hb_room.vip_options.getOptionNames(player.id);
+      let optionsTxt = '';
+      for (let option of all_option_names) {
+        if (option_names.includes(option)) optionsTxt += '✅';
+        optionsTxt += option + ' ';
+      }
+      this.sendMsgToPlayer(player, `By sprawdzić cenę: !vip <nazwa>, By rozpocząć proces zakupu: !vip <nazwa> <liczba dni>`, Colors.DarkGreen);
+      this.sendMsgToPlayer(player, "Lista opcji VIP: "+optionsTxt, Colors.DarkGreen);
+      if (playerExt.pendingVipOptionTransaction && playerExt.pendingVipOptionTransaction.status != "completed") {
+        this.hb_room.game_state.getPaymentStatus(playerExt.pendingVipOptionTransaction.transactionId).then((paymentStatus) => {
+          let tr = playerExt.pendingVipOptionTransaction;
+          if (tr && paymentStatus) {
+            if (paymentStatus === "completed") {
+              if (tr.status !== "completed") {
+                this.hb_room.vip_options.handlePlayerJoin(playerExt).then((num) => {
+                  if (num > 0) this.sendMsgToPlayer(player, `Nowa opcja VIP aktywowana! Możesz ją już teraz wykorzystać!`, Colors.AzureBlue);
+                }).catch((e) => e && hb_log(`!! vip_options after payment error: ${e}`));
+              }
+              tr.status = paymentStatus;
+              this.sendMsgToPlayer(player, `Twoja płatność została zaksięgowana! Zakup zostanie aktywowany przy następnej wizycie. Dziękujemy!`, Colors.AzureBlue);
+            } else if (paymentStatus === "failed") {
+              tr.status = paymentStatus;
+              this.sendMsgToPlayer(player, `Wystąpił problem z Twoją ostatnią płatnością. Sprawdź szczegóły tutaj: ${tr.link}`, Colors.DarkRed);
+            } else if (paymentStatus === "started") {
+              this.sendMsgToPlayer(player, `Masz aktywną transakcję. Możesz ją dokończyć tutaj: ${tr.link}`, Colors.AzureBlue);
+            }
+          }
+        }).catch((e) => e && hb_log(`!! getPaymentStatus error: ${e}`))
+      }
+      return;
+    }
+    let optionName = cmds[0];
+    if (!this.hb_room.vip_option_prices.has(optionName)) {
+      this.sendMsgToPlayer(player, `Nie ma opcji VIP o nazwie ${optionName}!`, Colors.DarkGreen);
+      return;
+    }
+    let prices = this.hb_room.vip_option_prices.get(optionName)!;
+    if (cmds.length === 1) {
+      const formattedString = Array.from(prices).map(({ for_days, price }) => `${for_days} dni: ${price} zł`).join(', ');
+      this.sendMsgToPlayer(player, `VIP ${optionName} - dostępne opcje: ${formattedString}`, Colors.DarkGreen);
+      return;
+    }
+    let forDays = Number.parseInt(cmds[1]);
+    if (isNaN(forDays)) {
+      this.sendMsgToPlayer(player, `Nieprawidłowa liczba dni dla opcji ${optionName}, ${forDays} nie jest prawidłową opcją!`, Colors.DarkGreen);
+      return;
+    }
+    if (!prices.some(e => e.for_days == forDays)) {
+      this.sendMsgToPlayer(player, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !vip <nazwa>`, Colors.DarkGreen);
+      return;
+    }
+    if (playerExt.pendingVipOptionTransaction && playerExt.pendingVipOptionTransaction.status !== 'completed') {
+      this.sendMsgToPlayer(player, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingVipOptionTransaction.link}`, Colors.DarkGreen);
+      return;
+    }
+    this.hb_room.game_state.insertVipTransaction(playerExt.auth_id, optionName, Date.now(), forDays, this.hb_room.getSselector()).then((result) => {
+      this.sendMsgToPlayer(player, `Proces zakupu opcji VIP rozpoczęty! Wkrótce otrzymasz link.`, Colors.DarkGreen);
+      hb_log(`Zakup opcji VIP dla ${playerExt.name} ${playerExt.auth_id} r:${optionName} na ${forDays}, id:${result}`);
+    }).catch((e) => e && hb_log(`!! insertVipTransaction error ${e}`));
+  }
+
   async commandPrintAvailableRejoices(player: PlayerObject, cmds: string[]) {
     let availableRejoices = Array.from(this.hb_room.rejoice_prices.keys());
     this.sendMsgToPlayer(player, `Cieszynki dostępne do zakupu: ${availableRejoices.join(", ")}; Wpisz !cieszynka by sprawdzić listę Twoich cieszynek!`, Colors.DarkGreen);
@@ -1114,10 +1181,10 @@ class Commander {
     let playerExt = this.Pid(player.id);
     if (cmds.length === 0) {
       this.sendMsgToPlayer(player, `By sprawdzić cenę: !sklep <nazwa>, By rozpocząć proces zakupu: !kup <nazwa> <liczba dni>`, Colors.DarkGreen);
-      this.sendMsgToPlayer(player, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki`, Colors.DarkGreen);
-      if (playerExt.pendingTransaction && playerExt.pendingTransaction.status != "completed") {
-        this.hb_room.game_state.getPaymentStatus(playerExt.pendingTransaction.transactionId).then((paymentStatus) => {
-          let tr = playerExt.pendingTransaction;
+      this.sendMsgToPlayer(player, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki, zainteresowany opcjami VIP? sprawdź !vip`, Colors.DarkGreen);
+      if (playerExt.pendingRejoiceTransaction && playerExt.pendingRejoiceTransaction.status != "completed") {
+        this.hb_room.game_state.getPaymentStatus(playerExt.pendingRejoiceTransaction.transactionId).then((paymentStatus) => {
+          let tr = playerExt.pendingRejoiceTransaction;
           if (tr && paymentStatus) {
             if (paymentStatus === "completed") {
               if (tr.status !== "completed") {
@@ -1139,6 +1206,9 @@ class Commander {
       return;
     }
     let rejoiceName = cmds[0];
+    if (rejoiceName === "vip") {
+      return this.commandVip(player, cmds.slice(1));
+    }
     if (!this.hb_room.rejoice_prices.has(rejoiceName)) {
       this.sendMsgToPlayer(player, `Nie ma cieszynki o nazwie ${rejoiceName}!`, Colors.DarkGreen);
       return;
@@ -1158,8 +1228,8 @@ class Commander {
       this.sendMsgToPlayer(player, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !kup <nazwa>`, Colors.DarkGreen);
       return;
     }
-    if (playerExt.pendingTransaction && playerExt.pendingTransaction.status !== 'completed') {
-      this.sendMsgToPlayer(player, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingTransaction.link}`, Colors.DarkGreen);
+    if (playerExt.pendingRejoiceTransaction && playerExt.pendingRejoiceTransaction.status !== 'completed') {
+      this.sendMsgToPlayer(player, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingRejoiceTransaction.link}`, Colors.DarkGreen);
       return;
     }
     this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays, this.hb_room.getSselector()).then((result) => {
@@ -1176,7 +1246,7 @@ class Commander {
     }
     let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
     if (!cmdPlayer) return;
-    let transaction = cmdPlayer.pendingTransaction;
+    let transaction = cmdPlayer.pendingRejoiceTransaction;
     if (!transaction) {
       this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} nie ma zadnej transakcji w trakcie`);
       return;
@@ -1213,6 +1283,22 @@ class Commander {
     })).catch((e) => hb_log(`updateOrInsertRejoice error: ${e}`));
   }
 
+  async commandSetVipOptionForPlayer(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'vip_option')) return;
+    if (cmds.length < 2) {
+      this.sendMsgToPlayer(player, `O jakiego gracza chodzi? I jaka opcja VIPowska?`);
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    if (!cmdPlayer) return;
+    let option = cmds[1];
+    this.hb_room.game_state.updateOrInsertVipOption(cmdPlayer.auth_id, option, 0, Date.now() + 60_000).then(((result) => {
+      this.hb_room.vip_options.handlePlayerJoin(cmdPlayer).then((num) => {
+        this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} nowych opcji VIP!`);
+      }).catch((e) => e && hb_log(`!! vip_options handlePlayerJoin error: ${e}`));
+    })).catch((e) => hb_log(`updateOrInsertVipOption error: ${e}`));
+  }
+
   async commandVerify(player: PlayerObject) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0 || playerExt.verify_link_requested) return;
@@ -1235,8 +1321,8 @@ class Commander {
       return;
     }
     let caller_ext = this.Pid(player.id);
-    if (caller_ext.trust_level < 2) {
-      this.sendMsgToPlayer(player, `Musisz mieć co najmniej drugi poziom by móc nadawać poziom zaufania!`);
+    if (caller_ext.trust_level < 3) {
+      this.sendMsgToPlayer(player, `Musisz mieć co najmniej trzeci poziom by móc nadawać poziom zaufania!`);
       return;
     }
     const amIhost = this.hb_room.isPlayerIdHost(player.id);
@@ -1330,6 +1416,23 @@ class Commander {
       this.hb_room.captcha.clearCaptcha(cmdPlayer);
       this.sendMsgToPlayer(player, `Usunąłem blokady dla gracza: ${cmdPlayer.name}`);
     }
+  }
+
+  static trustIndicators: string[] = ['❌', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+
+  async commandShowTrust(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    let rStr = '';
+    let bStr = '';
+    let sStr = '';
+    this.hb_room.players_ext.forEach(player => {
+      let str = `${player.name}=${player.trust_level < 6? Commander.trustIndicators[player.trust_level]: player.trust_level} `;
+      if (player.team === 1) rStr += str;
+      else if (player.team === 2) bStr += str;
+      else sStr += str;
+    })
+    this.sendMsgToPlayer(player, `R: ${rStr} | B: ${bStr} | S: ${sStr}`);
+
   }
 
   formatUptime(ms: number) {

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-FILE="retrusting.txt"
+FILE="data/retrusting.txt"
 DB_DIR="./db"
 MAIN_DB="$DB_DIR/main_futsal_players.db"
 V1_DB="$DB_DIR/other_futsal_1vs1.db"

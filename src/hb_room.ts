@@ -34,6 +34,7 @@ import GodCommander from './god_commander';
 import { DelayJoiner } from './delay_join';
 import { PlayerGatekeeper } from './gatekeeper/player_gatekeeper';
 import { PlayerJoinLogger } from './ip_logger';
+import { VipOptionsHandler } from './vip_options';
 
 
 export class HaxballRoom {
@@ -80,6 +81,7 @@ export class HaxballRoom {
   last_winner_team: 0|1|2;
   auto_mode: boolean;
   auto_afk: boolean;
+  max_afk_time_minutes: number;
   limit: number;
   commander: Commander;
   default_map_name: string;
@@ -98,7 +100,9 @@ export class HaxballRoom {
   player_ids_by_normalized_name: Map<string, number>;
   players_game_state_manager: PlayersGameStateManager;
   rejoice_maker: RejoiceMaker;
+  vip_options: VipOptionsHandler;
   rejoice_prices: Map<string, { for_days: number, price: number }[]>;
+  vip_option_prices: Map<string, { for_days: number, price: number }[]>;
   welcome_message: WelcomeMessage;
   pinger: Pinger;
   god_commander: GodCommander;
@@ -142,12 +146,13 @@ export class HaxballRoom {
     this.last_player_team_changed_by_admin_time = Date.now();
     this.last_winner_team = 0;
     this.limit = roomConfig.playersInTeamLimit;
+    this.max_afk_time_minutes = 10;
     this.auto_bot = new AutoBot(this);
-    this.player_stats = new Map<number, PlayerStat>();
-    this.player_stats_auth = new Map<string, number>();
+    this.player_stats = new Map();
+    this.player_stats_auth = new Map();
     // this.glicko_settings = null;
     this.glicko = new Glicko2.Glicko2();
-    this.glicko_players = new Map<string, Glicko2.Player>();
+    this.glicko_players = new Map();
     this.ratings = new Ratings(this.glicko, { limits: this.room_config.limits });
     this.ratings_for_all_games = false;
     this.match_stats = new MatchStats();
@@ -159,13 +164,15 @@ export class HaxballRoom {
     this.top10 = [];
     this.top10_daily = [];
     this.top10_weekly = [];
-    this.global_rank_by_auth = new Map<string, number>();
-    this.player_names_by_auth = new Map<string, string>();
-    this.player_ids_by_auth = new Map<string, number>();
-    this.player_ids_by_normalized_name = new Map<string, number>();
+    this.global_rank_by_auth = new Map();
+    this.player_names_by_auth = new Map();
+    this.player_ids_by_auth = new Map();
+    this.player_ids_by_normalized_name = new Map();
     this.players_game_state_manager = new PlayersGameStateManager(this);
     this.rejoice_maker = new RejoiceMaker(this);
-    this.rejoice_prices = new Map<string, { for_days: number, price: number }[]>();
+    this.vip_options = new VipOptionsHandler(this);
+    this.rejoice_prices = new Map();
+    this.vip_option_prices = new Map();
     this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.OrangeTangelo) });
     this.pinger = new Pinger(this.getSselector(), () => [this.players_ext.size, this.getAfkCount()]);
     this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
@@ -237,14 +244,31 @@ export class HaxballRoom {
       }
     }).catch((error) => {hb_log(`!! getRejoicePrices error: ${error}`)});
 
+    this.game_state.getVipOpionPrices().then((results) => {
+      for (let result of results) {
+        if (!this.vip_option_prices.has(result.option)) this.vip_option_prices.set(result.option, []);
+        this.vip_option_prices.get(result.option)!.push({for_days: result.for_days, price: result.price});
+      }
+    }).catch((error) => {hb_log(`!! getVipOpionPrices error: ${error}`)});
+
     this.game_state.setPaymentsLinkCallbackAndStart((authId: string, paymentTransactionId: number) => {
       this.game_state.getPaymentLink(authId, paymentTransactionId).then((result) => {
         let playerId = this.player_ids_by_auth.get(authId)!;
         let player = this.Pid(playerId);
         if (!player) return;
-        let link = result ?? 'INVALID';
-        player.pendingTransaction = new TransactionByPlayerInfo(paymentTransactionId);
-        player.pendingTransaction.link = link;
+        let link = 'INVALID';
+        let name = '';
+        if (result) {
+          link = result.link;
+          name = result.name;
+        }
+        if (name === 'vip') {
+          player.pendingVipOptionTransaction = new TransactionByPlayerInfo(paymentTransactionId);
+          player.pendingVipOptionTransaction.link = link;
+        } else {
+          player.pendingRejoiceTransaction = new TransactionByPlayerInfo(paymentTransactionId);
+          player.pendingRejoiceTransaction.link = link;
+        }
         let txt = `Link ⇒  ${link}  ⇐ Zakup przez Stripe! Następnie wyjdź i wejdź!`;
         this.sendMsgToPlayer(player, txt, Colors.OrangeTangelo, 'bold');
         hb_log(`Gracz ${player.name} otrzymał link: ${txt}`);
@@ -557,10 +581,12 @@ export class HaxballRoom {
       let anyPlayerProperties = this.getAnyPlayerDiscProperties();
       let ballProperties = this.getBallProperties();
       if (anyPlayerProperties === null || ballProperties === null) {
-        hb_log(`ST coś jest null: ${anyPlayerProperties}, ${ballProperties} ${anyPlayerProperties?.radius} ${anyPlayerProperties?.damping} ${ballProperties?.radius} ${ballProperties?.damping}`);
+        hb_log(`ST coś jest null: ${anyPlayerProperties}, ${ballProperties} ${anyPlayerProperties?.radius} `
+          + `${anyPlayerProperties?.damping} ${ballProperties?.radius} ${ballProperties?.damping}`);
       }
       this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
     }, 1000);
+    this.kickLongAfkingPlayers();
   }
 
   getAnyPlayerDiscProperties() {
@@ -892,6 +918,7 @@ export class HaxballRoom {
           }
         }).catch((e) => hb_log(`!! getPlayerNameInfo error: ${e}`));
       }).catch((e) => { hb_log(`!! insertPlayerName error: $${e}`) });
+      this.vip_options.handlePlayerJoin(playerExt);
       this.updateAdmins(null);
       await this.loadPlayerStat(playerExt);
       if (this.gatekeeper.handlePlayerJoin(playerExt)) return;
@@ -911,6 +938,7 @@ export class HaxballRoom {
     } catch (e) {
       hb_log(`!! getTrustAndAdminLevel error: ${e}`);
     }
+    this.kickAfkPlayerWhenSomePlayerJoined();
   }
 
   async loadPlayerStat(playerExt: PlayerData) {
@@ -972,6 +1000,48 @@ export class HaxballRoom {
     stat.counterLeftServer = playerMatchStats.left_server;
   }
 
+  kickAfkPlayerWhenSomePlayerJoined() {
+    let playersNum = this.players_ext.size;
+    if (playersNum <= this.room_config.playersInTeamLimit * 3) return;
+    const now = Date.now();
+    let afking = Array.from(this.players_ext.values())
+      .filter(e => e.afk || e.afk_maybe)
+      .sort((a, b) => a.afk_switch_time - b.afk_switch_time);
+    if (afking.length === 0) return;
+    if (playersNum === this.room_config.maxPlayers) {
+      this.room.kickPlayer(afking[0].id, "AFK, full", false);
+    }
+  }
+
+  kickTheLongestAfkPlayerOnFullServer() {
+    return this.kickSomeAfkPlayers(1);
+  }
+
+  kickLongAfkingPlayers() {
+    return this.kickSomeAfkPlayers(2);
+  }
+
+  kickSomeAfkPlayers(mode: 1|2) {
+    let playersNum = this.players_ext.size;
+    if (playersNum <= this.room_config.playersInTeamLimit * 3) return;
+    const now = Date.now();
+    let afking = Array.from(this.players_ext.values())
+      .filter(e => e.afk || e.afk_maybe)
+      .sort((a, b) => a.afk_switch_time - b.afk_switch_time);
+    if (afking.length === 0) return;
+    if (mode === 1) {
+      if (playersNum === this.room_config.maxPlayers) {
+        this.room.kickPlayer(afking[0].id, "AFK, full", false);
+      }
+      return;
+    }
+    for (let player of afking) {
+      if (!player.vip_data.afk_mode && now - player.afk_switch_time > this.max_afk_time_minutes * 60 * 1000) {
+        this.room.kickPlayer(player.id, "AAAAAAFK", false);
+      }
+    }
+  }
+
   checkIfPlayerNameContainsNotAllowedChars(player: PlayerObject) {
     if ('﷽' === player.name) return false; // there is such player with that name so it is olny exception :)
     if (this.containsWideCharacters(player.name)) {
@@ -1029,7 +1099,7 @@ export class HaxballRoom {
   async handlePlayerLeave(player: PlayerObject) {
     this.game_state.logMessage(player.name, "players", "Player left the room", false);
     this.players_num -= 1;
-    hb_log(`# (n:${this.players_num}) left server: ${player.name} [${player.id}]`);
+    hb_log(`# (n:${this.players_num}) left server: ${player.name} []`);
     this.updateAdmins(player);
     this.handleEmptyRoom(player);
     this.last_command.delete(player.id);
@@ -1451,10 +1521,22 @@ export class HaxballRoom {
         return userLogMessage(false);
       }
       userLogMessage(true);
+      if (playerExt.claimed || playerExt.trust_level < 3) {
+        let color = Colors.TrustZero;
+        let bell = 0;
+        if (playerExt.claimed) { // claimed, feature with user mgmt
+          color = Colors.TrustClaimed;
+          bell = 1;
+        } else if (playerExt.trust_level === 1) color = Colors.TrustOne; // no bell, broken level
+        else if (playerExt.trust_level === 2) { // new base level for people
+          color = Colors.TrustTwo;
+          bell = 1;
+        }
+        this.sendMsgToAll(`${player.name}: ${message}`, color, undefined, 0);
+        return false;
+      };
       // show as normal for trusted players
-      if (playerExt.trust_level > 0) return true;
-      // show as grey
-      this.sendMsgToAll(`${player.name}: ${message}`, Colors.TrustZero, undefined, 0);
+      if (playerExt.trust_level > 2) return true;
       return false;
     }
     return false;
