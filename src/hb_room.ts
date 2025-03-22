@@ -568,8 +568,8 @@ export class HaxballRoom {
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
 
-      if (!p.trust_level) { // TODO Debug
-        this.room.setPlayerAvatar(p.id, '<0');
+      if (p.trust_level < 2) { // TODO Debug
+        this.room.setPlayerAvatar(p.id, `<${p.trust_level}`);
       }
     }
     this.gameStopTimerReset();
@@ -870,15 +870,12 @@ export class HaxballRoom {
     if (cmdPlayer != null) {
       hb_log(`# Giving admin by name to ${playerName}`);
       this.giveAdminTo(cmdPlayer);
-      this.game_state.logMessage(playerName, "players", `Admin granted to ${playerName}`, false);
     } else {
       hb_log(`Player ${playerName} not found`);
     }
   }
 
   async handlePlayerJoin(player: PlayerObject) {
-    // TODO change storing info about when new player joins server
-    this.game_state.logMessage(player.name, "players", `Player joined the room, auth: ${player.auth} conn: ${player.conn}`, false);
     this.players_num += 1;
     hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}]`);
     this.players_ext.set(player.id, new PlayerData(player));
@@ -930,8 +927,8 @@ export class HaxballRoom {
       if (this.anti_spam.enabled && initialMute) {
         this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
       }
-      if (!playerExt.trust_level) {
-        this.room.setPlayerAvatar(playerExt.id, '<0');
+      if (playerExt.trust_level < 2) {
+        this.room.setPlayerAvatar(playerExt.id, `<${playerExt.trust_level}`);
       }
       // this.sendOnlyTo(player, `Mozesz aktywować sterowanie przyciskami (Link: https://tinyurl.com/HaxballKeyBinding): Lewy Shift = Sprint, A = Wślizg`, 0x22FF22);
       this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb !sklep`, Colors.Help);
@@ -1027,6 +1024,7 @@ export class HaxballRoom {
     const now = Date.now();
     let afking = Array.from(this.players_ext.values())
       .filter(e => e.afk || e.afk_maybe)
+      .filter(e => !this.isPlayerIdHost(e.id))
       .sort((a, b) => a.afk_switch_time - b.afk_switch_time);
     if (afking.length === 0) return;
     if (mode === 1) {
@@ -1097,7 +1095,6 @@ export class HaxballRoom {
   }
 
   async handlePlayerLeave(player: PlayerObject) {
-    this.game_state.logMessage(player.name, "players", "Player left the room", false);
     this.players_num -= 1;
     hb_log(`# (n:${this.players_num}) left server: ${player.name} []`);
     this.updateAdmins(player);
@@ -1337,7 +1334,7 @@ export class HaxballRoom {
 
             let stat = this.player_stats.get(playerExt.id)!;
             if (!playerExt.trust_level) {
-              this.autoTrustByPlayerGames(playerExt, stat);
+              // this.autoTrustByPlayerGames(playerExt, stat);
               continue;
             }
             let g = stat.glickoPlayer!;
@@ -1453,8 +1450,8 @@ export class HaxballRoom {
     this.match_stats.handlePositionsReset();
     this.rejoice_maker.handlePositionsReset();
     this.players_ext.forEach(p => {
-      if (!p.trust_level) { // TODO Debug
-        this.room.setPlayerAvatar(p.id, '<0');
+      if (p.trust_level < 2) {
+        this.room.setPlayerAvatar(p.id, `<${p.trust_level}`);
       }
     })
   }

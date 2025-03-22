@@ -10,7 +10,7 @@ import { HallOfFameDB } from '../src/db/hall_of_fame';
 import { RollingRatingsDB, RollingRatingsData } from '../src/db/rolling_ratings';
 import { MatchEntry } from '../src/db/matches';
 import { MatchStatsEntry } from '../src/db/match_stats';
-import { Match, PlayerStat, PlayerLeavedDueTo, PlayerTopRatingData, MatchType, GameModeType } from '../src/structs';
+import { Match, PlayerStat, PlayerLeavedDueTo, PlayerTopRatingData, MatchType, GameModeType, PlayerMatchStatsDataImpl } from '../src/structs';
 import { Ratings } from '../src/rating';
 import Glicko2 from 'glicko2';
 import { getTimestampHM } from '../src/utils';
@@ -72,17 +72,19 @@ export class AccuStats {
   async run() {
     try {
       await this.setupDatabases();
-      this.processOnce();
-      setInterval(() => {
-        this.processOnce();
-      }, 5 * 1000);
-    } catch (e) { e && console.error(`run error: ${e}`) };
+      while (true) {
+        await this.processOnce();
+        await new Promise(resolve => setTimeout(resolve, 5 * 1000)); // Odczekaj 5 sekund przed kolejnym uruchomieniem
+      }
+    } catch (e) {
+      console.error(`run error: ${e}`);
+    }
   }
 
   async runOnce() {
     try {
       await this.setupDatabases();
-      this.processOnce();
+      await this.processOnce();
     } catch (e) { e && console.error(`runOnce error: ${e}`) };
   }
 
@@ -401,14 +403,14 @@ export class AccuStats {
       return;
     }
     console.log(`updateAccuStatsRolling for ${rollingData.length} elements, last ID: ${lastProcessedMatchId}, matches: ${matches.length} stats: ${matchStats.length}`);
-    let rrByDate: Map<string, RollingRatingsData[]> = new Map();
+    let rrByDate: Map<string, Map<string, RollingRatingsData>> = new Map();
     for (let r of rollingData) {
       let day = rrByDate.get(r.date);
       if (!day) {
-        rrByDate.set(r.date, []);
+        rrByDate.set(r.date, new Map());
         day = rrByDate.get(r.date)!;
       }
-      day.push(r);
+      day.set(r.auth_id, r);
    }
     let matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }> = new Map();
     let matchIdsByDay: Map<string, Set<number>> = new Map();
@@ -459,7 +461,7 @@ export class AccuStats {
         console.log(`Empty matchIds for ${day}`);
         continue;
       }
-      let rr = rrByDate.get(day) ?? [];
+      let rr = rrByDate.get(day) ?? new Map();
       await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId, true);
       if (day === todayDate) {
         await this.updateTopRanking(playerNames, day, settings.min_full_games_daily, settings.players_limit, this.topRatingsDaily);
@@ -497,7 +499,7 @@ export class AccuStats {
       }
       match.stats.push(s);
     }
-    let playerRatings = await this.calculateRollingRating(playerNames, day, [], new Set(matchesByMatchId.keys()), matchesByMatchId);
+    let playerRatings = await this.calculateRollingRating(playerNames, day, new Map(), new Set(matchesByMatchId.keys()), matchesByMatchId);
     let playerRatingsArray = Array.from(playerRatings.values())
       .filter(e => e.games >= settings.min_full_games_daily)
       .sort((lhs: RollingRatingsData, rhs: RollingRatingsData) => rhs.mu - lhs.mu)
@@ -516,11 +518,21 @@ export class AccuStats {
     return date.toISOString().split("T")[0]; // Format YYYY-MM-DD
   }
 
-  async calculateRollingRating(playerNames: Map<string, string>, matchDay: string, rollingRatings: RollingRatingsData[],
+  private updateGlickoPlayerRating(playerStat: PlayerStat, rr: RollingRatingsData) {
+    let g = playerStat.glickoPlayer!;
+    g.setRating(rr.mu);
+    g.setRd(rr.rd);
+    g.setVol(rr.vol);
+  }
+
+  async calculateRollingRating(playerNames: Map<string, string>, matchDay: string, rollingRatings: Map<string, RollingRatingsData>,
     affectedMatchIds: Set<number>, matchesByMatchId: Map<number, { match: MatchEntry, stats: MatchStatsEntry[] }>, update = false) {
-    console.log(`calculateRollingRating for day: ${matchDay} elements: ${rollingRatings.length}`);
+    console.log(`calculateRollingRating for day: ${matchDay} elements: ${rollingRatings.size}`);
     let glicko = new Glicko2.Glicko2();
     let ratings = new Ratings(glicko);
+    let penaltyCounter: Map<number, number> = new Map();
+    let lastMatchDayProcessed = '';
+    let playerTopRatings: Map<number, RollingRatingsData> = new Map();
     let playerStats = new Map<number, PlayerStat>();
     let playerIdByAuth = new Map<string, number>();
     let nextPlayerId = 1;
@@ -528,30 +540,15 @@ export class AccuStats {
       if (!playerIdByAuth.has(authId)) {
         playerIdByAuth.set(authId, nextPlayerId);
         playerStats.set(nextPlayerId, this.createPlayerStat(nextPlayerId, glicko));
-        nextPlayerId++;
-      }
-      return playerIdByAuth.get(authId)!;
-    }
-
-    let playerTopRatings: Map<number, RollingRatingsData> = new Map();
-    for (let rr of rollingRatings) {
-      let playerId = getPlayerIdByAuth(rr.auth_id);
-      playerTopRatings.set(playerId, rr);
-      let g = playerStats.get(playerId)!.glickoPlayer!;
-      g.setRating(rr.mu);
-      g.setRd(rr.rd);
-      g.setVol(rr.vol);
-    }
-
-    console.log(`affcetedMatchIds count: ${affectedMatchIds.size}`);
-    for (let matchId of affectedMatchIds) {
-      let match = matchesByMatchId.get(matchId)!;
-      for (let stat of match.stats) {
-        let playerId = getPlayerIdByAuth(stat.auth_id);
-        if (!playerTopRatings.has(playerId)) {
-          playerTopRatings.set(playerId, {
+        if (rollingRatings.has(authId)) {
+          let rr = rollingRatings.get(authId)!;
+          playerTopRatings.set(nextPlayerId, rr);
+          // here init glicko rating to data from db
+          this.updateGlickoPlayerRating(playerStats.get(nextPlayerId)!, rr);
+        } else {
+          playerTopRatings.set(nextPlayerId, {
             date: matchDay,
-            auth_id: stat.auth_id,
+            auth_id: authId,
             match_id: 0,
             mu: PlayerStat.DefaultRating,
             rd: PlayerStat.DefaultRd,
@@ -568,6 +565,20 @@ export class AccuStats {
             left_server: 0,
           });
         }
+        penaltyCounter.set(nextPlayerId, 0);
+        nextPlayerId++;
+      }
+      return playerIdByAuth.get(authId)!;
+    }
+    ratings.isEnabledPenaltyFor = (playerId: number) => {
+      return penaltyCounter.get(playerId)! >= 3;
+    };
+
+    console.log(`affcetedMatchIds count: ${affectedMatchIds.size}`);
+    for (let matchId of affectedMatchIds) {
+      let match = matchesByMatchId.get(matchId)!;
+      for (let stat of match.stats) {
+        let playerId = getPlayerIdByAuth(stat.auth_id)!;
         let ptr = playerTopRatings.get(playerId)!;
         if (matchId > ptr.match_id) {
           ptr.match_id = matchId;
@@ -587,10 +598,20 @@ export class AccuStats {
       }
     }
 
+    const someAuth = '';  // 'F3448VJ-CgXAx-gJ8lUAUgxIqSpAEUA2unFoZ8TtKDI';
+    const someAuthPlayerId = playerIdByAuth.get(someAuth);
+
     for (let matchId of affectedMatchIds) {
       let m = matchesByMatchId.get(matchId)!;
       let match = new Match(selector as MatchType);
       const matchDuration = m.match.duration;
+      if (m.match.date !== lastMatchDayProcessed) {
+        for (let pc of penaltyCounter.keys()) {
+          penaltyCounter.set(pc, 0);
+        }
+        lastMatchDayProcessed = m.match.date;
+      }
+      let someAuthPlayed = 0;
       for (let s of m.stats) {
         let playerId = playerIdByAuth.get(s.auth_id)!;
         if (s.team === 1) match.redTeam.push(playerId);
@@ -606,6 +627,9 @@ export class AccuStats {
             else if (s.left_state === 3) stat.leftDueTo = PlayerLeavedDueTo.leftServer;
           }
         }
+        if (playerId === someAuthPlayerId) someAuthPlayed = 1;
+        // here update glicko rating from last match if any
+        // this.updateGlickoPlayerRating(playerStats.get(playerId)!, playerTopRatings.get(playerId)!);
       }
       match.winnerTeam = m.match.winner as 0 | 1 | 2;
       match.matchEndTime = matchDuration;
@@ -615,6 +639,18 @@ export class AccuStats {
       match.possessionRed = m.match.possession;
       match.setEnd(matchDuration, true, m.match.full_time);
       ratings.calculateNewPlayersRating(match, playerStats);
+      ratings.penaltySavedFor.forEach(playerId => {
+        penaltyCounter.set(playerId, penaltyCounter.get(playerId)! + 1);
+      });
+      if (matchDay === '2025-03-12') {
+        if (someAuthPlayerId) {
+          let ptr = playerTopRatings.get(someAuthPlayerId)!;
+          let g = playerStats.get(someAuthPlayerId)!.glickoPlayer!;
+          console.log(`#${m.match.match_id} ${someAuthPlayerId} => (${someAuthPlayed}) (${g.getRating()},${g.getRd()}) `
+            + `(${ptr.games},${ptr.wins}) (${ptr.left_afk},${ptr.left_votekick},${ptr.left_server}) `
+            + `(${penaltyCounter.get(someAuthPlayerId)!})`);
+        }
+      }
     }
 
     console.log(`player ID count: ${playerStats.size}`);

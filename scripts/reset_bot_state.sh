@@ -4,7 +4,8 @@ for auth_id in "$@"; do
     scripts/update_tkick.sh db/other_futsal_3vs3.db "$auth_id"
     scripts/update_tkick.sh db/other_futsal_1vs1.db "$auth_id"
     scripts/remove_bot.sh db/main_futsal_players.db "$auth_id"
-    scripts/update_trust_level.sh db/main_futsal_players.db "$auth_id" 1
+    # scripts/update_trust_level.sh db/main_futsal_players.db "$auth_id" 0
+    echo "No trust level change"
     S='GOD,!'
     S="${S}ban_reload"
     echo "$S" >>./dynamic/god_commander_3vs3_1.txt

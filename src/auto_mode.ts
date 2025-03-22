@@ -987,7 +987,7 @@ export class AutoBot {
 
   moveAllTeamToSpec(inTeam: PlayerData[], inFavor: number[]) {
     // move AFK to the end of spec list!
-    const afkFilter = (e: PlayerData) => { return !e.vip_data.afk_mode || e.afk || e.afk_maybe };
+    const afkFilter = (e: PlayerData) => { return !e.vip_data.afk_mode && (e.afk || e.afk_maybe) };
     let specAfk = this.specTeam.filter(e => afkFilter(e));
     let specNonAfk = this.specTeam.filter(e => !afkFilter(e));
     this.specTeam = [...specNonAfk, ...specAfk];

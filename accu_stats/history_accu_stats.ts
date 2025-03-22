@@ -1,5 +1,6 @@
 // run for example:
 // HX_SELECTOR=1vs1 ts-node accu_stats/history_accu_stats.ts 2025-03-14 https://haxball.ovh
+// HX_SELECTOR=3vs3 ts-node accu_stats/history_accu_stats.ts 2025-03-14 https://haxball.ovh
 import { AccuStats } from ".";
 import { GameModeType } from "../src/structs";
 import { getTimestampHM } from "../src/utils";

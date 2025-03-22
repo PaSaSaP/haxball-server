@@ -7,6 +7,7 @@ export class PlayerJoinLogger {
   hbRoom: HaxballRoom;
   filename: string;
   positions: Map<number, [number, number][]>;
+  positionsEnabled = false;
   constructor(hbRoom: HaxballRoom) {
     this.hbRoom = hbRoom;
     this.filename = `./dynamic/connected_players_${hbRoom.room_config.selector}_${hbRoom.room_config.subselector}.csv`;
@@ -39,12 +40,14 @@ export class PlayerJoinLogger {
       // save for all players so we can compare players vs bots
       const pos = this.pos(player);
       if (!pos) continue;
-      if (!this.positions.has(player.id)) this.positions.set(player.id, [[-180, 0]]);
-      let positions = this.positions.get(player.id)!;
-      const last_pos = positions.at(-1)!;
-      const new_pos: [number, number] = [pos.x, pos.y];
-      if (last_pos[0] !== new_pos[0] || last_pos[1] !== new_pos[1]) {
-        positions.push(new_pos);
+      if (this.positionsEnabled) {
+        if (!this.positions.has(player.id)) this.positions.set(player.id, [[-180, 0]]);
+        let positions = this.positions.get(player.id)!;
+        const last_pos = positions.at(-1)!;
+        const new_pos: [number, number] = [pos.x, pos.y];
+        if (last_pos[0] !== new_pos[0] || last_pos[1] !== new_pos[1]) {
+          positions.push(new_pos);
+        }
       }
 
       if (this.hbRoom.bot_stopping_enabled && player.bot  && Math.random() < 0.005) {
@@ -58,6 +61,7 @@ export class PlayerJoinLogger {
   }
 
   handleGameStop() {
+    if (!this.positionsEnabled) return;
     const fullSelector = `${this.hbRoom.room_config.selector}-${this.hbRoom.room_config.subselector}`;
     const now = new Date();
     const formattedDate = now.toISOString()

@@ -234,6 +234,7 @@ class Commander {
       nkick_bots: this.commandNKickBots,
       ban_reload: this.commandBanReload,
       bot_info: this.commandPrintShortInfo,
+      boti: this.commandPrintShortInfo,
       botradius: this.commandBotSetRadius,
       botstop: this.commandSwitchBotStoppingFlag,
 
@@ -1035,7 +1036,13 @@ class Commander {
     this.hb_room.updateTop10();
   }
 
-  async commandPrintAuth(player: PlayerObject) {
+  async commandPrintAuth(player: PlayerObject, cmds: string[]) {
+    if (this.hb_room.isPlayerIdHost(player.id) && cmds.length) {
+      let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+      if (!cmdPlayerExt) return;
+      this.sendMsgToPlayer(player, `${player.name} auth_id: ${cmdPlayerExt.auth_id} | conn_id: ${cmdPlayerExt.conn_id}`);
+      return;
+    }
     this.sendMsgToPlayer(player, `Twój auth ID to: ${this.Pid(player.id).auth_id}`);
   }
 
@@ -1681,7 +1688,7 @@ class Commander {
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
       this.hb_room.room.kickPlayer(bot.id, '', false);
-      this.hb_room.players_game_state_manager.setPlayerTimeKicked(bot, 365*24*60*60*1000, false);
+      this.hb_room.players_game_state_manager.setPlayerTimeKicked(bot, 365*24*60*60, false);
     }
   }
 
@@ -1690,7 +1697,7 @@ class Commander {
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
       this.hb_room.room.kickPlayer(bot.id, '', false);
-      this.hb_room.players_game_state_manager.setNetworkTimeKicked(bot, 365*24*60*60*1000, false);
+      this.hb_room.players_game_state_manager.setNetworkTimeKicked(bot, 365*24*60*60, false);
     }
   }
 
