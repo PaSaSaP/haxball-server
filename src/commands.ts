@@ -605,10 +605,12 @@ class Commander {
 
   async commandKick(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer) return;
-    if (cmdPlayer.id == player.id) return;
-    this.r().kickPlayer(cmdPlayer.id, "", false);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+      if (!cmdPlayer) continue;
+      if (cmdPlayer.id == player.id) continue;
+      this.r().kickPlayer(cmdPlayer.id, "Kik!", false);
+    }
   }
 
   async commandKickAllExceptVerified(player: PlayerObject) {
@@ -1315,7 +1317,7 @@ class Commander {
   }
 
   async commandTrust(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
+    // if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(player, "Uzycie: !t <@nick> <trust_level>");
       return;
@@ -1328,8 +1330,8 @@ class Commander {
       return;
     }
     let caller_ext = this.Pid(player.id);
-    if (caller_ext.trust_level < 3) {
-      this.sendMsgToPlayer(player, `Musisz mieć co najmniej trzeci poziom by móc nadawać poziom zaufania!`);
+    if (caller_ext.trust_level < 2) {
+      this.sendMsgToPlayer(player, `Musisz mieć co najmniej drugi poziom by móc nadawać poziom zaufania!`);
       return;
     }
     const amIhost = this.hb_room.isPlayerIdHost(player.id);

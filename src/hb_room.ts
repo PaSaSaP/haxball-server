@@ -177,7 +177,10 @@ export class HaxballRoom {
     this.pinger = new Pinger(this.getSselector(), () => [this.players_ext.size, this.getAfkCount()]);
     this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
       roomConfig.selector, roomConfig.subselector);
-    this.delay_joiner = new DelayJoiner((player: PlayerData) => { this.auto_bot.handlePlayerJoin(player); },
+    this.delay_joiner = new DelayJoiner((player: PlayerData) => {
+      if (player.trust_level) this.auto_bot.handlePlayerJoin(player);
+      else this.room.kickPlayer(player.id, 'VIPs only', false);
+    },
       () => { return !this.auto_bot.isLobbyTime(); },
       this.auto_mode);
     this.gatekeeper = new PlayerGatekeeper(this);
@@ -1367,14 +1370,15 @@ export class HaxballRoom {
 
   private async gePlayersRatingWhichPlayedInMatch(inMatch: Match) {
     const selector = this.getSelectorFromMatch(inMatch);
-    for (let playerId of inMatch.redTeam.concat(inMatch.blueScore)) {
+    const inMatchPlayerIds = inMatch.redTeam.concat(inMatch.blueScore);
+    for (let playerId of inMatchPlayerIds) {
       let playerExt = this.Pid(playerId);
       if (!playerExt.trust_level) continue;
       try {
           let rating = await this.game_state.loadPlayerRating(selector, playerExt.auth_id);
-          rating && this.assignPlayerRating(playerExt, rating);
+          if (rating) this.assignPlayerRating(playerExt, rating);
           // hb_log(`RATING get ${playerExt.name} (${rating.mu}, ${rating.rd})`);
-      } catch (e) { hb_log(`!! loadPlayerRating in match error s: ${selector} (${inMatch.redTeam.join(', ')}): ${e}`) };
+      } catch (e) { hb_log(`!! loadPlayerRating in match error s: ${selector} (${inMatchPlayerIds.join(', ')}): ${e}`) };
       try {
         playerExt.penalty_counter = await this.game_state.getPenaltyCounterFor(playerExt.auth_id);
       } catch (e) { hb_log(`!! getPenaltyCounterFor error: ${e}`) };
