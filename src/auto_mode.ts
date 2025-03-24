@@ -521,7 +521,7 @@ export class AutoBot {
 
   async handleRestartRequested(byPlayer: PlayerData) {
     if (this.isLobbyTime()) return; // add players only while game
-    if (!this.ranked || !this.currentScores || this.currentScores.time > 10) return;
+    if (!this.ranked || !this.currentScores || this.currentScores.time > 15) return;
     if (!this.restartRequestedByRed) {
       let p = this.redTeam.find(e => e.id === byPlayer.id);
       if (p) {

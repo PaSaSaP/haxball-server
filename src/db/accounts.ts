@@ -125,28 +125,18 @@ export class AccountsDB extends BaseDB {
     });
   }
 
-private async checkTokenUnique(token: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const query = `SELECT COUNT(*) AS count FROM accounts WHERE token = ?`;
+  private async checkTokenUnique(token: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      const query = `SELECT COUNT(*) AS count FROM accounts WHERE token = ?`;
 
-    this.db.get(query, [token], (err, row :{count: number}) => {
-      if (err) {
-        console.error("Error checking token uniqueness:", err);
-        reject('Error checking token uniqueness: ' + err.message);
-      } else {
-        resolve(row?.count === 0);
-      }
+      this.db.get(query, [token], (err, row: { count: number }) => {
+        if (err) {
+          console.error("Error checking token uniqueness:", err);
+          reject('Error checking token uniqueness: ' + err.message);
+        } else {
+          resolve(row?.count === 0);
+        }
+      });
     });
-  });
-}
-
-  static AccountsSecretKey = 'Walka trwa!';
-  private generateShortToken(auth_id: string): string {
-    const nonce = crypto.randomBytes(8).toString('hex');
-    const token = crypto.createHmac('sha256', AccountsDB.AccountsSecretKey)
-      .update(auth_id + nonce)
-      .digest('hex');
-    const shortToken = token.substring(0, 16);
-    return shortToken;
   }
 }

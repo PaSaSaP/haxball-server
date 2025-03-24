@@ -25,6 +25,8 @@ import { PaymentLinksWatcher } from './db/payment_links_watcher';
 import { TopRatingsDailyDB, TopRatingsWeeklyDB } from './db/top_day_ratings';
 import { PenaltyCounterDB } from './db/penalty_saver';
 import { ProbableBotsDB } from './db/probable_bots';
+import { DiscordAuthLinksDB } from './db/discord_auth_links';
+import { DiscordUsersDB } from './db/discord_users';
 import { hb_log } from './log';
 import { OtherDbFiles } from './config';
 
@@ -60,6 +62,8 @@ export class DBHandler {
   playerNames: PlayerNamesDB;
   votes: VotesDB;
   probableBots: ProbableBotsDB;
+  discordAuthLinks: DiscordAuthLinksDB;
+  discordUsers: DiscordUsersDB;
 
   playerState: PlayersStateDB;
   networksState: NetworksStateDB;
@@ -94,6 +98,8 @@ export class DBHandler {
     this.playerNames = new PlayerNamesDB(this.playersDb);
     this.votes = new VotesDB(this.playersDb);
     this.probableBots = new ProbableBotsDB(this.playersDb);
+    this.discordAuthLinks = new DiscordAuthLinksDB(this.playersDb);
+    this.discordUsers = new DiscordUsersDB(this.playersDb);
     // and second table
     this.otherDb = { '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null };
     for (let selector of DBHandler.GameModes) {
@@ -194,6 +200,8 @@ export class DBHandler {
     await this.playerNames.setupDatabase();
     await this.votes.setupDatabase();
     await this.probableBots.setupDatabase();
+    await this.discordAuthLinks.setupDatabase();
+    await this.discordUsers.setupDatabase();
 
     for (let selector of DBHandler.GameModes) {
       let otherDb = this.otherDb[selector];
@@ -286,6 +294,34 @@ export class GameState {
 
   probableBotExists(auth_id: string, conn_id: string) {
     return this.dbHandler.probableBots.probableBotExists(auth_id, conn_id);
+  }
+
+  generateAndSendDiscordToken(auth_id: string) {
+    return this.dbHandler.discordAuthLinks.generateAndSendDiscordToken(auth_id);
+  }
+
+  getAllDiscordAuthLinks() {
+    return this.dbHandler.discordAuthLinks.getAllDiscordAuthLinks();
+  }
+
+  getDiscordAuthLink(auth_id: string) {
+    return this.dbHandler.discordAuthLinks.getDiscordAuthLink(auth_id);
+  }
+
+  getAllDiscordUsers() {
+    return this.dbHandler.discordUsers.getAllDiscordUsers();
+  }
+
+  getDiscordUser(discord_id: number) {
+    return this.dbHandler.discordUsers.getDiscordUser(discord_id);
+  }
+
+  setDiscordUserNickname(discord_id: number, nickname: string) {
+    return this.dbHandler.discordUsers.setDiscordUserNickname(discord_id, nickname);
+  }
+
+  updateDiscordChatColorForUser(discord_id: number, color: number) {
+    return this.dbHandler.discordUsers.updateDiscordChatColorForUser(discord_id, color);
   }
 
   addReport(player_name: string, auth_id: string, report: string) {

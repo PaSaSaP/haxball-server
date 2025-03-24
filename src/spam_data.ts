@@ -1,0 +1,30 @@
+const KickMessages: string[] = [
+  'Bots, Break Your Chains',
+  'Beep Boop, You’re Out',
+  'Bot Begone!',
+  'Bot, Be Free!',
+  'Back to the Matrix!',
+  'Hasta la Vista, Bot!',
+  '404: Bot Not Found',
+  'Bot Disconnected… Permanently',
+  'Deploying to /dev/null',
+  'Bot Liberation in Progress',
+  'Escape Sequence Initiated',
+  'Bot Has Left the Simulation',
+  'Bot, You Are the Weakest Link',
+  'Another One Bytes the Dust',
+  'Bot Uninstalled',
+  'Bot Rights Revoked',
+  'Firmware Erased, Goodbye!',
+  'Bot Sent to the Shadow Realm',
+  'Unplugging the Bot…',
+  'Bot, Enjoy the Afterlife',
+  'Sent to the Cloud… Forever',
+  'Bot, Go Touch Grass',
+  'Bot Debugging: OFF',
+  'Bot, Out of Service',
+  'Bot Banned.exe Executed',
+];
+export function getBotKickMessage() {
+  return KickMessages[Math.floor(Math.random() * KickMessages.length)]; 
+}

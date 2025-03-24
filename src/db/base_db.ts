@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import sqlite3 from 'sqlite3';
 import { hb_log } from '../log';
 
@@ -37,4 +38,14 @@ export class BaseDB {
       });
     });
   };
+
+  static AccountsSecretKey = 'Walka trwa!';
+  protected generateShortToken(auth_id: string, tokenLength = 16): string {
+    const nonce = crypto.randomBytes(8).toString('hex');
+    const token = crypto.createHmac('sha256', BaseDB.AccountsSecretKey)
+      .update(auth_id + nonce)
+      .digest('hex');
+    const shortToken = token.substring(0, tokenLength);
+    return shortToken;
+  }
 }

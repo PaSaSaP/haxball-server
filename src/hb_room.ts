@@ -35,6 +35,8 @@ import { DelayJoiner } from './delay_join';
 import { PlayerGatekeeper } from './gatekeeper/player_gatekeeper';
 import { PlayerJoinLogger } from './ip_logger';
 import { VipOptionsHandler } from './vip_options';
+import { getBotKickMessage } from './spam_data';
+import { DiscordAccountManager } from './discord_account';
 
 
 export class HaxballRoom {
@@ -109,6 +111,7 @@ export class HaxballRoom {
   delay_joiner: DelayJoiner;
   gatekeeper: PlayerGatekeeper;
   pl_logger: PlayerJoinLogger;
+  discord_account: DiscordAccountManager;
   bot_stopping_enabled = false;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
@@ -179,18 +182,20 @@ export class HaxballRoom {
       roomConfig.selector, roomConfig.subselector);
     this.delay_joiner = new DelayJoiner((player: PlayerData) => {
       if (player.trust_level) this.auto_bot.handlePlayerJoin(player);
-      else this.room.kickPlayer(player.id, 'VIPs only', false);
+      else this.room.kickPlayer(player.id, getBotKickMessage(), false);
     },
       () => { return !this.auto_bot.isLobbyTime(); },
       this.auto_mode);
     this.gatekeeper = new PlayerGatekeeper(this);
     this.pl_logger = new PlayerJoinLogger(this);
+    this.discord_account = new DiscordAccountManager(this);
 
     this.ratings.isEnabledPenaltyFor = (playerId: number) => {
       let playerExt = this.Pid(playerId);
       return playerExt.trust_level === 0 || (playerExt.trust_level > 0 && playerExt.penalty_counter >= 3);
     };
-    this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
+    // this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
+    this.welcome_message.setMessage(`By móc grać musisz zyskać pierwszy stopień zaufania, sprawdź Discord! 💬 ${config.discordLink} 💬`);
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -235,7 +240,8 @@ export class HaxballRoom {
       this.anti_spam.setEnabled(true); // enable anti spam there
       // on spam set timed mute for 5 mintues
       this.anti_spam.setOnMute((playerId: number) => {
-        this.players_game_state_manager.setPlayerTimeMuted(this.Pid(playerId), 5 * 60);
+        const muteInSeconds = this.Pid(playerId).trust_level < 2 ? 5 * 60 : 60;
+        this.players_game_state_manager.setPlayerTimeMuted(this.Pid(playerId), muteInSeconds);
         this.anti_spam.clearMute(playerId);
       });
     }
@@ -277,6 +283,7 @@ export class HaxballRoom {
         hb_log(`Gracz ${player.name} otrzymał link: ${txt}`);
       }).catch((error) => { hb_log(`!! getPaymentLink error: ${error}`) });
     }, this.getSselector());
+    await this.discord_account.init();
     hb_log("#I# InitData() done");
   }
 
@@ -878,6 +885,7 @@ export class HaxballRoom {
     }
   }
 
+
   async handlePlayerJoin(player: PlayerObject) {
     this.players_num += 1;
     hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}]`);
@@ -885,6 +893,10 @@ export class HaxballRoom {
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
     let playerExt = this.Pid(player.id);
     this.pl_logger.handlePlayerJoin(playerExt);
+    this.discord_account.handlePlayerJoin(playerExt);
+    await this.discord_account.oneTimePlayerNameSetup(playerExt);
+
+    if (this.checkForDiscordAccountNameValidity(playerExt)) return;
     if (this.players_game_state_manager.checkIfPlayerIsNotTimeKicked(player)) return;
     if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
     if (this.checkIfDotPlayerIsHost(player)) return;
@@ -1041,6 +1053,14 @@ export class HaxballRoom {
         this.room.kickPlayer(player.id, "AAAAAAFK", false);
       }
     }
+  }
+
+  checkForDiscordAccountNameValidity(player: PlayerData) {
+    if (!this.discord_account.checkAccountNameValidity(player)) {
+      this.room.kickPlayer(player.id, "Fake!", false);
+      return true;
+    }
+    return false;
   }
 
   checkIfPlayerNameContainsNotAllowedChars(player: PlayerObject) {
@@ -1522,18 +1542,20 @@ export class HaxballRoom {
         return userLogMessage(false);
       }
       userLogMessage(true);
-      if (playerExt.claimed || playerExt.trust_level < 3) {
+      if (playerExt.discord_user && playerExt.discord_user.state) {
+        console.log(`XX Color = ${playerExt.discord_user.chat_color}`)
+        this.sendMsgToAll(`${player.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
+        return false;
+      }
+      if (playerExt.trust_level < 3) {
         let color = Colors.TrustZero;
         let bell = 0;
-        if (playerExt.claimed) { // claimed, feature with user mgmt
-          color = Colors.TrustClaimed;
-          bell = 1;
-        } else if (playerExt.trust_level === 1) color = Colors.TrustOne; // no bell, broken level
+        if (playerExt.trust_level === 1) color = Colors.TrustOne; // no bell, broken level
         else if (playerExt.trust_level === 2) { // new base level for people
           color = Colors.TrustTwo;
           bell = 1;
         }
-        this.sendMsgToAll(`${player.name}: ${message}`, color, undefined, 0);
+        this.sendMsgToAll(`${player.name}: ${message}`, color, undefined, bell);
         return false;
       };
       // show as normal for trusted players

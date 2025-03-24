@@ -212,6 +212,20 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run discord_1vs1
+  discord-accounts:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run discord_accounts
   monitoring:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped

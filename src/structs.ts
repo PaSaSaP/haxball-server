@@ -8,6 +8,7 @@ import { PlayerAccelerator } from "./player_accelerator";
 import { BallPossessionTracker } from "./possesion_tracker";
 import { getTimestampHM, normalizeNameString } from "./utils";
 import Glicko2 from 'glicko2';
+import { DiscordUserEntry } from "./db/discord_users";
 
 export class PlayerActivity {
   chat: number; // if is writing or is moving players from team to team
@@ -130,6 +131,9 @@ export class PlayerData {
   pendingVipOptionTransaction: TransactionByPlayerInfo | null;
   vip_data: PlayerVipData;
 
+  discord_user: DiscordUserEntry | null;
+  discord_token: string;
+
   bot = false;
 
   constructor(player: PlayerObject|PPP) {
@@ -162,6 +166,8 @@ export class PlayerData {
     this.pendingRejoiceTransaction = null;
     this.pendingVipOptionTransaction = null;
     this.vip_data = new PlayerVipData();
+    this.discord_user = null;
+    this.discord_token = '';
   }
 
   update(player: PlayerObject) {
