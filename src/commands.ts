@@ -8,6 +8,7 @@ import { Colors } from "./colors";
 import * as config from './config';
 import { hb_log } from "./log";
 import e from "express";
+import { Emoji } from "./emoji";
 
 class BaseCommander {
   hb_room: HaxballRoom;
@@ -274,7 +275,6 @@ class Commander extends BaseCommander {
       only_trusted_chat: this.commandOnlyTrustedChat,
       trust_nick: this.commandWhitelistNonTrustedNick,
       auto_debug: this.commandAutoDebug,
-      set_delay: this.commandSetDelayOnJoin,
       set_welcome: this.commandSetWelcomeMsg,
       anno: this.commandSendAnnoToAllPlayers,
 
@@ -994,11 +994,12 @@ class Commander extends BaseCommander {
     let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
     let stat = cmdPlayerExt.stat;
+    let verifiedStr = playerExt.trust_level && cmdPlayerExt.discord_user?.state ? Emoji.UserVerified: '';
     let shameStr = playerExt.admin_level ? ` A:${stat.counterAfk},L:${stat.counterLeftServer},V:${stat.counterVoteKicked}` : '';
     let afkStr = playerExt.admin_level ? ` AFK:${getTimestampHM(playerExt.afk_switch_time)}` : '';
     let dateStr = getTimestampHM(cmdPlayerExt.join_time);
     let penaltyStr = playerExt.penalty_counter > 0 ? ` P:${playerExt.penalty_counter}` : '';
-    this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${adminStr}${shameStr}${penaltyStr} od:${dateStr}${afkStr}`);
+    this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${verifiedStr}${adminStr}${shameStr}${penaltyStr} od:${dateStr}${afkStr}`, Colors.GameState, 'italic');
   }
 
   async commandStat(player: PlayerObject, cmds: string[]) {
@@ -1046,10 +1047,10 @@ class Commander extends BaseCommander {
         `${rankEmojis[shift+index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`;
     const formatEntry1 = (e: PlayerTopRatingDataShort, index: number) => formatEntry(e, index, 0);
     const formatEntry2 = (e: PlayerTopRatingDataShort, index: number) => formatEntry(e, index, 5);
-    
+
     const firstHalf = ranking.data.slice(0, 5).map(formatEntry1).join(" ");
     this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[0]}${firstHalf}`, Colors.Stats);
-    
+
     if (ranking.data.length > 5) {
       const secondHalf = ranking.data.slice(5, 10).map(formatEntry2).join(" ");
       this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[1]}${secondHalf}`, Colors.Stats);
@@ -1378,6 +1379,9 @@ class Commander extends BaseCommander {
     } else if (trust_level >= caller_ext.trust_level) {
       this.sendMsgToPlayer(player, `Nie możesz nadać poziomu ${trust_level}, ponieważ Twój własny poziom to ${caller_ext.trust_level}. Możesz przyznać jedynie poziomy niższe od swojego.`);
       return;
+    } else if (trust_level === cmd_player_ext.trust_level) {
+        this.sendMsgToPlayer(player, `Gracz ma juz dany poziom zaufania`);
+        return;
     } else if (caller_ext.trust_level < 10 && trust_level < cmd_player_ext.trust_level) {
       this.sendMsgToPlayer(player, `Nie możesz obnizyc poziomu, mozesz jedynie podwyzszyc poziom innych graczy.`);
       return;
@@ -1599,16 +1603,6 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(player, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
   }
 
-  async commandSetDelayOnJoin(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'set_delay')) return;
-    if (!cmds.length) return;
-    let time = Number.parseInt(cmds[0]);
-    if (!isNaN(time)) {
-      this.hb_room.delay_joiner.DelayTime = time * 1000;
-      this.sendMsgToPlayer(player, `Delay ustawiony na: ${time} s`);
-    }
-  }
-
   async commandSetWelcomeMsg(player: PlayerObject, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(player, 'welcome')) return;
     if (!cmds.length) return;
@@ -1768,6 +1762,8 @@ class DiscordCommander extends BaseCommander {
     commander.commands['link_nick'] = this.commandLinkSetNickname;
     commander.commands['color'] = this.commandChatColor;
     commander.commands['kolor'] = this.commandChatColor;
+    commander.commands['users_update'] = this.commandAllUsersUpdate;
+    commander.commands['links_update'] = this.commandAllLinksUpdate;
   }
 
   commandLinkDiscordAccount(player: PlayerObject, cmds: string[]) {
@@ -1803,8 +1799,9 @@ class DiscordCommander extends BaseCommander {
       const red = (hexColor >> 16) & 0xFF;
       const green = (hexColor >> 8) & 0xFF;
       const blue = hexColor & 0xFF;
-      if (red < 200 || green < 200 || blue < 200) {
-        this.sendMsgToPlayer(player, "Nieprawidłowy kolor, któraś ze składowych RGB jest poza zakresem, dopuszczalny zakres dla kazdego komponentu RGB to <200, 255>", Colors.DarkRed);
+      const sum = red + green + blue;
+      if (sum < 500) {
+        this.sendMsgToPlayer(player, `Nieprawidłowy kolor, suma(R+G+B) = ${sum} < 500`, Colors.DarkRed);
         return;
       }
       dc.chat_color = hexColor;
@@ -1812,7 +1809,7 @@ class DiscordCommander extends BaseCommander {
     }
   }
 
-  commandLinkSetNickname(player: PlayerObject, cmds: string[]) {
+  commandAllLinksUpdate(player: PlayerObject, cmds: string[]) {
     let playerExt = this.Pid(player.id);
     if (playerExt.trust_level) {
       let dc = playerExt.discord_user;
@@ -1821,6 +1818,16 @@ class DiscordCommander extends BaseCommander {
         this.sendMsgToPlayer(playerExt, `Zmieniłeś nazwę na ${player.name} i od teraz ona będzie chroniona!`, Colors.BrightGreen);
       }
     }
+  }
+
+  commandAllUsersUpdate(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+    this.hb_room.discord_account.updateDiscordUsers();
+  }
+
+  commandLinkSetNickname(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+    this.hb_room.discord_account.updateDiscordLinks();
   }
 }
 

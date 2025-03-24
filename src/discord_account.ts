@@ -78,6 +78,8 @@ export class DiscordAccountManager {
 
   async updateDiscordUsers() {
     await this.hbRoom.game_state.getAllDiscordUsers().then((results) => {
+      this.discordUsers.clear();
+      this.claimedNames.clear();
       for (let result of results) {
         this.discordUsers.set(result.discord_id, result);
         if (result.claimed) this.claimedNames.add(normalizeNameString(result.nickname))
@@ -88,6 +90,7 @@ export class DiscordAccountManager {
 
   async updateDiscordLinks() {
     await this.hbRoom.game_state.getAllDiscordAuthLinks().then((results) => {
+      this.discordUserIdByAuthId.clear();
       for (let result of results) {
         this.discordUserIdByAuthId.set(result.auth_id, result.discord_id);
       }

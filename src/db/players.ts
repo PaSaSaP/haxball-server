@@ -18,7 +18,41 @@ export class PlayersDB extends BaseDB {
       );
     `;
 
+    const createTrustHistoryTableQuery = `
+      CREATE TABLE IF NOT EXISTS history_players_trust (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        auth_id TEXT NOT NULL,
+        trusted_level INTEGER NOT NULL,
+        trusted_by TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    const createTrustHistoryTriggerUpdateQuery = `
+      CREATE TRIGGER IF NOT EXISTS trigger_players_trust_changes
+      AFTER UPDATE ON players
+      FOR EACH ROW
+      WHEN OLD.trusted_level != NEW.trusted_level OR OLD.trusted_by != NEW.trusted_by
+      BEGIN
+        INSERT INTO history_players_trust (auth_id, trusted_level, trusted_by)
+        VALUES (NEW.auth_id, NEW.trusted_level, NEW.trusted_by);
+      END;
+    `;
+
+    const createTrustHistoryTriggerInsertQuery = `
+    CREATE TRIGGER IF NOT EXISTS trigger_players_trust_insertions
+    AFTER INSERT ON players
+    FOR EACH ROW
+    BEGIN
+      INSERT INTO history_players_trust (auth_id, trusted_level, trusted_by)
+      VALUES (NEW.auth_id, NEW.trusted_level, NEW.trusted_by);
+    END;
+  `;
+
     await this.promiseQuery(createPlayersTableQuery, 'players');
+    await this.promiseQuery(createTrustHistoryTableQuery, 'history_players_trust');
+    await this.promiseQuery(createTrustHistoryTriggerUpdateQuery, 'trigger_players_trust_changes');
+    await this.promiseQuery(createTrustHistoryTriggerInsertQuery, 'trigger_players_trust_insertions');
   }
 
   async updateAdminLevel(auth_id: string, new_admin_level: number): Promise<void> {
@@ -72,14 +106,33 @@ export class PlayersDB extends BaseDB {
   setTrustLevel(player: PlayerData, trust_level: number, by_player: PlayerData) {
     return new Promise((resolve, reject) => {
       const query = `
-        INSERT INTO players (auth_id, trusted_level, trusted_by) 
-        VALUES (?, ?, ?) 
-        ON CONFLICT(auth_id) 
-        DO UPDATE SET trusted_level = excluded.trusted_level, 
-                      trusted_by = excluded.trusted_by;
+        INSERT INTO players (auth_id, trusted_level, trusted_by)
+        VALUES (?, ?, ?)
+        ON CONFLICT(auth_id)
+        DO UPDATE SET
+          trusted_level = excluded.trusted_level,
+          trusted_by = excluded.trusted_by;
       `;
 
       this.db.run(query, [player.auth_id, trust_level, by_player.auth_id], function (err: any) {
+        if (err) {
+          reject('Error setting trust level: ' + err.message);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  private static DiscordBotAuthId = 'DISCORD_BOT_____________________DISCORD_BOT';
+  setTrustLevelByDiscordBot(auth_id: string, trust_level: number) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO players (auth_id, trusted_level, trusted_by)
+        VALUES (?, ?, ?);
+      `;
+
+      this.db.run(query, [auth_id, trust_level,PlayersDB.DiscordBotAuthId], function (err: any) {
         if (err) {
           reject('Error setting trust level: ' + err.message);
         } else {

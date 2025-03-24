@@ -23,26 +23,50 @@ export class DiscordAuthLinksDB extends BaseDB {
         FOREIGN KEY (auth_id) REFERENCES players(auth_id) ON DELETE CASCADE
       );
     `;
+    const limitConnectedAuthQuery = `
+      CREATE TRIGGER IF NOT EXISTS trigger_discord_auth_links_discord_id_limit_before_insert
+      BEFORE INSERT ON discord_auth_links
+      FOR EACH ROW
+      BEGIN
+        SELECT CASE
+        WHEN (SELECT COUNT(*) FROM discord_auth_links WHERE discord_id = NEW.discord_id) >= 5 THEN
+          RAISE (ABORT, 'Maximum 5 records allowed for a single discord_id')
+        END;
+      END;
+    `;
     await this.promiseQuery(createTableQuery, 'discord_auth_links');
+    await this.promiseQuery(limitConnectedAuthQuery, 'trigger_discord_auth_links_discord_id_limit_before_insert');
+  }
+
+  async insertNextDiscordAccount(discord_id: number, auth_id: string): Promise<string> {
+    const token = await this.genDiscordToken(auth_id);
+
+    const query = `
+      INSERT INTO discord_auth_links (discord_id, auth_id, token)
+      VALUES (?, ?, ?);
+    `;
+
+    return new Promise<string>((resolve, reject) => {
+      this.db.run(query, [discord_id, auth_id, token], function (err) {
+        if (err) {
+          reject('Error inserting next discord account: ' + err.message);
+        } else {
+          resolve(token);
+        }
+      });
+    });
   }
 
   async generateAndSendDiscordToken(auth_id: string): Promise<string> {
-    let token = this.generateShortToken(auth_id, 32);
-    let isTokenUnique = await this.checkTokenUnique(token);
-    
-    // Ensure token uniqueness
-    while (!isTokenUnique) {
-      token = this.generateShortToken(auth_id, 32);
-      isTokenUnique = await this.checkTokenUnique(token);
-    }
-  
+    const token = await this.genDiscordToken(auth_id);
+
     // Insert token into database without discord_id
     const query = `
       INSERT INTO discord_auth_links (auth_id, token)
       VALUES (?, ?)
       ON CONFLICT(auth_id) DO UPDATE SET token = excluded.token, token_created_at = CURRENT_TIMESTAMP
     `;
-  
+
     return new Promise<string>((resolve, reject) => {
       this.db.run(query, [auth_id, token], function (err) {
         if (err) {
@@ -54,13 +78,24 @@ export class DiscordAuthLinksDB extends BaseDB {
     });
   }
 
+  private async genDiscordToken(auth_id: string) {
+    let token = this.generateShortToken(auth_id, 32);
+    let isTokenUnique = await this.checkTokenUnique(token);
+    // Ensure token uniqueness
+    while (!isTokenUnique) {
+      token = this.generateShortToken(auth_id, 32);
+      isTokenUnique = await this.checkTokenUnique(token);
+    }
+    return token;
+  }
+
   async associateDiscordWithToken(discord_id: number, token: string, tokenValidityInMinutes = 15): Promise<void> {
     const checkQuery = `
-      SELECT token_created_at 
-      FROM discord_auth_links 
+      SELECT token_created_at
+      FROM discord_auth_links
       WHERE token = ?;
     `;
-  
+
     return new Promise<void>((resolve, reject) => {
       this.db.get(checkQuery, [token], (err, row: any) => {
         if (err) {
@@ -74,7 +109,7 @@ export class DiscordAuthLinksDB extends BaseDB {
           const nowUTC = new Date(now.getTime() + now.getTimezoneOffset() * 60000); // Konwersja lokalnego czasu na UTC
           const timeDiff = nowUTC.getTime() - tokenCreatedAt.getTime();
           const fifteenMinutesInMs = tokenValidityInMinutes * 60 * 1000;
-  
+
           if (timeDiff > fifteenMinutesInMs) {
             reject(`Token is older than ${tokenValidityInMinutes} minutes.`);
           } else {
@@ -84,7 +119,7 @@ export class DiscordAuthLinksDB extends BaseDB {
               SET discord_id = ?
               WHERE token = ?
             `;
-            
+
             this.db.run(updateQuery, [discord_id, token], function (err) {
               if (err) {
                 reject('Error associating discord_id with token: ' + err.message);
@@ -127,7 +162,7 @@ export class DiscordAuthLinksDB extends BaseDB {
   private async checkTokenUnique(token: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       const query = `SELECT COUNT(*) AS count FROM discord_auth_links WHERE token = ?`;
-  
+
       this.db.get(query, [token], (err, row :{count: number}) => {
         if (err) {
           console.error("Error checking token uniqueness:", err);

@@ -3,28 +3,36 @@ import { PlayerData } from "./structs";
 export class DelayJoiner {
   playerTimers: Map<number, NodeJS.Timeout>;
   onDelayJoin: (player: PlayerData) => void;
-  shouldBeDelayed: () => boolean;
+  onGameStop: (player: PlayerData) => void;
+  shouldBeDelayedInSeconds: (player: PlayerData) => number;
   enabled: boolean;
   kickZeroTrust: boolean;
-  DelayTimeZeroTrust: number = 60 * 1000;
-  DelayTimeOneTrust: number = 15 * 1000;
-  DelayTime: number = 5 * 1000;
+  playersOnGameStop: PlayerData[];
 
-  constructor(onDelayJoin: (player: PlayerData) => void, shouldBeDelayed: () => boolean, enabled: boolean) {
+  constructor(onDelayJoin: (player: PlayerData) => void,
+    onGameStop: (player: PlayerData) => void,
+    shouldBeDelayed: (player: PlayerData) => number,
+    enabled: boolean) {
     this.playerTimers = new Map();
     this.enabled = enabled;
     this.kickZeroTrust = true;
+    this.playersOnGameStop = [];
     this.onDelayJoin = onDelayJoin;
-    this.shouldBeDelayed = shouldBeDelayed;
+    this.onGameStop = onGameStop;
+    this.shouldBeDelayedInSeconds = shouldBeDelayed;
   }
 
+  addPlayerOnGameStop(player: PlayerData) {
+    this.playersOnGameStop.push(player);
+  }
   handlePlayerJoin(playerExt: PlayerData) {
-    if (!this.enabled || this.DelayTime <= 0 || !this.shouldBeDelayed()) return this.onDelayJoin(playerExt);
-    const delayTime = playerExt.trust_level > 1 ? this.DelayTime : playerExt.trust_level ? this.DelayTimeOneTrust : this.DelayTimeZeroTrust;
+    if (!this.enabled) return;
+    const delayTime = this.shouldBeDelayedInSeconds(playerExt);
+    if (delayTime === 0) return this.onDelayJoin(playerExt);
     this.playerTimers.set(playerExt.id, setTimeout(() => {
       this.onDelayJoin(playerExt);
       this.playerTimers.delete(playerExt.id);
-    }, delayTime));
+    }, delayTime * 1000));
   }
 
   handlePlayerLeave(playerExt: PlayerData) {
@@ -33,5 +41,12 @@ export class DelayJoiner {
       clearTimeout(timer);
       this.playerTimers.delete(playerExt.id);
     }
+  }
+
+  handleGameStop() {
+    this.playersOnGameStop.forEach(player => {
+      this.onGameStop(player);
+    })
+    this.playersOnGameStop.length = 0;
   }
 }

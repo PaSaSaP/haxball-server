@@ -180,12 +180,25 @@ export class HaxballRoom {
     this.pinger = new Pinger(this.getSselector(), () => [this.players_ext.size, this.getAfkCount()]);
     this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
       roomConfig.selector, roomConfig.subselector);
-    this.delay_joiner = new DelayJoiner((player: PlayerData) => {
+    const OnDelayJoinMinPlayers = 5;
+    const onDelayJoinCallback = (player: PlayerData) => {
       if (player.trust_level) this.auto_bot.handlePlayerJoin(player);
-      else this.room.kickPlayer(player.id, getBotKickMessage(), false);
-    },
-      () => { return !this.auto_bot.isLobbyTime(); },
-      this.auto_mode);
+      else if (this.players_ext.size < OnDelayJoinMinPlayers) {
+        this.delay_joiner.addPlayerOnGameStop(player);
+        this.auto_bot.handlePlayerJoin(player);
+      } else this.room.kickPlayer(player.id, getBotKickMessage(), false);
+    };
+    const onGameStopCallback = (player: PlayerData) => {
+      if (!player.trust_level) this.room.kickPlayer(player.id, getBotKickMessage(), false);
+    }
+    const shouldBeDelayedInSecondsCallback = (player: PlayerData) => {
+      if (this.players_ext.size < OnDelayJoinMinPlayers) { // no players, allow to play all bots and players :D
+        if (!player.trust_level) return 10; // 10 seconds delay for non trusted
+        return 5; // 5 seconds delay for trusted
+      } else if (!player.trust_level) return 60; // 60 seconds delay for non trusted when more players
+      else return 5; // 5 seconds delay for trusted
+    };
+    this.delay_joiner = new DelayJoiner(onDelayJoinCallback, onGameStopCallback, shouldBeDelayedInSecondsCallback, this.auto_mode);
     this.gatekeeper = new PlayerGatekeeper(this);
     this.pl_logger = new PlayerJoinLogger(this);
     this.discord_account = new DiscordAccountManager(this);
@@ -194,8 +207,8 @@ export class HaxballRoom {
       let playerExt = this.Pid(playerId);
       return playerExt.trust_level === 0 || (playerExt.trust_level > 0 && playerExt.penalty_counter >= 3);
     };
-    // this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
-    this.welcome_message.setMessage(`By móc grać musisz zyskać pierwszy stopień zaufania, sprawdź Discord! 💬 ${config.discordLink} 💬`);
+    this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
+    this.welcome_message.setMessageNonTrusted(`By móc grać musisz zyskać pierwszy stopień zaufania, sprawdź Discord! 💬 ${config.discordLink} 💬`);
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -637,6 +650,7 @@ export class HaxballRoom {
   async handleGameStop(byPlayer: PlayerObject | null) {
     this.pinger.start();
     this.pl_logger.handleGameStop();
+    this.delay_joiner.handleGameStop();
     if (byPlayer) this.Pid(byPlayer.id).admin_stat_start_stop();
     const MaxAllowedGameStopTime = 20.0 * 1000; // [ms]
     const now = Date.now();
@@ -1543,8 +1557,7 @@ export class HaxballRoom {
       }
       userLogMessage(true);
       if (playerExt.discord_user && playerExt.discord_user.state) {
-        console.log(`XX Color = ${playerExt.discord_user.chat_color}`)
-        this.sendMsgToAll(`${player.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
+        this.sendMsgToAll(`${Emoji.UserVerified}${player.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
         return false;
       }
       if (playerExt.trust_level < 3) {
@@ -1770,8 +1783,8 @@ export class HaxballRoom {
   }
 
   sendMsgToPlayer(player: PlayerObject | PlayerData, message: string, color: number | undefined = undefined, style: string | undefined = undefined, sound: number = 0) {
-    // If sound is set to 0 the announcement will produce no sound. 
-    // If sound is set to 1 the announcement will produce a normal chat sound. 
+    // If sound is set to 0 the announcement will produce no sound.
+    // If sound is set to 1 the announcement will produce a normal chat sound.
     // If set to 2 it will produce a notification sound.
     this.room.sendAnnouncement(message, player.id, color, style, sound);
   }

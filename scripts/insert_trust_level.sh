@@ -10,20 +10,18 @@ if [ -z "$DB_FILE" ] || [ -z "$AUTH_ID" ] || [ -z "$NEW_TRUST_LEVEL" ]; then
   exit 1
 fi
 
-BY='SCRIPT_UPDATE_________________SCRIPT_UPDATE'
+BY='SCRIPT_INSERT_________________SCRIPT_INSERT'
 # Zaktualizuj poziom admina w tabeli players
 sqlite3 "$DB_FILE" <<EOF
-  UPDATE players
-  SET
-    trusted_level = $NEW_TRUST_LEVEL
-    trusted_by = '$BY'
-  WHERE auth_id = '$AUTH_ID';
+  INSERT INTO players
+  (auth_id, trusted_by, trusted_level)
+  VALUES ('$AUTH_ID', '$BY', $NEW_TRUST_LEVEL);
 EOF
 
 # Sprawdzamy, czy zapytanie zakończyło się powodzeniem
 if [ $? -eq 0 ]; then
-  echo "Trust level updated successfully."
+  echo "Trust level inserted successfully."
 else
-  echo "Error: Failed to update trust_level."
+  echo "Error: Failed to insert trust_level."
 fi
 
