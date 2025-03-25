@@ -39,6 +39,10 @@ import { getBotKickMessage } from './spam_data';
 import { DiscordAccountManager } from './discord_account';
 
 
+declare global {
+  var PlayerFlagByPlayerId: Map<number, string>;
+}
+
 export class HaxballRoom {
   room: RoomObject;
   room_config: config.RoomServerConfig;
@@ -296,7 +300,7 @@ export class HaxballRoom {
         hb_log(`Gracz ${player.name} otrzymał link: ${txt}`);
       }).catch((error) => { hb_log(`!! getPaymentLink error: ${error}`) });
     }, this.getSselector());
-    await this.discord_account.init();
+    await this.discord_account.setupDiscordAccounts();
     hb_log("#I# InitData() done");
   }
 
@@ -318,7 +322,9 @@ export class HaxballRoom {
       admin: true,
       position: { "x": 0.0, "y": 0.0 },
       auth: 'QxkI4PJuA0LOT0krfPdtAgPojFw_nCXWP8qL0Aw0dGc',
-      conn: 'CONN'
+      conn: 'CONN',
+      country: 'pl',
+      real_ip: '127.0.0.1'
     };
     let p = new PlayerData(ppp);
     p.mark_disconnected();
@@ -900,12 +906,20 @@ export class HaxballRoom {
   }
 
 
+
   async handlePlayerJoin(player: PlayerObject) {
     this.players_num += 1;
     hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}]`);
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
     let playerExt = this.Pid(player.id);
+    // hb_log(`FLAG = ${player.country} IP = ${player.real_ip}`)
+    if (player.country && player.country.length && player.real_ip && player.real_ip.length) {
+      if (player.country.toLowerCase() === 'pl') playerExt.flag = '🇵🇱';
+      else playerExt.flag = '🇪🇺';
+      playerExt.real_ip = player.real_ip;
+    }
+
     this.pl_logger.handlePlayerJoin(playerExt);
     this.discord_account.handlePlayerJoin(playerExt);
     await this.discord_account.oneTimePlayerNameSetup(playerExt);
@@ -1557,7 +1571,7 @@ export class HaxballRoom {
       }
       userLogMessage(true);
       if (playerExt.discord_user && playerExt.discord_user.state) {
-        this.sendMsgToAll(`${Emoji.UserVerified}${player.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
+        this.sendMsgToAll(`${playerExt.flag}${Emoji.UserVerified}${player.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
         return false;
       }
       if (playerExt.trust_level < 3) {
@@ -1568,7 +1582,7 @@ export class HaxballRoom {
           color = Colors.TrustTwo;
           bell = 1;
         }
-        this.sendMsgToAll(`${player.name}: ${message}`, color, undefined, bell);
+        this.sendMsgToAll(`${playerExt.flag}${player.name}: ${message}`, color, undefined, bell);
         return false;
       };
       // show as normal for trusted players

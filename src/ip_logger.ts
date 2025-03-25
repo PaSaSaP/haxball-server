@@ -24,11 +24,11 @@ export class PlayerJoinLogger {
 
   handlePlayerJoin(playerExt: PlayerData) {
     const now = new Date().toISOString();
-    this.appendLineToFile(this.filename, `${now},${playerExt.auth_id},${playerExt.name}`);
+    this.appendLineToFile(this.filename, `${now},${playerExt.auth_id},${playerExt.name},${playerExt.real_ip}`);
     this.hbRoom.game_state.probableBotExists(playerExt.auth_id, playerExt.conn_id).then((isBot) => {
       if (isBot) {
         playerExt.bot = true;
-        console.log(`BOT AT ${now} WITH NAME: ${playerExt.name} AUTH: ${playerExt.auth_id} CONN: ${playerExt.conn_id}`);
+        console.log(`BOT AT ${now} WITH NAME: ${playerExt.name} AUTH: ${playerExt.auth_id} CONN: ${playerExt.conn_id} IP: ${playerExt.real_ip}`);
       }
     }).catch((e) => hb_log(`!! probableBotExists error ${e}`));
   }

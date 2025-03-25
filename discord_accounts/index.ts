@@ -111,8 +111,10 @@ Komendy dostępne na serwerze po połączeniu konta: \n\
   },
   kolor: async (msg: Message, params: string[]) => {
     msg.reply("\
-By ustawić kolor, na serwerze wpisz komendę !kolor 0xDDEEFF, nie wszystkie kolory są dostępne, suma składowych R+G+B musi być większa bądź równa 500\n\
-Paletę kolorów mozesz sprawdzić tutaj: https://rgbcolorcode.com/");
+By ustawić kolor, na serwerze wpisz komendę `!kolor FFDDEE` lub `!kolor 0xDDEEFF` \n\
+Nie wszystkie kolory są dostępne, suma składowych R+G+B musi być większa niz 500\n\
+Pełną paletę kolorów mozesz sprawdzić tutaj: https://rgbcolorcode.com/\n\
+Mozesz równiez wybrać kolor na naszej super wybierałce do kolorów: https://haxball.ovh/kolor");
   }
 };
 commands["pomoc"] = commands["help"];

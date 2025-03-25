@@ -18,7 +18,7 @@ export class DiscordAccountManager {
     this.claimedNames = new Set();
   }
 
-  async init() {
+  async setupDiscordAccounts() {
     await this.updateDiscordLinks();
     await this.updateDiscordUsers();
   }

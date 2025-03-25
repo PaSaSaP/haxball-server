@@ -1792,7 +1792,7 @@ class DiscordCommander extends BaseCommander {
     let dc = playerExt.discord_user
     if (dc && dc.state) {
       if (!cmds.length) {
-        this.sendMsgToPlayer(player, "Wpisz kolor w formacie 0xFFFFFF albo FFFFFF jako RGB, np stąd: https://rgbcolorcode.com", Colors.BrightGreen);
+        this.sendMsgToPlayer(player, "Wpisz kolor w formacie DDEEFF albo 0xDDEEFF jako RGB, np stąd: https://haxball.ovh/kolor", Colors.BrightGreen);
         return;
       }
       const hexColor = parseInt(cmds[0], 16);

@@ -71,7 +71,7 @@ const futsal_4vs4: RoomServerConfig = {
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_4vs4.mpk",
   roomName: "🍌 FUTSAL 4vs4 XxX Banana League!",
-  isPublic: true,
+  isPublic: false,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   limits: roomLimits,
   playersInTeamLimit: 4,

@@ -84,6 +84,8 @@ export interface PPP {
   position: { "x": number; "y": number };
   auth: string;
   conn: string;
+  country: string;
+  real_ip: string;
 }
 
 export class TransactionByPlayerInfo {
@@ -104,6 +106,8 @@ export class PlayerVipData {
 export class PlayerData {
   name: string;
   name_normalized: string;
+  flag: string;
+  real_ip: string;
   id: number;
   user_id: number; // should be unique in system
   claimed: number;
@@ -140,6 +144,8 @@ export class PlayerData {
     // this.player = player;
     this.name = player.name; /// @type string
     this.name_normalized = normalizeNameString(this.name);
+    this.flag = '';
+    this.real_ip = '';
     this.id = player.id; /// @type int
     this.user_id = -1;
     this.claimed = 0;
