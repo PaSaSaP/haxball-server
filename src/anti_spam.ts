@@ -1,3 +1,5 @@
+import { PlayerData } from "./structs";
+
 export class AntiSpam {
   max_messages: number;
   interval_ms: number;
@@ -33,11 +35,11 @@ export class AntiSpam {
     this.enabled = enabled;
   }
 
-  setSpamDisabled(player: PlayerObject) {
+  setSpamDisabled(player: PlayerData) {
     this.check_spam_disabled.add(player.id);
   }
 
-  addPlayer(player: PlayerObject, initialMute: boolean = false) {
+  addPlayer(player: PlayerData, initialMute: boolean = false) {
     const now: number = Date.now();
     if (initialMute)
       this.muted_players.set(player.id, now + this.initial_mute_ms); // Blokada na start
@@ -45,7 +47,7 @@ export class AntiSpam {
     this.player_messages.set(player.id, []);
   }
 
-  canSendMessage(player: PlayerObject, message: string) {
+  canSendMessage(player: PlayerData, message: string) {
     if (!this.enabled) {
       return true;
     }
@@ -88,7 +90,7 @@ export class AntiSpam {
     this.muted_players.delete(playerId);
   }
 
-  logMessage(player: PlayerObject, message: string, timestamp: number) {
+  logMessage(player: PlayerData, message: string, timestamp: number) {
     if (!this.player_messages.has(player.id)) {
       this.player_messages.set(player.id, []);
     }
@@ -114,7 +116,7 @@ export class AntiSpam {
     return this.similarity(msg1, msg2) > 0.8 && this.similarity(msg2, msg3) > 0.8;
   }
 
-  isSpammingSameMessage(player: PlayerObject) {
+  isSpammingSameMessage(player: PlayerData) {
     if (this.check_spam_disabled.has(player.id)) {
       return false; // User now can spam with similar messages
     }
@@ -141,7 +143,7 @@ export class AntiSpam {
     return (lastTime - firstTime) <= this.same_message_interval_ms;
   }
 
-  removePlayer(player: PlayerObject) {
+  removePlayer(player: PlayerData) {
     this.message_logs.delete(player.id);
     this.muted_players.delete(player.id);
     this.check_spam_disabled.delete(player.id);

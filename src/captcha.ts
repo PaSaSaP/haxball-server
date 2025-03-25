@@ -1,3 +1,5 @@
+import { PlayerData } from "./structs";
+
 export class TextCaptcha {
   room: RoomObject;
   pending_captchas: Map<number, { "question": string, "answer": string, "timeout": any }>;
@@ -37,7 +39,7 @@ export class TextCaptcha {
     return { question, answer };
   }
 
-  clearCaptcha(player: PlayerObject) {
+  clearCaptcha(player: PlayerData) {
     if (!this.hasPendingCaptcha(player)) return;
     let captcha = this.pending_captchas.get(player.id);
     if (captcha) {
@@ -46,7 +48,7 @@ export class TextCaptcha {
     }
   }
 
-  askCaptcha(player: PlayerObject) {
+  askCaptcha(player: PlayerData) {
     if (!this.enabled) return;
     let captcha = this.generateCaptcha();
     this.pending_captchas.set(player.id, {
@@ -60,11 +62,11 @@ export class TextCaptcha {
     this.room.sendAnnouncement(`🔒 CAPTCHA: (masz ${this.timeout_ms / 1000}s) Answer/Odpowiedz, ile jest ${captcha.question} = ?`, player.id, 0xFF0000, "bold");
   }
 
-  hasPendingCaptcha(player: PlayerObject) {
+  hasPendingCaptcha(player: PlayerData) {
     return this.pending_captchas.has(player.id);
   }
 
-  checkAnswer(player: PlayerObject, message: string) {
+  checkAnswer(player: PlayerData, message: string) {
     if (!this.hasPendingCaptcha(player)) return false;
     let captcha = this.pending_captchas.get(player.id);
     if (!captcha) return false;
@@ -104,7 +106,7 @@ export class ScoreCaptcha {
     };
   }
 
-  clearCaptcha(player: PlayerObject) {
+  clearCaptcha(player: PlayerData) {
     if (!this.hasPendingCaptcha(player)) return;
     let captcha = this.pending_captchas.get(player.id);
     if (!captcha) return;
@@ -113,7 +115,7 @@ export class ScoreCaptcha {
     this.pending_captchas.delete(player.id);
   }
 
-  askCaptcha(player: PlayerObject) {
+  askCaptcha(player: PlayerData) {
     if (!this.enabled) return;
     let { red, blue } = this.getCurrentScore();
 
@@ -133,11 +135,11 @@ export class ScoreCaptcha {
     );
   }
 
-  hasPendingCaptcha(player: PlayerObject) {
+  hasPendingCaptcha(player: PlayerData) {
     return this.pending_captchas.has(player.id);
   }
 
-  checkAnswer(player: PlayerObject, message: string) {
+  checkAnswer(player: PlayerData, message: string) {
     if (!this.hasPendingCaptcha(player)) return false;
     let captcha = this.pending_captchas.get(player.id);
     if (!captcha) return;

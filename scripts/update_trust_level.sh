@@ -15,7 +15,7 @@ BY='SCRIPT_UPDATE_________________SCRIPT_UPDATE'
 sqlite3 "$DB_FILE" <<EOF
   UPDATE players
   SET
-    trusted_level = $NEW_TRUST_LEVEL
+    trusted_level = $NEW_TRUST_LEVEL,
     trusted_by = '$BY'
   WHERE auth_id = '$AUTH_ID';
 EOF

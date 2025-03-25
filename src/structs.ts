@@ -137,6 +137,7 @@ export class PlayerData {
 
   discord_user: DiscordUserEntry | null;
   discord_token: string;
+  command_after_match_ends: string;
 
   bot = false;
 
@@ -174,6 +175,7 @@ export class PlayerData {
     this.vip_data = new PlayerVipData();
     this.discord_user = null;
     this.discord_token = '';
+    this.command_after_match_ends = '';
   }
 
   update(player: PlayerObject) {

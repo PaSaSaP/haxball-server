@@ -21,15 +21,11 @@ class BaseCommander {
     return this.hb_room.room;
   }
 
-  P(player: PlayerObject): PlayerData {
-    return this.hb_room.P(player);
-  }
-
   Pid(playerId: number): PlayerData {
     return this.hb_room.Pid(playerId);
   }
 
-  sendMsgToPlayer(player: PlayerObject | PlayerData, message: string, color: number | undefined = undefined, style: string | undefined = undefined, sound: number = 0) {
+  sendMsgToPlayer(player: PlayerData, message: string, color: number | undefined = undefined, style: string | undefined = undefined, sound: number = 0) {
     this.hb_room.sendMsgToPlayer(player, message, color, style, sound);
   }
 
@@ -37,12 +33,8 @@ class BaseCommander {
     this.hb_room.sendMsgToAll(message, color, style, sound);
   }
 
-  getPlayerDataByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false, allPlayers = false): PlayerData | null {
+  getPlayerDataByName(playerName: string | string[], byPlayer: PlayerData | null, byPlayerIfNameNotSpecified = false, allPlayers = false): PlayerData | null {
     return this.hb_room.getPlayerDataByName(playerName, byPlayer, byPlayerIfNameNotSpecified, allPlayers);
-  }
-
-  getPlayerObjectByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false): PlayerObject | null {
-    return this.hb_room.getPlayerObjectByName(playerName, byPlayer, byPlayerIfNameNotSpecified);
   }
 
   getPlayers() {
@@ -57,12 +49,12 @@ class BaseCommander {
     return this.hb_room.getPlayersExtList(updateExt);
   }
 
-  warnIfPlayerIsNotAdminNorHost(player: PlayerObject) {
+  warnIfPlayerIsNotAdminNorHost(player: PlayerData) {
     if (this.hb_room.isPlayerHost(player)) return false;
     return this.warnIfPlayerIsNotAdmin(player);
   }
 
-  warnIfPlayerIsNotAdmin(player: PlayerObject) {
+  warnIfPlayerIsNotAdmin(player: PlayerData) {
     if (!player.admin) {
       this.sendMsgToPlayer(player, "Tylko dla Admina!");
       return true;
@@ -70,12 +62,11 @@ class BaseCommander {
     return false;
   }
 
-  warnIfPlayerIsNotApprovedAdmin(player: PlayerObject|PlayerData) {
-    if (!("admin_level" in player)) return this.Pid(player.id).admin_level <= 0;
+  warnIfPlayerIsNotApprovedAdmin(player: PlayerData) {
     return player.admin_level <= 0;
   }
 
-  warnIfPlayerIsNotHost(player: PlayerObject, cmd_name: string) {
+  warnIfPlayerIsNotHost(player: PlayerData, cmd_name: string) {
     if (!this.hb_room.isPlayerHost(player) && !this.hb_room.isGodPlayer(player)) {
       this.sendMsgToPlayer(player, `Nieznana komenda:${cmd_name} `);
       return true;
@@ -121,7 +112,7 @@ class Commander extends BaseCommander {
       dodaj: this.commandAddPlayersToTeam,
       map: this.commandChangeMap,
       m: this.commandChangeMap,
-      ping: (player: PlayerObject) => this.hb_room.sendMsgToPlayer(player, "Pong!"),
+      ping: (player: PlayerData) => this.hb_room.sendMsgToPlayer(player, "Pong!"),
       mute: this.commandMute,
       muted: this.commandMuted,
       unmute: this.commandUnmute,
@@ -259,6 +250,7 @@ class Commander extends BaseCommander {
       t: this.commandTrust,
       tt: this.commandAutoTrust,
       ttt: this.commandShowTrust,
+      after: this.commandAfter,
 
       check_transaction: this.commandCheckPlayerTransaction,
       check_tr: this.commandCheckPlayerTransaction,
@@ -325,12 +317,12 @@ class Commander extends BaseCommander {
   }
 
   // commands below
-  async commandSendMessage(player: PlayerObject, cmds: string[]) {
+  async commandSendMessage(player: PlayerData, cmds: string[]) {
     if (cmds.length < 2) {
       this.sendMsgToPlayer(player, 'Uzycie:!pm/!pw/!w <@player_name> <message...>')
       return;
     }
-    let cmdPlayer = this.getPlayerObjectByName(cmds[0], player);
+    let cmdPlayer = this.getPlayerDataByName(cmds[0], player);
     if (!cmdPlayer) return;
     if (cmdPlayer.id == player.id) return;
     let msg = cmds.slice(1).join(" ");
@@ -338,22 +330,20 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(cmdPlayer, `PM<< ${player.name}: ${msg}`, 0xFFBF00, 'italic', 1);
   }
 
-  async commandPressure(player: PlayerObject) {
+  async commandPressure(player: PlayerData) {
     this.sendMsgToPlayer(player, `Pressure: Red ${this.hb_room.pressure_right.toFixed(2)}s, Blue ${this.hb_room.pressure_left.toFixed(2)}s`);
   }
 
-  async commandChoosingPlayers(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandChoosingPlayers(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) {
-      this.sendMsgToPlayer(player, "W trakcie meczu wybierz sobie graczy! Dostaniesz dostępnych! np: !wyb @player1 @player2... !wyb #5 #8 #13 #21...", Colors.Help, 'italic');
-      this.sendMsgToPlayer(player, "Nie będzie przerwy na wybieranie. Lista przetrwa do restartu, by ją wyczyścić, uzyj !wyb-", Colors.Help, 'italic');
-      if (playerExt.chosen_player_names.length) this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
+      this.sendMsgToPlayer(playerExt, "W trakcie meczu wybierz sobie graczy! Dostaniesz dostępnych! np: !wyb @player1 @player2... !wyb #5 #8 #13 #21...", Colors.Help, 'italic');
+      this.sendMsgToPlayer(playerExt, "Nie będzie przerwy na wybieranie. Lista przetrwa do restartu, by ją wyczyścić, uzyj !wyb-", Colors.Help, 'italic');
+      if (playerExt.chosen_player_names.length) this.sendMsgToPlayer(playerExt, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
       return;
     }
     cmds.reverse().forEach(playerName => {
-      let e = this.getPlayerObjectByName(playerName, player);
-      if (e) {
-        let p = this.Pid(e.id);
+      let p = this.getPlayerDataByName(playerName, playerExt);
+      if (p) {
         let newName = p.name_normalized;
         const prevIdx = playerExt.chosen_player_names.indexOf(newName);
         if (prevIdx !== -1) {
@@ -362,75 +352,73 @@ class Commander extends BaseCommander {
         playerExt.chosen_player_names.unshift(newName); // add always at the beginning, given player list is in reverse order so it it as expected
       }
     });
-    this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
+    this.sendMsgToPlayer(playerExt, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
   }
 
-  async commandUnchoosingPlayers(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandUnchoosingPlayers(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) {
-      this.sendMsgToPlayer(player, "Wyczyściłeś listę!", Colors.GameState, 'italic');
+      this.sendMsgToPlayer(playerExt, "Wyczyściłeś listę!", Colors.GameState, 'italic');
       playerExt.chosen_player_names = [];
     } else {
       const cmdsSet = new Set(); // O(1), list.includes has O(n)
       // TODO below to function?
       cmds.forEach(playerName => {
-        let e = this.getPlayerObjectByName(playerName, player);
-        if (e) {
-          let p = this.Pid(e.id);
+        let p = this.getPlayerDataByName(playerName, playerExt);
+        if (p) {
           cmdsSet.add(p.name_normalized);
         }
       })
       playerExt.chosen_player_names = playerExt.chosen_player_names.filter(e => !cmdsSet.has(e));
-      this.sendMsgToPlayer(player, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
+      this.sendMsgToPlayer(playerExt, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
     }
   }
 
-  async commandPauseRequested(player: PlayerObject) {
+  async commandPauseRequested(player: PlayerData) {
     if (!player.team) return;
-    if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePauseRequest(this.Pid(player.id));
+    if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePauseRequest(player);
   }
 
-  async commandRestartMatch(player: PlayerObject) {
+  async commandRestartMatch(playerExt: PlayerData) {
     if (this.hb_room.auto_mode) {
-      this.hb_room.auto_bot.handleRestartRequested(this.Pid(player.id));
+      this.hb_room.auto_bot.handleRestartRequested(playerExt);
       return;
     }
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     this.r().stopGame();
     await sleep(125);
     this.r().startGame();
-    this.sendMsgToAll(`(!r) ${player.name} zrobił restart meczu, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
+    this.sendMsgToAll(`(!r) ${playerExt.name} zrobił restart meczu, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandRandomAndRestartMatch(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandRandomAndRestartMatch(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     this.hb_room.makeRandomAndRestartMatch();
-    this.sendMsgToAll(`(!rr) ${player.name} zrobił losowanie drużyn${this.hb_room.getPrevWinnerLogTxt()}, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
+    this.sendMsgToAll(`(!rr) ${playerExt.name} zrobił losowanie drużyn${this.hb_room.getPrevWinnerLogTxt()}, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandWinStayNextMatch(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandWinStayNextMatch(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     if (!this.hb_room.last_winner_team) this.hb_room.makeRandomAndRestartMatch();
     else this.hb_room.makeWinStayAndRestartMatch();
-    this.sendMsgToAll(`(!ws) ${player.name} zostawił zwycięską druzynę${this.hb_room.getPrevWinnerLogTxt()}, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
+    this.sendMsgToAll(`(!ws) ${playerExt.name} zostawił zwycięską druzynę${this.hb_room.getPrevWinnerLogTxt()}, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandStartMatch(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandStartMatch(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.r().startGame();
   }
 
-  async commandStopMatch(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandStopMatch(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     this.r().stopGame();
   }
 
-  async commandStartOrStopMatch(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandStartOrStopMatch(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     let d = this.r().getScores();
     if (d) {
       this.hb_room.updateWinnerTeamBeforeGameStop();
@@ -440,28 +428,28 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandSwapTeams(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandSwapTeams(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     if (this.hb_room.isGameInProgress()) {
-      this.sendMsgToPlayer(player, 'Nie mozna zmieniać zespołów podczas meczu!')
+      this.sendMsgToPlayer(playerExt, 'Nie mozna zmieniać zespołów podczas meczu!')
       return;
     }
     this.hb_room.swapTeams();
   }
 
-  async commandSwapAndRestart(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandSwapAndRestart(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     this.r().stopGame();
     await sleep(125);
     this.hb_room.swapTeams();
     await sleep(125);
     this.r().startGame();
-    this.sendMsgToAll(`(!sr) ${player.name} zmienił strony druzyn, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
+    this.sendMsgToAll(`(!sr) ${playerExt.name} zmienił strony druzyn, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandAddPlayersToTeam(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandAddPlayersToTeam(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     let players = this.getPlayersExtList(true);
     this.hb_room.shuffleAllPlayers(players);
     let red = this.hb_room.limit;
@@ -486,280 +474,278 @@ class Commander extends BaseCommander {
       this.r().setPlayerTeam(player_ext.id, team);
       any_added = true;
     }
-    if (any_added) this.sendMsgToAll(`(!a) ${player.name} uzupełnił druzyny`, Colors.GameState);
+    if (any_added) this.sendMsgToAll(`(!a) ${playerExt.name} uzupełnił druzyny`, Colors.GameState);
   }
 
-  async commandHelp(player: PlayerObject) {
-    this.sendMsgToPlayer(player, "Komendy: !wyb !p !pm/w !bb !ping !afk !back !afks !stat !top !ttop !wtop !pasek !discord !kebab !cieszynka !sklep", Colors.Help);
-    let playerExt = this.Pid(player.id);
+  async commandHelp(playerExt: PlayerData) {
+    this.sendMsgToPlayer(playerExt, "Komendy: !wyb !p !pm/w !bb !ping !afk !back !afks !stat !top !ttop !wtop !pasek !discord !kebab !cieszynka !sklep", Colors.Help);
     if (playerExt.admin_level) {
-      this.sendMsgToPlayer(player, "Dla Admina: !mute !unmute !r !s !swap !sr !rr !ws !a !map/m", Colors.Help);
-      this.sendMsgToPlayer(player, "Dla Admina: !kick (auth) !tkick_5m/1h/1d, !tmute_5m/1h/1d (network) !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help);
+      this.sendMsgToPlayer(playerExt, "Dla Admina: !mute !unmute !r !s !swap !sr !rr !ws !a !map/m", Colors.Help);
+      this.sendMsgToPlayer(playerExt, "Dla Admina: !kick (auth) !tkick_5m/1h/1d, !tmute_5m/1h/1d (network) !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help);
     }
     if (playerExt.trust_level > 0) {
-      this.sendMsgToPlayer(player, ": !thumb !thumb_up !thump_down !thumb_remove !report !verify", Colors.Help);
+      this.sendMsgToPlayer(playerExt, ": !thumb !thumb_up !thump_down !thumb_remove !report !verify", Colors.Help);
     }
-    this.sendMsgToPlayer(player, "By wywołać ostatnią komendę, uzyj !!", Colors.Help);
+    this.sendMsgToPlayer(playerExt, "By wywołać ostatnią komendę, uzyj !!", Colors.Help);
   }
 
-  async commandChangeMap(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandChangeMap(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb');
+      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb');
       return;
     }
     let map_name = cmds[0].toLowerCase();
     if (all_maps.has(map_name)) {
       if (!this.hb_room.isGameInProgress()) {
         this.hb_room.setMapByName(map_name);
-        this.sendMsgToAll(`${player.name} zmienił mapę na ${map_name}`, Colors.GameState);
+        this.sendMsgToAll(`${playerExt.name} zmienił mapę na ${map_name}`, Colors.GameState);
       }
     } else {
-      this.sendMsgToPlayer(player, 'Nie ma takiej mapy', Colors.Warning);
+      this.sendMsgToPlayer(playerExt, 'Nie ma takiej mapy', Colors.Warning);
     }
   }
 
-  async commandMute(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+  async commandMute(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (cmdPlayer.id == player.id) return;
+    if (cmdPlayer.id == playerExt.id) return;
     this.hb_room.addPlayerMuted(cmdPlayer);
     this.sendMsgToPlayer(cmdPlayer, "Zostałeś wyciszony!", Colors.Warning, undefined, 2);
-    this.sendMsgToPlayer(player, `Muted: ${cmdPlayer.name}`);
+    this.sendMsgToPlayer(playerExt, `Muted: ${cmdPlayer.name}`);
   }
 
-  async commandMuted(player: PlayerObject) {
+  async commandMuted(playerExt: PlayerData) {
     let muted: string[] = [];
     for (let p of this.getPlayersExt()) {
       if (this.hb_room.isPlayerMuted(p)) muted.push(p.name);
     }
-    this.sendMsgToPlayer(player, `Muted: ${muted.join(" ")}`);
+    this.sendMsgToPlayer(playerExt, `Muted: ${muted.join(" ")}`);
   }
 
-  async commandMuteAll(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  async commandMuteAll(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let p of this.getPlayersExt()) {
       this.hb_room.addPlayerMuted(p);
     }
-    this.sendMsgToPlayer(player, "Muted all Players", Colors.GameState);
+    this.sendMsgToPlayer(playerExt, "Muted all Players", Colors.GameState);
   }
 
-  async commandUnmute(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+  async commandUnmute(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
+    if (playerExt.id == cmdPlayer.id) return;
     if (!this.hb_room.isPlayerMuted(cmdPlayer)) return;
     this.hb_room.removePlayerMuted(cmdPlayer);
     this.hb_room.anti_spam.removePlayer(cmdPlayer);
     this.sendMsgToPlayer(cmdPlayer, "Ju mozesz pisać!", Colors.Warning, undefined, 2);
-    this.sendMsgToPlayer(player, `Unmuted: ${cmdPlayer.name}`);
+    this.sendMsgToPlayer(playerExt, `Unmuted: ${cmdPlayer.name}`);
   }
 
-  async commandUnmuteAll(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  async commandUnmuteAll(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.muted_players.clear();
-    this.sendMsgToPlayer(player, "Unmuted all Players", Colors.GameState);
+    this.sendMsgToPlayer(playerExt, "Unmuted all Players", Colors.GameState);
   }
 
-  async commandSwitchAfk(player: PlayerObject) {
+  async commandSwitchAfk(playerExt: PlayerData) {
     // switch on/off afk
-    let player_ext = this.Pid(player.id);
-    if (!player_ext.afk) {
-      this.commandSetAfkExt(player_ext);
+    if (!playerExt.afk) {
+      this.commandSetAfkExt(playerExt);
     } else {
       // clear AFK status
-      this.commandClearAfkExt(player_ext);
+      this.commandClearAfkExt(playerExt);
     }
   }
 
-  async commandSetAfk(player: PlayerObject) {
-    this.commandSetAfkExt(this.Pid(player.id));
+  async commandSetAfk(playerExt: PlayerData) {
+    this.commandSetAfkExt(playerExt);
   }
 
-  commandSetAfkExt(player_ext: PlayerData) {
+  commandSetAfkExt(playerExt: PlayerData) {
     // set on afk
-    if (player_ext.afk) return;
-    player_ext.afk_switch_time = Date.now();
-    player_ext.afk = true;
-    this.r().setPlayerAvatar(player_ext.id, '💤');
-    this.sendMsgToAll(`${player_ext.name} poszedł AFK (!afk !back !jj)`, Colors.Afk);
-    if (player_ext.team != 0) {
-      this.r().setPlayerTeam(player_ext.id, 0);
+    if (playerExt.afk) return;
+    playerExt.afk_switch_time = Date.now();
+    playerExt.afk = true;
+    this.r().setPlayerAvatar(playerExt.id, '💤');
+    this.sendMsgToAll(`${playerExt.name} poszedł AFK (!afk !back !jj)`, Colors.Afk);
+    if (playerExt.team != 0) {
+      this.r().setPlayerTeam(playerExt.id, 0);
     }
-    if (player_ext.admin) this.hb_room.updateAdmins(null);
+    if (playerExt.admin) this.hb_room.updateAdmins(null);
   }
 
-  async commandClearAfk(player: PlayerObject) {
-    this.commandClearAfkExt(this.Pid(player.id));
+  async commandClearAfk(playerExt: PlayerData) {
+    this.commandClearAfkExt(playerExt);
   }
 
-  commandClearAfkExt(player_ext: PlayerData) {
-    if (player_ext.afk) {
+  commandClearAfkExt(playerExt: PlayerData) {
+    if (playerExt.afk) {
       const now = Date.now();
-      if (now - player_ext.afk_switch_time < 15_000) {
-        this.sendMsgToPlayer(player_ext, "Nie da się tak szybko wstać z krzesła i usiąść!", Colors.Afk);
+      if (now - playerExt.afk_switch_time < 15_000) {
+        this.sendMsgToPlayer(playerExt, "Nie da się tak szybko wstać z krzesła i usiąść!", Colors.Afk);
         return;
       }
-      player_ext.afk = false;
-      this.r().setPlayerAvatar(player_ext.id, null);
-      this.sendMsgToAll(`${player_ext.name} wrócił z AFK (!afk !back !jj)`, Colors.Afk);
-      player_ext.activity.updateGame();
-      if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePlayerBackFromAfk(player_ext);
+      playerExt.afk = false;
+      this.r().setPlayerAvatar(playerExt.id, null);
+      this.sendMsgToAll(`${playerExt.name} wrócił z AFK (!afk !back !jj)`, Colors.Afk);
+      playerExt.activity.updateGame();
+      if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePlayerBackFromAfk(playerExt);
     }
     this.hb_room.updateAdmins(null);
   }
 
-  async commandPrintAfkList(player: PlayerObject) {
+  async commandPrintAfkList(playerExt: PlayerData) {
     var log_str = "AFK list: "
     for (let p of this.getPlayersExt()) {
       if (p.afk || p.afk_maybe) log_str += `${p.name}[${p.id}] `;
     }
-    this.sendMsgToPlayer(player, log_str);
+    this.sendMsgToPlayer(playerExt, log_str);
   }
 
-  async commandSetAfkOther(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+  async commandSetAfkOther(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     if (!cmdPlayerExt.afk) this.commandSetAfkExt(cmdPlayerExt);
   }
 
-  async commandClearAfkOther(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+  async commandClearAfkOther(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
     this.commandClearAfkExt(cmdPlayerExt);
   }
 
-  async commandByeBye(player: PlayerObject) {
-    this.r().kickPlayer(player.id, "Bye bye!", false);
+  async commandByeBye(playerExt: PlayerData) {
+    this.r().kickPlayer(playerExt.id, "Bye bye!", false);
   }
 
-  async commandKick(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  async commandKick(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+      let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
       if (!cmdPlayer) continue;
-      if (cmdPlayer.id == player.id) continue;
+      if (cmdPlayer.id == playerExt.id) continue;
       this.r().kickPlayer(cmdPlayer.id, "Kik!", false);
     }
   }
 
-  async commandKickAllExceptVerified(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  async commandKickAllExceptVerified(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let p of this.getPlayersExt()) {
-      if (player.id != p.id && !p.trust_level) this.r().kickPlayer(p.id, "", false);
+      if (playerExt.id != p.id && !p.trust_level) this.r().kickPlayer(p.id, "", false);
     }
   }
 
-  async commandKickAllRed(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    this.hb_room.kickAllTeamExceptTrusted(player, 1);
+  async commandKickAllRed(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.kickAllTeamExceptTrusted(playerExt, 1);
   }
 
-  async commandKickAllBlue(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    this.hb_room.kickAllTeamExceptTrusted(player, 2);
+  async commandKickAllBlue(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.kickAllTeamExceptTrusted(playerExt, 2);
   }
 
-  async commandKickAllSpec(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    this.hb_room.kickAllTeamExceptTrusted(player, 0);
+  async commandKickAllSpec(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.kickAllTeamExceptTrusted(playerExt, 0);
   }
 
-  commandTimeKickPlayer5m(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickPlayer(player, cmds, 5 * 60, true);
+  commandTimeKickPlayer5m(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(playerExt, cmds, 5 * 60, true);
   }
-  commandTimeKickPlayer1h(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickPlayer(player, cmds, 60 * 60, true);
+  commandTimeKickPlayer1h(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(playerExt, cmds, 60 * 60, true);
   }
-  commandTimeKickPlayer1d(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickPlayer(player, cmds, 24 * 60 * 60, true);
+  commandTimeKickPlayer1d(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(playerExt, cmds, 24 * 60 * 60, true);
   }
-  commandTimeKickPlayerReset(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickPlayer(player, cmds, -1, false);
+  commandTimeKickPlayerReset(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(playerExt, cmds, -1, false);
   }
-  async execCommandTimeKickPlayer(player: PlayerObject, cmds: string[], seconds: number, kick: boolean) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+  async execCommandTimeKickPlayer(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
+    if (playerExt.id == cmdPlayer.id) return;
     this.hb_room.players_game_state_manager.setPlayerTimeKicked(cmdPlayer, seconds, kick);
-    if (seconds < 0) this.hb_room.sendMsgToPlayer(player, `Wyczyściłeś Player_kick dla ${cmdPlayer.name}`);
+    if (seconds < 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś Player_kick dla ${cmdPlayer.name}`);
   }
 
-  commandTimeMutePlayer5m(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(player, cmds, 5 * 60);
+  commandTimeMutePlayer5m(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(playerExt, cmds, 5 * 60);
   }
-  commandTimeMutePlayer1h(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(player, cmds, 60 * 60);
+  commandTimeMutePlayer1h(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(playerExt, cmds, 60 * 60);
   }
-  commandTimeMutePlayer1d(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(player, cmds, 24 * 60 * 60);
+  commandTimeMutePlayer1d(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(playerExt, cmds, 24 * 60 * 60);
   }
-  commandTimeMutePlayerReset(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(player, cmds, -1);
+  commandTimeMutePlayerReset(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTimeMutePlayer(playerExt, cmds, -1);
   }
 
-  async execCommandTimeMutePlayer(player: PlayerObject, cmds: string[], seconds: number) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+  async execCommandTimeMutePlayer(playerExt: PlayerData, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
+    if (playerExt.id == cmdPlayer.id) return;
     this.hb_room.players_game_state_manager.setPlayerTimeMuted(cmdPlayer, seconds);
-    this.hb_room.sendMsgToPlayer(player, `Ustawiłeś Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
   }
 
-  commandTimeKickNetwork5m(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickNetwork(player, cmds, 5 * 60, true);
+  commandTimeKickNetwork5m(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(playerExt, cmds, 5 * 60, true);
   }
-  commandTimeKickNetwork1h(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickNetwork(player, cmds, 60 * 60, true);
+  commandTimeKickNetwork1h(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(playerExt, cmds, 60 * 60, true);
   }
-  commandTimeKickNetwork1d(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickNetwork(player, cmds, 24 * 60 * 60, true);
+  commandTimeKickNetwork1d(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(playerExt, cmds, 24 * 60 * 60, true);
   }
-  commandTimeKickNetworkReset(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeKickNetwork(player, cmds, -1, false);
+  commandTimeKickNetworkReset(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(playerExt, cmds, -1, false);
   }
 
-  async execCommandTimeKickNetwork(player: PlayerObject, cmds: string[], seconds: number, kick: boolean) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+  async execCommandTimeKickNetwork(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
+    if (playerExt.id == cmdPlayer.id) return;
     this.hb_room.players_game_state_manager.setNetworkTimeKicked(cmdPlayer, seconds, kick);
-    if (seconds < 0) this.hb_room.sendMsgToPlayer(player, `Wyczyściłeś Network_kick dla ${cmdPlayer.name}`);
+    if (seconds < 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś Network_kick dla ${cmdPlayer.name}`);
   }
 
-  commandTimeMuteNetwork5m(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTimeMuteNetwork(player, cmds, 5 * 60);
+  commandTimeMuteNetwork5m(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTimeMuteNetwork(playerExt, cmds, 5 * 60);
   }
-  commandTimeMuteNetwork1h(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTimeMuteNetwork(player, cmds, 60 * 60);
+  commandTimeMuteNetwork1h(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTimeMuteNetwork(playerExt, cmds, 60 * 60);
   }
-  commandTimeMuteNetwork1d(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTimeMuteNetwork(player, cmds, 24 * 60 * 60);
+  commandTimeMuteNetwork1d(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTimeMuteNetwork(playerExt, cmds, 24 * 60 * 60);
   }
-  commandTimeMuteNetworkReset(player: PlayerObject, cmds: string[]) {
-    this.execCommandTimeMuteNetwork(player, cmds, -1);
+  commandTimeMuteNetworkReset(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMuteNetwork(playerExt, cmds, -1);
   }
 
-  async execCommandTimeMuteNetwork(player: PlayerObject, cmds: string[], seconds: number) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, player);
+  async execCommandTimeMuteNetwork(playerExt: PlayerData, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (player.id == cmdPlayer.id) return;
+    if (playerExt.id == cmdPlayer.id) return;
     this.hb_room.players_game_state_manager.setNetworkTimeMuted(cmdPlayer, seconds);
-    this.hb_room.sendMsgToPlayer(player, `Ustawiłeś Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
   }
 
-  async commandAutoMode(player: PlayerObject, values: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, "auto_mode")) return;
+  async commandAutoMode(playerExt: PlayerData, values: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, "auto_mode")) return;
     if (values.length == 0) return;
     const arg = values[0].toLowerCase();
     if (arg == "on") {
@@ -774,17 +760,17 @@ class Commander extends BaseCommander {
       this.hb_room.auto_bot.reset();
       this.sendMsgToAll("Wyłączono tryb automatyczny!")
     } else {
-      this.sendMsgToPlayer(player, "Poprawne wartosci: [on, off]");
+      this.sendMsgToPlayer(playerExt, "Poprawne wartosci: [on, off]");
     }
   }
 
-  async commandLimit(player: PlayerObject, values: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'limit')) return;
+  async commandLimit(playerExt: PlayerData, values: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'limit')) return;
     if (values.length == 0) return;
     try {
       const limit = parseInt(values[0], 10);
       if (limit < 1 || limit > 6) {
-        this.sendMsgToPlayer(player, "Poprawne wartosci to zakres <1, 6>")
+        this.sendMsgToPlayer(playerExt, "Poprawne wartosci to zakres <1, 6>")
       } else {
         this.hb_room.limit = limit;
         this.sendMsgToAll(`Zmieniono limit max graczy w druzynie na ${limit}`);
@@ -792,15 +778,14 @@ class Commander extends BaseCommander {
     } catch (e) { }
   }
 
-  async commandEmoji(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandEmoji(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.emoji.turnOnOff();
-    this.sendMsgToPlayer(player, "Losowe Emoji, by włączyć/wyłączyć - odpal jeszcze raz komendę")
+    this.sendMsgToPlayer(playerExt, "Losowe Emoji, by włączyć/wyłączyć - odpal jeszcze raz komendę")
   }
 
-  async commandClaimAdmin(player: PlayerObject) {
+  async commandClaimAdmin(playerExt: PlayerData) {
     if (this.hb_room.auto_mode) return; // no admin in auto mode
-    let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     if (playerExt.admin_level > 0) {
       this.hb_room.giveAdminTo(playerExt); // approved admin
@@ -808,9 +793,8 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandSelectOneAdmin(player: PlayerObject) {
+  async commandSelectOneAdmin(playerExt: PlayerData) {
     if (this.hb_room.auto_mode) return; // no admin in auto mode
-    let playerExt = this.Pid(player.id);
     if (playerExt.trust_level == 0) return;
     let currentAdmins: PlayerData[] = [];
     let bestAdmin: PlayerData | null = null;
@@ -841,9 +825,9 @@ class Commander extends BaseCommander {
     this.sendMsgToAll(`${chosenAdmin.name} jako gracz z najwyzszym zaufaniem i najdłuzej afczący zostaje wybrany na jedynego admina by zarządzać sytuacją kryzysową!`, 0xEE3333, 'bold', 2);
   }
 
-  async commandAdminStats(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+  async commandAdminStats(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayer) return;
     let p = this.Pid(cmdPlayer.id);
     let s = p.admin_stats;
@@ -855,42 +839,42 @@ class Commander extends BaseCommander {
       if (s.banned_users.size) txt += ` ban(${[...s.banned_users].join(', ')})`;
       txt += ` s(${s.action_start_stop}/${s.action_pause_unpause}/${s.action_admin}/${s.action_team}/${s.action_kick}/${s.action_other})`;
     }
-    this.sendMsgToPlayer(player, txt);
+    this.sendMsgToPlayer(playerExt, txt);
   }
 
-  async commandSpecMoveRed(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandSpecMoveRed(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(0, 1);
   }
 
-  async commandSpecMoveBlue(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandSpecMoveBlue(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(0, 2);
   }
 
-  async commandRedMoveSpec(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandRedMoveSpec(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(1, 0);
   }
 
-  async commandBlueMoveSpec(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotAdmin(player)) return;
+  async commandBlueMoveSpec(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(2, 0);
   }
 
-  async commandSefin(player: PlayerObject) {
-    if (!this.hb_room.isPlayerHost(player)) {
-      this.sendMsgToPlayer(player, "Nieznana komenda: sefin");
+  async commandSefin(playerExt: PlayerData) {
+    if (!this.hb_room.isPlayerHost(playerExt)) {
+      this.sendMsgToPlayer(playerExt, "Nieznana komenda: sefin");
       return;
     }
-    this.sendMsgToPlayer(player, "Sprawdzamy czy jest Sefinek na serwerze");
+    this.sendMsgToPlayer(playerExt, "Sprawdzamy czy jest Sefinek na serwerze");
     const sefik_auth_id = 'nV4o2rl_sZDXAfXY7rYHl1PDr-qz56V03uz20npdtzw';
     const sefik_conn_id = '38372E3230352E3133392E313339';
     for (let p of this.getPlayersExt()) {
       if (p.auth_id == sefik_auth_id) {
-        this.sendMsgToPlayer(player, `${p.name} [${p.id}] zgadza się auth`);
+        this.sendMsgToPlayer(playerExt, `${p.name} [${p.id}] zgadza się auth`);
       } else if (p.conn_id == sefik_conn_id) {
-        this.sendMsgToPlayer(player, `${p.name} [${p.id}] zgadza się conn`);
+        this.sendMsgToPlayer(playerExt, `${p.name} [${p.id}] zgadza się conn`);
       }
     }
     let disconnected: string[] = [];
@@ -900,99 +884,89 @@ class Commander extends BaseCommander {
       }
     });
     if (disconnected.length > 0) {
-      this.sendMsgToPlayer(player, `Był jako: ${disconnected.join(", ")}`);
+      this.sendMsgToPlayer(playerExt, `Był jako: ${disconnected.join(", ")}`);
     }
   }
 
-  async commandSpamCheckDisable(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'spam_disable')) return;
+  async commandSpamCheckDisable(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'spam_disable')) return;
     cmds.forEach(player_name => {
-      let cmdPlayer = this.getPlayerObjectByName(player_name, null);
+      let cmdPlayer = this.getPlayerDataByName(player_name, null);
       if (cmdPlayer) {
         this.hb_room.anti_spam.setSpamDisabled(cmdPlayer);
       }
     });
   }
 
-  async commandPlayerOtherNames(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandPlayerOtherNames(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "Wpisz nazwę gracza");
+      this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza");
       return;
     }
-    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayerExt) return;
     let lastPlayerNames = this.hb_room.game_state.getPlayerNames(cmdPlayerExt.auth_id);
-    this.sendMsgToPlayer(player, `Ostatnie 5 nazw: ${(await lastPlayerNames).join(', ')}`);
+    this.sendMsgToPlayer(playerExt, `Ostatnie 5 nazw: ${(await lastPlayerNames).join(', ')}`);
   }
 
-  async commandVoteKick(player: PlayerObject, cmds: string[]) {
-    if (!cmds.length) return this.commandVoteYes(player, cmds); // no param means vote yes
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer || cmdPlayer.id == player.id) return;
+  async commandVoteKick(playerExt: PlayerData, cmds: string[]) {
+    if (!cmds.length) return this.commandVoteYes(playerExt, cmds); // no param means vote yes
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer || cmdPlayer.id == playerExt.id) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
-    let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.autoVoter.requestVoteKick(cmdPlayerExt, byPlayerExt);
+    this.hb_room.auto_bot.autoVoter.requestVoteKick(cmdPlayerExt, playerExt);
   }
 
-  async commandVoteMute(player: PlayerObject, cmds: string[]) {
-    if (!cmds.length) return this.commandVoteYes(player, cmds); // no param means vote yes
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer || cmdPlayer.id == player.id) return;
+  async commandVoteMute(playerExt: PlayerData, cmds: string[]) {
+    if (!cmds.length) return this.commandVoteYes(playerExt, cmds); // no param means vote yes
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer || cmdPlayer.id == playerExt.id) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
-    let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.autoVoter.requestVoteMute(cmdPlayerExt, byPlayerExt);
+    this.hb_room.auto_bot.autoVoter.requestVoteMute(cmdPlayerExt, playerExt);
   }
 
-  async commandVoteBotKick(player: PlayerObject, cmds: string[]) {
-    if (!cmds.length) return this.commandVoteYes(player, cmds); // no param means vote yes
-    let cmdPlayer = this.getPlayerObjectByName(cmds, player);
-    if (!cmdPlayer || cmdPlayer.id == player.id) return;
+  async commandVoteBotKick(playerExt: PlayerData, cmds: string[]) {
+    if (!cmds.length) return this.commandVoteYes(playerExt, cmds); // no param means vote yes
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer || cmdPlayer.id == playerExt.id) return;
     let cmdPlayerExt = this.Pid(cmdPlayer.id);
-    let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.autoVoter.requestVoteBotKick(cmdPlayerExt, byPlayerExt);
+    this.hb_room.auto_bot.autoVoter.requestVoteBotKick(cmdPlayerExt, playerExt);
   }
 
-  async commandVoteV4(player: PlayerObject, cmds: string[]) {
-    let byPlayerExt = this.Pid(player.id);
-    if (byPlayerExt.afk || byPlayerExt.afk_maybe) {
-      this.sendMsgToPlayer(byPlayerExt, "Jesteś AFK, najpierw wyjdź z AFKa!", Colors.White);
+  async commandVoteV4(playerExt: PlayerData, cmds: string[]) {
+    if (playerExt.afk || playerExt.afk_maybe) {
+      this.sendMsgToPlayer(playerExt, "Jesteś AFK, najpierw wyjdź z AFKa!", Colors.White);
       return;
     }
-    this.hb_room.auto_bot.autoVoter.requestVote4(null, byPlayerExt);
+    this.hb_room.auto_bot.autoVoter.requestVote4(null, playerExt);
   }
 
-  async commandVoteReset(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandVoteReset(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.auto_bot.autoVoter.reset();
-    this.sendMsgToPlayer(player, 'Głosowanie zresetowane');
+    this.sendMsgToPlayer(playerExt, 'Głosowanie zresetowane');
   }
 
-  async commandVoteYes(player: PlayerObject, cmds: string[]) {
-    let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.autoVoter.handleYes(byPlayerExt);
+  async commandVoteYes(playerExt: PlayerData, cmds: string[]) {
+    this.hb_room.auto_bot.autoVoter.handleYes(playerExt);
   }
 
-  async commandVoteNo(player: PlayerObject, cmds: string[]) {
-    let byPlayerExt = this.Pid(player.id);
-    this.hb_room.auto_bot.autoVoter.handleNo(byPlayerExt);
+  async commandVoteNo(playerExt: PlayerData, cmds: string[]) {
+    this.hb_room.auto_bot.autoVoter.handleNo(playerExt);
   }
 
-  async commandReport(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandReport(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     let report = cmds.join(" ").trim();
     if (!report) return;
     this.hb_room.game_state.addReport(playerExt.name, playerExt.auth_id, report);
-    this.sendMsgToPlayer(player, 'Twoje zazalenie zostanie rozpatrzone oraz zignorowane juz wkrótce!');
+    this.sendMsgToPlayer(playerExt, 'Twoje zazalenie zostanie rozpatrzone oraz zignorowane juz wkrótce!');
   }
 
-  async commandMe(player: PlayerObject, cmds: string[]) {
-    let cmdPlayerExt = this.getPlayerDataByName(cmds, player, true);
+  async commandMe(playerExt: PlayerData, cmds: string[]) {
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayerExt) return;
-    let playerExt = this.Pid(player.id);
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
     let stat = cmdPlayerExt.stat;
     let verifiedStr = playerExt.trust_level && cmdPlayerExt.discord_user?.state ? Emoji.UserVerified: '';
@@ -1000,11 +974,11 @@ class Commander extends BaseCommander {
     let afkStr = playerExt.admin_level ? ` AFK:${getTimestampHM(playerExt.afk_switch_time)}` : '';
     let dateStr = getTimestampHM(cmdPlayerExt.join_time);
     let penaltyStr = playerExt.penalty_counter > 0 ? ` P:${playerExt.penalty_counter}` : '';
-    this.sendMsgToPlayer(player, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${verifiedStr}${adminStr}${shameStr}${penaltyStr} od:${dateStr}${afkStr}`, Colors.GameState, 'italic');
+    this.sendMsgToPlayer(playerExt, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${verifiedStr}${adminStr}${shameStr}${penaltyStr} od:${dateStr}${afkStr}`, Colors.GameState, 'italic');
   }
 
-  async commandStat(player: PlayerObject, cmds: string[]) {
-    let cmdPlayerExt = this.getPlayerDataByName(cmds, player, true);
+  async commandStat(playerExt: PlayerData, cmds: string[]) {
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayerExt) return;
     let stat = cmdPlayerExt.stat;
     let rank = this.hb_room.global_rank_by_auth.get(cmdPlayerExt.auth_id) ?? 0;
@@ -1014,21 +988,21 @@ class Commander extends BaseCommander {
     let winRate = stat.fullGames > 0 ? ((stat.fullWins / stat.fullGames) * 100).toFixed(1) : 0;
     let msg = `${cmdPlayerExt.name}➡️ 🔝${rank} ⭐${rating} ±${rd} ⚽${stat.goals} 🤝${stat.assists} ❌${stat.ownGoals} 🧤${stat.cleanSheets} ⏱️${playtimeMin}m`
       + ` 🎮Pełne: ${stat.fullWins}/${stat.fullGames} 🔲Wszystkie: ${stat.wins}/${stat.games} (WR: ${winRate}%)`;
-    if (player.id === cmdPlayerExt.id && cmdPlayerExt.user_id !== -1)
-      this.sendMsgToPlayer(player, `🎮 Hej! Sprawdź swój profil na stronie: ${config.webpageLink}/i/${cmdPlayerExt.user_id} 📊`, Colors.Stats, 'small-italic');
-    this.sendMsgToPlayer(player, msg, Colors.Stats);
+    if (playerExt.id === cmdPlayerExt.id && cmdPlayerExt.user_id !== -1)
+      this.sendMsgToPlayer(playerExt, `🎮 Hej! Sprawdź swój profil na stronie: ${config.webpageLink}/i/${cmdPlayerExt.user_id} 📊`, Colors.Stats, 'small-italic');
+    this.sendMsgToPlayer(playerExt, msg, Colors.Stats);
   }
 
-  commandTop10Daily(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTop10(player, cmds, 'daily');
+  commandTop10Daily(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTop10(playerExt, cmds, 'daily');
   }
-  commandTop10Weekly(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTop10(player, cmds, 'weekly');
+  commandTop10Weekly(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTop10(playerExt, cmds, 'weekly');
   }
-  commandTop10All(player: PlayerObject, cmds: string[]) {
-    return this.execCommandTop10(player, cmds, 'all');
+  commandTop10All(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandTop10(playerExt, cmds, 'all');
   }
-  async execCommandTop10(player: PlayerObject, cmds: string[], type: "daily" | "weekly" | "all") {
+  async execCommandTop10(playerExt: PlayerData, cmds: string[], type: "daily" | "weekly" | "all") {
     const rankings = {
       daily: { selector: 'top', data: this.hb_room.top10_daily,   prefix: ["TODAY",           "\u2007TOP\u2007"] },
       weekly: { selector: 'wtop', data: this.hb_room.top10_weekly, prefix: ["\u2007WEEK",      "\u2007TOP\u2007"] },
@@ -1037,12 +1011,12 @@ class Commander extends BaseCommander {
 
     const ranking = rankings[type];
     if (!ranking || ranking.data.length === 0) {
-      this.sendMsgToPlayer(player, "🏆 Brak danych o najlepszych graczach.", Colors.Stats);
+      this.sendMsgToPlayer(playerExt, "🏆 Brak danych o najlepszych graczach.", Colors.Stats);
       return;
     }
 
     const link = `${config.webpageLink}/${ranking.selector}/${this.hb_room.room_config.playersInTeamLimit}`;
-    this.sendMsgToPlayer(player, `🏆 Pełny ranking dostępny pod linkiem: ${link}`, Colors.BrightBlue);
+    this.sendMsgToPlayer(playerExt, `🏆 Pełny ranking dostępny pod linkiem: ${link}`, Colors.BrightBlue);
     const rankEmojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
     const formatEntry = (e: PlayerTopRatingDataShort, index: number, shift: number) =>
         `${rankEmojis[shift+index]} ${e.player_name.length > 10 ? e.player_name.slice(0, 9) + "…" : e.player_name}⭐${e.rating}`;
@@ -1050,121 +1024,116 @@ class Commander extends BaseCommander {
     const formatEntry2 = (e: PlayerTopRatingDataShort, index: number) => formatEntry(e, index, 5);
 
     const firstHalf = ranking.data.slice(0, 5).map(formatEntry1).join(" ");
-    this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[0]}${firstHalf}`, Colors.Stats);
+    this.sendMsgToPlayer(playerExt, `🏆 ${ranking.prefix[0]}${firstHalf}`, Colors.Stats);
 
     if (ranking.data.length > 5) {
       const secondHalf = ranking.data.slice(5, 10).map(formatEntry2).join(" ");
-      this.sendMsgToPlayer(player, `🏆 ${ranking.prefix[1]}${secondHalf}`, Colors.Stats);
+      this.sendMsgToPlayer(playerExt, `🏆 ${ranking.prefix[1]}${secondHalf}`, Colors.Stats);
     }
   }
 
-  async commandTop10Ext(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, "topext")) return;
+  async commandTop10Ext(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, "topext")) return;
     this.hb_room.game_state.getTop10Players().then((results) => {
       let n = 3;
       for (let result of results) {
         if (n-- <= 0) return;
-        this.sendMsgToPlayer(player, `mamy ${result.player_name} ${result.games} ${result.goals}`);
+        this.sendMsgToPlayer(playerExt, `mamy ${result.player_name} ${result.games} ${result.goals}`);
 
       }
     }).catch((e) => hb_log(`!! commandTop10Ext error ${e}`));
   }
 
-  async commandUpdateTop10(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, "update_top10")) return;
+  async commandUpdateTop10(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, "update_top10")) return;
     this.hb_room.updateTop10();
   }
 
-  async commandPrintAuth(player: PlayerObject, cmds: string[]) {
-    if (this.hb_room.isPlayerIdHost(player.id) && cmds.length) {
-      let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+  async commandPrintAuth(playerExt: PlayerData, cmds: string[]) {
+    if (this.hb_room.isPlayerIdHost(playerExt.id) && cmds.length) {
+      let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt);
       if (!cmdPlayerExt) return;
-      this.sendMsgToPlayer(player, `${player.name} auth_id: ${cmdPlayerExt.auth_id} | conn_id: ${cmdPlayerExt.conn_id}`);
+      this.sendMsgToPlayer(playerExt, `${playerExt.name} auth_id: ${cmdPlayerExt.auth_id} | conn_id: ${cmdPlayerExt.conn_id}`);
       return;
     }
-    this.sendMsgToPlayer(player, `Twój auth ID to: ${this.Pid(player.id).auth_id}`);
+    this.sendMsgToPlayer(playerExt, `Twój auth ID to: ${playerExt.auth_id}`);
   }
 
-  async commandThumbVote(player: PlayerObject) {
-    let playerExt = this.Pid(player.id);
+  async commandThumbVote(playerExt: PlayerData) {
     if (playerExt.trust_level == 0) return;
     this.hb_room.game_state.getPlayerVotes(playerExt.auth_id).then(({ upvotes, downvotes }) => {
-      this.sendMsgToPlayer(player, `Masz ${upvotes} 👍 oraz ${downvotes} 👎, daj komuś kciuka w górę: !thumb_up @kebab`, Colors.Help);
+      this.sendMsgToPlayer(playerExt, `Masz ${upvotes} 👍 oraz ${downvotes} 👎, daj komuś kciuka w górę: !thumb_up @kebab`, Colors.Help);
     }).catch((error) => {
       console.error('Błąd przy pobieraniu reputacji:', error);
     });
   }
 
-  async commandThumbVoteUp(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandThumbVoteUp(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz dać kciuka w górę!");
+      this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza któremu chcesz dać kciuka w górę!");
       return;
     }
-    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayerExt) return;
-    if (player.id == cmdPlayerExt.id) return;
+    if (playerExt.id == cmdPlayerExt.id) return;
     this.hb_room.game_state.voteUp(playerExt.auth_id, cmdPlayerExt.auth_id);
-    this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w górę!`);
+    this.sendMsgToPlayer(playerExt, `Dałeś ${cmdPlayerExt.name} kciuka w górę!`);
   }
 
-  async commandThumbVoteDown(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandThumbVoteDown(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz dać kciuka w dół!");
+      this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza któremu chcesz dać kciuka w dół!");
       return;
     }
-    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayerExt) return;
-    if (player.id == cmdPlayerExt.id) return;
+    if (playerExt.id == cmdPlayerExt.id) return;
     this.hb_room.game_state.voteDown(playerExt.auth_id, cmdPlayerExt.auth_id);
-    this.sendMsgToPlayer(player, `Dałeś ${cmdPlayerExt.name} kciuka w dół!`);
+    this.sendMsgToPlayer(playerExt, `Dałeś ${cmdPlayerExt.name} kciuka w dół!`);
   }
 
-  async commandThumbVoteRemove(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandThumbVoteRemove(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "Wpisz nazwę gracza któremu chcesz zabrać swojego kciuka!");
+      this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza któremu chcesz zabrać swojego kciuka!");
       return;
     }
-    let cmdPlayerExt = this.getPlayerDataByName(cmds, player);
+    let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayerExt) return;
-    if (player.id == cmdPlayerExt.id) return;
+    if (playerExt.id == cmdPlayerExt.id) return;
     this.hb_room.game_state.removeVote(playerExt.auth_id, cmdPlayerExt.auth_id);
-    this.sendMsgToPlayer(player, `Zabrałeś ${cmdPlayerExt.name} kciuka!`);
+    this.sendMsgToPlayer(playerExt, `Zabrałeś ${cmdPlayerExt.name} kciuka!`);
   }
 
-  async commandRejoice(player: PlayerObject, cmds: string[]) {
+  async commandRejoice(playerExt: PlayerData, cmds: string[]) {
     if (cmds.length === 0) {
-      let names = this.hb_room.rejoice_maker.getRejoiceNames(player.id);
+      let names = this.hb_room.rejoice_maker.getRejoiceNames(playerExt.id);
       let txt = names.length === 0 ? "Nie masz dostępnych cieszynek :( Sprawdź !sklep" : `Twoje cieszynki: ${names.join(", ")}, Wpisz !cieszynka <nazwa> by ją zmienić!`;
-      this.sendMsgToPlayer(player, txt, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, txt, Colors.DarkGreen);
       return;
     }
     let newSelected = cmds[0];
-    if (this.hb_room.rejoice_maker.changeSelected(player.id, newSelected)) {
-      this.sendMsgToPlayer(player, `Twoja aktualna cieszynka to ${newSelected}`, Colors.DarkGreen);
+    if (this.hb_room.rejoice_maker.changeSelected(playerExt.id, newSelected)) {
+      this.sendMsgToPlayer(playerExt, `Twoja aktualna cieszynka to ${newSelected}`, Colors.DarkGreen);
     } else {
-      let names = this.hb_room.rejoice_maker.getRejoiceNames(player.id);
-      this.sendMsgToPlayer(player, `Nie udało się zmienić cieszynki na ${newSelected}, Twoje cieszynki: ${names.join(", ")}`, Colors.DarkGreen);
+      let names = this.hb_room.rejoice_maker.getRejoiceNames(playerExt.id);
+      this.sendMsgToPlayer(playerExt, `Nie udało się zmienić cieszynki na ${newSelected}, Twoje cieszynki: ${names.join(", ")}`, Colors.DarkGreen);
     }
   }
 
-  async commandVip(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandVip(playerExt: PlayerData, cmds: string[]) {
     if (cmds.length === 0) {
       let all_option_names = Array.from(this.hb_room.vip_option_prices.keys());
-      let option_names = this.hb_room.vip_options.getOptionNames(player.id);
+      let option_names = this.hb_room.vip_options.getOptionNames(playerExt.id);
       let optionsTxt = '';
       for (let option of all_option_names) {
         if (option_names.includes(option)) optionsTxt += '✅';
         optionsTxt += option + ' ';
       }
-      this.sendMsgToPlayer(player, `By sprawdzić cenę: !vip <nazwa>, By rozpocząć proces zakupu: !vip <nazwa> <liczba dni>`, Colors.DarkGreen);
-      this.sendMsgToPlayer(player, "Lista opcji VIP: "+optionsTxt, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `By sprawdzić cenę: !vip <nazwa>, By rozpocząć proces zakupu: !vip <nazwa> <liczba dni>`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, "Lista opcji VIP: "+optionsTxt, Colors.DarkGreen);
       if (playerExt.pendingVipOptionTransaction && playerExt.pendingVipOptionTransaction.status != "completed") {
         this.hb_room.game_state.getPaymentStatus(playerExt.pendingVipOptionTransaction.transactionId).then((paymentStatus) => {
           let tr = playerExt.pendingVipOptionTransaction;
@@ -1172,16 +1141,16 @@ class Commander extends BaseCommander {
             if (paymentStatus === "completed") {
               if (tr.status !== "completed") {
                 this.hb_room.vip_options.handlePlayerJoin(playerExt).then((num) => {
-                  if (num > 0) this.sendMsgToPlayer(player, `Nowa opcja VIP aktywowana! Możesz ją już teraz wykorzystać!`, Colors.AzureBlue);
+                  if (num > 0) this.sendMsgToPlayer(playerExt, `Nowa opcja VIP aktywowana! Możesz ją już teraz wykorzystać!`, Colors.AzureBlue);
                 }).catch((e) => e && hb_log(`!! vip_options after payment error: ${e}`));
               }
               tr.status = paymentStatus;
-              this.sendMsgToPlayer(player, `Twoja płatność została zaksięgowana! Zakup zostanie aktywowany przy następnej wizycie. Dziękujemy!`, Colors.AzureBlue);
+              this.sendMsgToPlayer(playerExt, `Twoja płatność została zaksięgowana! Zakup zostanie aktywowany przy następnej wizycie. Dziękujemy!`, Colors.AzureBlue);
             } else if (paymentStatus === "failed") {
               tr.status = paymentStatus;
-              this.sendMsgToPlayer(player, `Wystąpił problem z Twoją ostatnią płatnością. Sprawdź szczegóły tutaj: ${tr.link}`, Colors.DarkRed);
+              this.sendMsgToPlayer(playerExt, `Wystąpił problem z Twoją ostatnią płatnością. Sprawdź szczegóły tutaj: ${tr.link}`, Colors.DarkRed);
             } else if (paymentStatus === "started") {
-              this.sendMsgToPlayer(player, `Masz aktywną transakcję. Możesz ją dokończyć tutaj: ${tr.link}`, Colors.AzureBlue);
+              this.sendMsgToPlayer(playerExt, `Masz aktywną transakcję. Możesz ją dokończyć tutaj: ${tr.link}`, Colors.AzureBlue);
             }
           }
         }).catch((e) => e && hb_log(`!! getPaymentStatus error: ${e}`))
@@ -1190,44 +1159,43 @@ class Commander extends BaseCommander {
     }
     let optionName = cmds[0];
     if (!this.hb_room.vip_option_prices.has(optionName)) {
-      this.sendMsgToPlayer(player, `Nie ma opcji VIP o nazwie ${optionName}!`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Nie ma opcji VIP o nazwie ${optionName}!`, Colors.DarkGreen);
       return;
     }
     let prices = this.hb_room.vip_option_prices.get(optionName)!;
     if (cmds.length === 1) {
       const formattedString = Array.from(prices).map(({ for_days, price }) => `${for_days} dni: ${price} zł`).join(', ');
-      this.sendMsgToPlayer(player, `VIP ${optionName} - dostępne opcje: ${formattedString}`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `VIP ${optionName} - dostępne opcje: ${formattedString}`, Colors.DarkGreen);
       return;
     }
     let forDays = Number.parseInt(cmds[1]);
     if (isNaN(forDays)) {
-      this.sendMsgToPlayer(player, `Nieprawidłowa liczba dni dla opcji ${optionName}, ${forDays} nie jest prawidłową opcją!`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Nieprawidłowa liczba dni dla opcji ${optionName}, ${forDays} nie jest prawidłową opcją!`, Colors.DarkGreen);
       return;
     }
     if (!prices.some(e => e.for_days == forDays)) {
-      this.sendMsgToPlayer(player, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !vip <nazwa>`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !vip <nazwa>`, Colors.DarkGreen);
       return;
     }
     if (playerExt.pendingVipOptionTransaction && playerExt.pendingVipOptionTransaction.status !== 'completed') {
-      this.sendMsgToPlayer(player, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingVipOptionTransaction.link}`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingVipOptionTransaction.link}`, Colors.DarkGreen);
       return;
     }
     this.hb_room.game_state.insertVipTransaction(playerExt.auth_id, optionName, Date.now(), forDays, this.hb_room.getSselector()).then((result) => {
-      this.sendMsgToPlayer(player, `Proces zakupu opcji VIP rozpoczęty! Wkrótce otrzymasz link.`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Proces zakupu opcji VIP rozpoczęty! Wkrótce otrzymasz link.`, Colors.DarkGreen);
       hb_log(`Zakup opcji VIP dla ${playerExt.name} ${playerExt.auth_id} r:${optionName} na ${forDays}, id:${result}`);
     }).catch((e) => e && hb_log(`!! insertVipTransaction error ${e}`));
   }
 
-  async commandPrintAvailableRejoices(player: PlayerObject, cmds: string[]) {
+  async commandPrintAvailableRejoices(playerExt: PlayerData, cmds: string[]) {
     let availableRejoices = Array.from(this.hb_room.rejoice_prices.keys());
-    this.sendMsgToPlayer(player, `Cieszynki dostępne do zakupu: ${availableRejoices.join(", ")}; Wpisz !cieszynka by sprawdzić listę Twoich cieszynek!`, Colors.DarkGreen);
+    this.sendMsgToPlayer(playerExt, `Cieszynki dostępne do zakupu: ${availableRejoices.join(", ")}; Wpisz !cieszynka by sprawdzić listę Twoich cieszynek!`, Colors.DarkGreen);
   }
 
-  async commandBuyRejoice(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  async commandBuyRejoice(playerExt: PlayerData, cmds: string[]) {
     if (cmds.length === 0) {
-      this.sendMsgToPlayer(player, `By sprawdzić cenę: !sklep <nazwa>, By rozpocząć proces zakupu: !kup <nazwa> <liczba dni>`, Colors.DarkGreen);
-      this.sendMsgToPlayer(player, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki, zainteresowany opcjami VIP? sprawdź !vip`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `By sprawdzić cenę: !sklep <nazwa>, By rozpocząć proces zakupu: !kup <nazwa> <liczba dni>`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki, zainteresowany opcjami VIP? sprawdź !vip`, Colors.DarkGreen);
       if (playerExt.pendingRejoiceTransaction && playerExt.pendingRejoiceTransaction.status != "completed") {
         this.hb_room.game_state.getPaymentStatus(playerExt.pendingRejoiceTransaction.transactionId).then((paymentStatus) => {
           let tr = playerExt.pendingRejoiceTransaction;
@@ -1235,16 +1203,16 @@ class Commander extends BaseCommander {
             if (paymentStatus === "completed") {
               if (tr.status !== "completed") {
                 this.hb_room.rejoice_maker.handlePlayerJoin(playerExt).then((num) => {
-                  if (num > 0) this.sendMsgToPlayer(player, `Nowa cieszynka aktywowana! Możesz ją już teraz wykorzystać!`, Colors.AzureBlue);
+                  if (num > 0) this.sendMsgToPlayer(playerExt, `Nowa cieszynka aktywowana! Możesz ją już teraz wykorzystać!`, Colors.AzureBlue);
                 }).catch((e) => e && hb_log(`!! rejoice_maker after payment error: ${e}`));
               }
               tr.status = paymentStatus;
-              this.sendMsgToPlayer(player, `Twoja płatność została zaksięgowana! Zakup zostanie aktywowany przy następnej wizycie. Dziękujemy!`, Colors.AzureBlue);
+              this.sendMsgToPlayer(playerExt, `Twoja płatność została zaksięgowana! Zakup zostanie aktywowany przy następnej wizycie. Dziękujemy!`, Colors.AzureBlue);
             } else if (paymentStatus === "failed") {
               tr.status = paymentStatus;
-              this.sendMsgToPlayer(player, `Wystąpił problem z Twoją ostatnią płatnością. Sprawdź szczegóły tutaj: ${tr.link}`, Colors.DarkRed);
+              this.sendMsgToPlayer(playerExt, `Wystąpił problem z Twoją ostatnią płatnością. Sprawdź szczegóły tutaj: ${tr.link}`, Colors.DarkRed);
             } else if (paymentStatus === "started") {
-              this.sendMsgToPlayer(player, `Masz aktywną transakcję. Możesz ją dokończyć tutaj: ${tr.link}`, Colors.AzureBlue);
+              this.sendMsgToPlayer(playerExt, `Masz aktywną transakcję. Możesz ją dokończyć tutaj: ${tr.link}`, Colors.AzureBlue);
             }
           }
         }).catch((e) => e && hb_log(`!! getPaymentStatus error: ${e}`))
@@ -1253,155 +1221,154 @@ class Commander extends BaseCommander {
     }
     let rejoiceName = cmds[0];
     if (rejoiceName === "vip") {
-      return this.commandVip(player, cmds.slice(1));
+      return this.commandVip(playerExt, cmds.slice(1));
     }
     if (!this.hb_room.rejoice_prices.has(rejoiceName)) {
-      this.sendMsgToPlayer(player, `Nie ma cieszynki o nazwie ${rejoiceName}!`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Nie ma cieszynki o nazwie ${rejoiceName}!`, Colors.DarkGreen);
       return;
     }
     let prices = this.hb_room.rejoice_prices.get(rejoiceName)!;
     if (cmds.length === 1) {
       const formattedString = Array.from(prices).map(({ for_days, price }) => `${for_days} dni: ${price} zł`).join(', ');
-      this.sendMsgToPlayer(player, `Cieszynka ${rejoiceName} - dostępne opcje: ${formattedString}`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Cieszynka ${rejoiceName} - dostępne opcje: ${formattedString}`, Colors.DarkGreen);
       return;
     }
     let forDays = Number.parseInt(cmds[1]);
     if (isNaN(forDays)) {
-      this.sendMsgToPlayer(player, `Nieprawidłowa liczba dni dla cieszynki ${rejoiceName}, ${forDays} nie jest prawidłową opcją!`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Nieprawidłowa liczba dni dla cieszynki ${rejoiceName}, ${forDays} nie jest prawidłową opcją!`, Colors.DarkGreen);
       return;
     }
     if (!prices.some(e => e.for_days == forDays)) {
-      this.sendMsgToPlayer(player, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !kup <nazwa>`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Nie ma takiej opcji zakupu! Sprawdź dostępne opcje wpisując !kup <nazwa>`, Colors.DarkGreen);
       return;
     }
     if (playerExt.pendingRejoiceTransaction && playerExt.pendingRejoiceTransaction.status !== 'completed') {
-      this.sendMsgToPlayer(player, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingRejoiceTransaction.link}`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Inny proces zakupu jest w toku. Najpierw go zakończ: ${playerExt.pendingRejoiceTransaction.link}`, Colors.DarkGreen);
       return;
     }
     this.hb_room.game_state.insertRejoiceTransaction(playerExt.auth_id, rejoiceName, Date.now(), forDays, this.hb_room.getSselector()).then((result) => {
-      this.sendMsgToPlayer(player, `Proces zakupu cieszynki rozpoczęty! Wkrótce otrzymasz link.`, Colors.DarkGreen);
+      this.sendMsgToPlayer(playerExt, `Proces zakupu cieszynki rozpoczęty! Wkrótce otrzymasz link.`, Colors.DarkGreen);
       hb_log(`Zakup cieszynki dla ${playerExt.name} ${playerExt.auth_id} r:${rejoiceName} na ${forDays}, id:${result}`);
     }).catch((e) => e && hb_log(`!! insertRejoiceTransaction error ${e}`));
   }
 
-  async commandCheckPlayerTransaction(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'check_transaction')) return;
+  async commandCheckPlayerTransaction(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'check_transaction')) return;
     if (cmds.length === 0) {
-      this.sendMsgToPlayer(player, `O jakiego gracza chodzi?`);
+      this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi?`);
       return;
     }
-    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayer) return;
     let transaction = cmdPlayer.pendingRejoiceTransaction;
     if (!transaction) {
-      this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} nie ma zadnej transakcji w trakcie`);
+      this.sendMsgToPlayer(playerExt, `Gracz ${cmdPlayer.name} nie ma zadnej transakcji w trakcie`);
       return;
     }
-    this.sendMsgToPlayer(player, `Gracz ${player.name} numer transakcji: ${transaction.transactionId}, link: ${transaction.link} status: ${transaction.status}`);
+    this.sendMsgToPlayer(playerExt, `Gracz ${playerExt.name} numer transakcji: ${transaction.transactionId}, link: ${transaction.link} status: ${transaction.status}`);
   }
 
-  async commandUpdateRejoiceForPlayer(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'update_rejoice')) return;
+  async commandUpdateRejoiceForPlayer(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'update_rejoice')) return;
     if (cmds.length === 0) {
-      this.sendMsgToPlayer(player, `O jakiego gracza chodzi?`);
+      this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi?`);
       return;
     }
-    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayer) return;
     this.hb_room.rejoice_maker.handlePlayerJoin(cmdPlayer).then((num) => {
-      this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
+      this.sendMsgToPlayer(playerExt, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
     }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
   }
 
-  async commandSetRejoiceForPlayer(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'set_rejoice')) return;
+  async commandSetRejoiceForPlayer(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'set_rejoice')) return;
     if (cmds.length < 2) {
-      this.sendMsgToPlayer(player, `O jakiego gracza chodzi? I jaka cieszynka?`);
+      this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi? I jaka cieszynka?`);
       return;
     }
-    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayer) return;
     let rejoiceId = cmds[1];
     this.hb_room.game_state.updateOrInsertRejoice(cmdPlayer.auth_id, rejoiceId, 0, Date.now() + 60_000).then(((result) => {
       this.hb_room.rejoice_maker.handlePlayerJoin(cmdPlayer).then((num) => {
-        this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
+        this.sendMsgToPlayer(playerExt, `Gracz ${cmdPlayer.name} Dostał ${num} cieszynek!`);
       }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
     })).catch((e) => hb_log(`updateOrInsertRejoice error: ${e}`));
   }
 
-  async commandSetVipOptionForPlayer(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'vip_option')) return;
+  async commandSetVipOptionForPlayer(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'vip_option')) return;
     if (cmds.length < 2) {
-      this.sendMsgToPlayer(player, `O jakiego gracza chodzi? I jaka opcja VIPowska?`);
+      this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi? I jaka opcja VIPowska?`);
       return;
     }
-    let cmdPlayer = this.getPlayerDataByName(cmds, player, true);
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayer) return;
     let option = cmds[1];
     this.hb_room.game_state.updateOrInsertVipOption(cmdPlayer.auth_id, option, 0, Date.now() + 60_000).then(((result) => {
       this.hb_room.vip_options.handlePlayerJoin(cmdPlayer).then((num) => {
-        this.sendMsgToPlayer(player, `Gracz ${cmdPlayer.name} Dostał ${num} nowych opcji VIP!`);
+        this.sendMsgToPlayer(playerExt, `Gracz ${cmdPlayer.name} Dostał ${num} nowych opcji VIP!`);
       }).catch((e) => e && hb_log(`!! vip_options handlePlayerJoin error: ${e}`));
     })).catch((e) => hb_log(`updateOrInsertVipOption error: ${e}`));
   }
 
-  async commandVerify(player: PlayerObject) {
-    let playerExt = this.Pid(player.id);
+  async commandVerify(playerExt: PlayerData) {
     if (playerExt.trust_level == 0 || playerExt.verify_link_requested) return;
-    const link = generateVerificationLink(player.name);
+    const link = generateVerificationLink(playerExt.name);
     playerExt.verify_link_requested = true;
-    this.sendMsgToPlayer(player, `Twój link: ${link}`);
+    this.sendMsgToPlayer(playerExt, `Twój link: ${link}`);
   }
 
-  async commandTrust(player: PlayerObject, cmds: string[]) {
+  async commandTrust(playerExt: PlayerData, cmds: string[]) {
     // if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "Uzycie: !t <@nick> <trust_level>");
+      this.sendMsgToPlayer(playerExt, "Uzycie: !t <@nick> <trust_level>");
       return;
     }
-    let cmdPlayer = this.getPlayerObjectByName(cmds[0], player);
+    let cmdPlayer = this.getPlayerDataByName(cmds[0], playerExt);
     if (!cmdPlayer) return;
     let cmd_player_ext = this.Pid(cmdPlayer.id);
-    if (cmdPlayer.id == player.id) {
-      this.sendMsgToPlayer(player, `Nie mozesz sobie samemu zmieniać poziomu!`);
+    if (cmdPlayer.id == playerExt.id) {
+      this.sendMsgToPlayer(playerExt, `Nie mozesz sobie samemu zmieniać poziomu!`);
       return;
     }
-    let caller_ext = this.Pid(player.id);
-    if (caller_ext.trust_level < 2) {
-      this.sendMsgToPlayer(player, `Musisz mieć co najmniej drugi poziom by móc nadawać poziom zaufania!`);
+    let callerExt = playerExt;
+    if (callerExt.trust_level < 2) {
+      this.sendMsgToPlayer(playerExt, `Musisz mieć co najmniej drugi poziom by móc nadawać poziom zaufania!`);
       return;
     }
-    const amIhost = this.hb_room.isPlayerIdHost(player.id);
+    const amIhost = this.hb_room.isPlayerIdHost(playerExt.id);
     let trust_level = parseInt(cmds[1] ?? 1, 10);
     trust_level = isNaN(trust_level) ? 0 : trust_level;
     if (!amIhost && trust_level <= 0) {
-      this.sendMsgToPlayer(player, `Wartość nie moze być mniejsza ani równa zero: ${trust_level}`);
+      this.sendMsgToPlayer(playerExt, `Wartość nie moze być mniejsza ani równa zero: ${trust_level}`);
       return;
-    } else if (trust_level >= caller_ext.trust_level) {
-      this.sendMsgToPlayer(player, `Nie możesz nadać poziomu ${trust_level}, ponieważ Twój własny poziom to ${caller_ext.trust_level}. Możesz przyznać jedynie poziomy niższe od swojego.`);
+    } else if (trust_level >= callerExt.trust_level) {
+      this.sendMsgToPlayer(playerExt, `Nie możesz nadać poziomu ${trust_level}, ponieważ Twój własny poziom to ${callerExt.trust_level}. Możesz przyznać jedynie poziomy niższe od swojego.`);
       return;
     } else if (trust_level === cmd_player_ext.trust_level) {
-        this.sendMsgToPlayer(player, `Gracz ma juz dany poziom zaufania`);
+        this.sendMsgToPlayer(playerExt, `Gracz ma juz dany poziom zaufania`);
         return;
-    } else if (caller_ext.trust_level < 10 && trust_level < cmd_player_ext.trust_level) {
-      this.sendMsgToPlayer(player, `Nie możesz obnizyc poziomu, mozesz jedynie podwyzszyc poziom innych graczy.`);
+    } else if (callerExt.trust_level < 10 && trust_level < cmd_player_ext.trust_level) {
+      this.sendMsgToPlayer(playerExt, `Nie możesz obnizyc poziomu, mozesz jedynie podwyzszyc poziom innych graczy.`);
       return;
     }
     cmd_player_ext.trust_level = trust_level;
-    this.hb_room.game_state.setTrustLevel(cmd_player_ext, trust_level, caller_ext);
-    this.sendMsgToPlayer(player, `Ustawiłeś trust level ${cmd_player_ext.name} na ${trust_level}`);
+    this.hb_room.game_state.setTrustLevel(cmd_player_ext, trust_level, callerExt);
+    this.sendMsgToPlayer(playerExt, `Ustawiłeś trust level ${cmd_player_ext.name} na ${trust_level}`);
   }
 
-  async commandAutoTrust(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  async commandAutoTrust(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, `podkomendy: red/r blue/b spec/s all/a by dodać wszystkich z danego teamu do kolejki`);
-      this.sendMsgToPlayer(player, `+ by nadać wszystkim wartość zaufania 1; - by usunąć wszystkich z kolejki; a+ dodaj wszystkich`);
+      this.sendMsgToPlayer(playerExt, `podkomendy: red/r blue/b spec/s all/a by dodać wszystkich z danego teamu do kolejki`);
+      this.sendMsgToPlayer(playerExt, `+ by nadać wszystkim wartość zaufania 1; - by usunąć wszystkich z kolejki; a+ dodaj wszystkich`);
       return;
     }
-    let caller_ext = this.Pid(player.id);
-    if (caller_ext.trust_level < 2) {
-      this.sendMsgToPlayer(player, `Musisz mieć co najmniej drugi poziom by móc nadawać poziom zaufania!`);
+    let callerExt = playerExt;
+    if (callerExt.trust_level < 2) {
+      this.sendMsgToPlayer(playerExt, `Musisz mieć co najmniej drugi poziom by móc nadawać poziom zaufania!`);
       return;
     }
     let red = false;
@@ -1414,11 +1381,11 @@ class Commander extends BaseCommander {
     else if (c == 'all' || c == 'a') {
       red = spec = blue = true;
     } else if (c == '+') {
-      this.sendMsgToPlayer(player, `Ustawiłeś zaufanie dla: ${this.hb_room.to_be_trusted.size} graczy!`)
+      this.sendMsgToPlayer(playerExt, `Ustawiłeś zaufanie dla: ${this.hb_room.to_be_trusted.size} graczy!`)
       this.hb_room.to_be_trusted.forEach(player_id => {
         let p = this.Pid(player_id);
         p.trust_level = 1;
-        this.hb_room.game_state.setTrustLevel(p, 1, caller_ext);
+        this.hb_room.game_state.setTrustLevel(p, 1, callerExt);
       });
       this.hb_room.to_be_trusted.clear();
       return;
@@ -1426,8 +1393,8 @@ class Commander extends BaseCommander {
       this.hb_room.to_be_trusted.clear();
       return;
     } else if (c == 'a+') {
-      this.commandAutoTrust(player, ['a', ...cmds.slice(1)]);
-      this.commandAutoTrust(player, ['+', ...cmds.slice(1)]);
+      this.commandAutoTrust(playerExt, ['a', ...cmds.slice(1)]);
+      this.commandAutoTrust(playerExt, ['+', ...cmds.slice(1)]);
       return;
     } else {
       return;
@@ -1435,7 +1402,7 @@ class Commander extends BaseCommander {
     let to_be_trusted_names = new Set();
     this.getPlayersExtList(true).forEach(p => {
       let add = false;
-      if (player.id != p.id) {
+      if (playerExt.id != p.id) {
         if (p.trust_level == 0) {
           if (p.team == 0 && spec) add = true;
           else if (p.team == 1 && red) add = true;
@@ -1449,28 +1416,28 @@ class Commander extends BaseCommander {
         to_be_trusted_names.add(p.name);
       }
     });
-    this.sendMsgToPlayer(player, `W kolejce do dodania czekają: ${[...to_be_trusted_names].join(" ")}`);
+    this.sendMsgToPlayer(playerExt, `W kolejce do dodania czekają: ${[...to_be_trusted_names].join(" ")}`);
   }
 
-  async commandUnlockWriting(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'u')) return;
+  async commandUnlockWriting(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'u')) return;
     if (cmds.length == 0) {
-      this.hb_room.anti_spam.clearMute(player.id);
-      this.hb_room.captcha.clearCaptcha(player);
-      this.hb_room.giveAdminTo(player);
+      this.hb_room.anti_spam.clearMute(playerExt.id);
+      this.hb_room.captcha.clearCaptcha(playerExt);
+      this.hb_room.giveAdminTo(playerExt);
     } else {
-      let cmdPlayer = this.getPlayerObjectByName(cmds, player);
+      let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
       if (!cmdPlayer) return;
       this.hb_room.anti_spam.clearMute(cmdPlayer.id);
       this.hb_room.captcha.clearCaptcha(cmdPlayer);
-      this.sendMsgToPlayer(player, `Usunąłem blokady dla gracza: ${cmdPlayer.name}`);
+      this.sendMsgToPlayer(playerExt, `Usunąłem blokady dla gracza: ${cmdPlayer.name}`);
     }
   }
 
   static trustIndicators: string[] = ['❌', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
 
-  async commandShowTrust(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  async commandShowTrust(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     let rStr = '';
     let bStr = '';
     let sStr = '';
@@ -1480,8 +1447,15 @@ class Commander extends BaseCommander {
       else if (player.team === 2) bStr += str;
       else sStr += str;
     })
-    this.sendMsgToPlayer(player, `R: ${rStr} | B: ${bStr} | S: ${sStr}`);
+    this.sendMsgToPlayer(playerExt, `R: ${rStr} | B: ${bStr} | S: ${sStr}`);
 
+  }
+
+  async commandAfter(playerExt: PlayerData, cmds: string[]) {
+    let cmd = cmds.join(" ");
+    if (cmd.length && !cmd.startsWith('!')) cmd = '!' + cmd;
+    playerExt.command_after_match_ends = cmd;
+    this.sendMsgToPlayer(playerExt, `Po meczu zostanie wywołana komenda: ${cmd}`, Colors.DarkGreen, 'italic');
   }
 
   formatUptime(ms: number) {
@@ -1492,132 +1466,131 @@ class Commander extends BaseCommander {
     return `${hours}:${minutes}:${seconds}`;
   }
 
-  async commandUptime(player: PlayerObject) {
+  async commandUptime(playerExt: PlayerData) {
     let txt = this.formatUptime(Date.now() - this.hb_room.server_start_time);
-    this.sendMsgToPlayer(player, `Server uptime: ${txt}`);
+    this.sendMsgToPlayer(playerExt, `Server uptime: ${txt}`);
   }
 
-  async commandPasek(player: PlayerObject) {
-    this.sendMsgToPlayer(player, 'Mniejsza kulka wskazuje presję na połowie przeciwnika, większa kulka określa posiadanie piłki');
+  async commandPasek(playerExt: PlayerData) {
+    this.sendMsgToPlayer(playerExt, 'Mniejsza kulka wskazuje presję na połowie przeciwnika, większa kulka określa posiadanie piłki');
   }
 
-  async commandBuyCoffeeLink(player: PlayerObject) {
+  async commandBuyCoffeeLink(playerExt: PlayerData) {
     let link = 'https://' + BuyCoffee.buy_coffe_link;
     let random_text = BuyCoffee.buy_coffee_link_texts[Math.floor(Math.random() * BuyCoffee.buy_coffee_link_texts.length)];
-    this.sendMsgToPlayer(player, `${random_text} ${link}`, 0xFF4444, 'bold', 2);
+    this.sendMsgToPlayer(playerExt, `${random_text} ${link}`, 0xFF4444, 'bold', 2);
   }
 
-  async commandShowDiscordAndWebpage(player: PlayerObject) {
-    this.sendMsgToPlayer(player, `Chcesz pogadać? 💬 ${config.discordLink} 💬 Strona serwera: 🌐 ${config.webpageLink} 🌐`);
+  async commandShowDiscordAndWebpage(playerExt: PlayerData) {
+    this.sendMsgToPlayer(playerExt, `Chcesz pogadać? 💬 ${config.discordLink} 💬 Strona serwera: 🌐 ${config.webpageLink} 🌐`);
   }
 
-  async commandDumpPlayers(player: PlayerObject) {
-    let playerExt = this.Pid(player.id);
+  async commandDumpPlayers(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let p of this.getPlayersExt()) {
-      this.sendMsgToPlayer(player, `${p.name} [${p.id}] auth: ${p.auth_id.substring(0, 16)} conn: ${p.conn_id}`);
+      this.sendMsgToPlayer(playerExt, `${p.name} [${p.id}] auth: ${p.auth_id.substring(0, 16)} conn: ${p.conn_id}`);
     }
   }
 
-  async commandAntiSpam(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'anti_spam')) return;
+  async commandAntiSpam(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'anti_spam')) return;
     if (cmds.length == 0) return;
     let new_state = toBoolean(cmds[0]);
     this.hb_room.anti_spam.setEnabled(new_state);
-    this.sendMsgToPlayer(player, `anti_spam = ${new_state}`);
+    this.sendMsgToPlayer(playerExt, `anti_spam = ${new_state}`);
     if (new_state) {
-      this.getPlayers().filter(e => e.admin).forEach(player => {
+      this.getPlayersExtList().filter(e => e.admin).forEach(player => {
         this.sendMsgToPlayer(player, `Anty Spam został włączony, mozesz wyłączyć dla niego sprawdzanie spamu: !spam_disable/sd <nick>, bez tego przy pisaniu podobnych wiadomości mógłby dostać kicka!`);
       });
     }
   }
 
-  async commandTriggerCaptcha(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'captcha')) return;
+  async commandTriggerCaptcha(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'captcha')) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "Podkomendy: gen, clear, gen_me, set [0/1]");
+      this.sendMsgToPlayer(playerExt, "Podkomendy: gen, clear, gen_me, set [0/1]");
     }
     if (cmds[0] == "gen_me") {
-      this.hb_room.captcha.askCaptcha(player);
+      this.hb_room.captcha.askCaptcha(playerExt);
       return;
     } else if (cmds[0] == "set" && cmds.length > 1) {
       let new_state = toBoolean(cmds[1]);
       this.hb_room.captcha.setEnabled(new_state);
-      this.sendMsgToPlayer(player, `Stan captcha = ${new_state}`);
+      this.sendMsgToPlayer(playerExt, `Stan captcha = ${new_state}`);
       return;
     }
 
     this.getPlayers().forEach(p => {
-      if (p.id != player.id) {
-        if (cmds[0] == "gen") this.hb_room.captcha.askCaptcha(p);
-        else if (cmds[0] == "clear") this.hb_room.captcha.clearCaptcha(p);
+      if (p.id != playerExt.id) {
+        if (cmds[0] == "gen") this.hb_room.captcha.askCaptcha(this.Pid(p.id));
+        else if (cmds[0] == "clear") this.hb_room.captcha.clearCaptcha(this.Pid(p.id));
       }
     });
   }
 
-  async commandOnlyTrustedJoin(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'only_trusted_join')) return;
+  async commandOnlyTrustedJoin(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'only_trusted_join')) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "wołaj z on/off");
+      this.sendMsgToPlayer(playerExt, "wołaj z on/off");
       return;
     }
     let new_state = toBoolean(cmds[0]);
     this.hb_room.allow_connecting_only_trusted = new_state;
-    this.sendMsgToPlayer(player, `Tylko trusted connecting: ${new_state}`);
+    this.sendMsgToPlayer(playerExt, `Tylko trusted connecting: ${new_state}`);
   }
 
-  async commandOnlyTrustedChat(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'only_trusted_chat')) return;
+  async commandOnlyTrustedChat(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'only_trusted_chat')) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(player, "wołaj z on/off");
+      this.sendMsgToPlayer(playerExt, "wołaj z on/off");
       return;
     }
     let new_state = toBoolean(cmds[0]);
     this.hb_room.allow_chatting_only_trusted = new_state;
-    this.sendMsgToPlayer(player, `Tylko trusted chatting: ${new_state}`);
+    this.sendMsgToPlayer(playerExt, `Tylko trusted chatting: ${new_state}`);
   }
 
-  async commandWhitelistNonTrustedNick(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  async commandWhitelistNonTrustedNick(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     cmds.forEach(player_name => {
       this.hb_room.whitelisted_nontrusted_player_names.add(player_name);
     });
   }
 
-  async commandAutoDebug(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'auto_debug')) return;
+  async commandAutoDebug(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'auto_debug')) return;
     if (!this.hb_room.ratings_for_all_games) {
       this.hb_room.player_duplicate_allowed = true;
       this.hb_room.limit = Number.parseInt(cmds[0]) || 3;
       this.hb_room.auto_afk = false;
       this.hb_room.auto_bot.MaxMatchTime = Number.parseInt(cmds[1]) || 150;
       this.hb_room.auto_bot.autoVoter.setRequiredVotes(2);
-      this.commandAutoMode(player, ["on"]);
+      this.commandAutoMode(playerExt, ["on"]);
     } else {
       this.hb_room.player_duplicate_allowed = false;
       this.hb_room.auto_afk = true;
       this.hb_room.auto_bot.MaxMatchTime = 6*60;
       this.hb_room.auto_bot.autoVoter.setRequiredVotes(3);
-      this.commandAutoMode(player, ["off"]);
+      this.commandAutoMode(playerExt, ["off"]);
     }
     this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
-    this.sendMsgToPlayer(player, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
+    this.sendMsgToPlayer(playerExt, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
   }
 
-  async commandSetWelcomeMsg(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'welcome')) return;
+  async commandSetWelcomeMsg(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'welcome')) return;
     if (!cmds.length) return;
     this.hb_room.welcome_message.setMessage(cmds.join(' '));
   }
 
-  async commandSendAnnoToAllPlayers(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'welcome')) return;
+  async commandSendAnnoToAllPlayers(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'welcome')) return;
     if (!cmds.length) return;
     this.hb_room.sendMsgToAll(`${cmds.join(' ')}`, Colors.AzureBlue, 'bold');
   }
 
-  async commandServerRestart(player: PlayerObject) {
-    if (this.warnIfPlayerIsNotHost(player, 'server_restart')) return;
+  async commandServerRestart(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'server_restart')) return;
     for (let i = 0; i < 3; ++i) {
       this.hb_room.sendMsgToAll(`Reset za ${3 - i} sekund`, Colors.Warning, 'bold', 2);
       await sleep(1000);
@@ -1627,32 +1600,32 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandGodTest(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'server_restart')) return;
+  async commandGodTest(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'server_restart')) return;
     let cmd = cmds.join(" ");
-    this.sendMsgToPlayer(player, `trying to exec: ${cmd}`);
+    this.sendMsgToPlayer(playerExt, `trying to exec: ${cmd}`);
     this.r().onPlayerChat(this.hb_room.god_player, cmd);
   }
 
-  async commandSwitchBotStoppingFlag(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+  async commandSwitchBotStoppingFlag(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     this.hb_room.bot_stopping_enabled = !this.hb_room.bot_stopping_enabled;
-      this.sendMsgToPlayer(player, `Obecny stan: ${this.hb_room.bot_stopping_enabled}`);
+      this.sendMsgToPlayer(playerExt, `Obecny stan: ${this.hb_room.bot_stopping_enabled}`);
   }
 
-  async commandPrintShortInfo(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+  async commandPrintShortInfo(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let players = this.r().getPlayerList();
     let txt = '';
     for (let e of players) {
       let p = this.hb_room.Pid(e.id);
       txt += ` ${p.name}=T${p.trust_level},B${p.bot?1:0}`;
     }
-    this.sendMsgToPlayer(player,txt);
+    this.sendMsgToPlayer(playerExt,txt);
   }
 
-  async commandBotSetRadius(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'botmin')) return;
+  async commandBotSetRadius(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'botmin')) return;
     let newRadius = Number.parseFloat(cmds[0]);
     if (isNaN(newRadius)) newRadius = 15;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
@@ -1661,62 +1634,62 @@ class Commander extends BaseCommander {
       })
   }
 
-  async commandCheckBots(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+  async commandCheckBots(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot).map(e => e.name);
     if (bots.length)
-      this.sendMsgToPlayer(player, `Boty: ${bots.join(', ')}`);
+      this.sendMsgToPlayer(playerExt, `Boty: ${bots.join(', ')}`);
     else
-      this.sendMsgToPlayer(player, `Nie znalazłem botów`);
+      this.sendMsgToPlayer(playerExt, `Nie znalazłem botów`);
   }
 
-  async commandWhoIsNotBot(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+  async commandWhoIsNotBot(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => !e.bot).map(e => e.name);
     if (bots.length)
-      this.sendMsgToPlayer(player, `Raczej ludzie: ${bots.join(', ')}`);
+      this.sendMsgToPlayer(playerExt, `Raczej ludzie: ${bots.join(', ')}`);
     else
-      this.sendMsgToPlayer(player, `Nie znalazłem Człowieka`);
+      this.sendMsgToPlayer(playerExt, `Nie znalazłem Człowieka`);
   }
 
-  async commandMarkBot(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'bot')) return;
+  async commandMarkBot(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bot')) return;
     let txt = '';
     for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, player);
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
       if (!cmdPlayer) continue;
-      if (cmdPlayer.id == player.id) continue;
+      if (cmdPlayer.id == playerExt.id) continue;
       cmdPlayer.bot = true;
       this.hb_room.game_state.addProbableBot(cmdPlayer.auth_id, cmdPlayer.conn_id).catch((e) => hb_log(`!! addProbableBot error ${e}`));
       txt += `${cmdPlayer.name} `;
     }
-    this.sendMsgToPlayer(player, `BOT dodałem ${txt}`);
+    this.sendMsgToPlayer(playerExt, `BOT dodałem ${txt}`);
   }
 
-  async commandUnmarkBot(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'bot')) return;
+  async commandUnmarkBot(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bot')) return;
     let txt = '';
     for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, player);
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
       if (!cmdPlayer) continue;
-      if (cmdPlayer.id == player.id) continue;
+      if (cmdPlayer.id == playerExt.id) continue;
       cmdPlayer.bot = false;
       this.hb_room.game_state.removeProbableBotByAuthId(cmdPlayer.auth_id).catch((e) => hb_log(`!! removeProbableBot error ${e}`));
       txt += `${cmdPlayer.name} `;
     }
-    this.sendMsgToPlayer(player, `BOT usunąłem ${txt}`);
+    this.sendMsgToPlayer(playerExt, `BOT usunąłem ${txt}`);
   }
 
-  async commandKickBots(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'bots')) return;
+  async commandKickBots(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
       this.hb_room.room.kickPlayer(bot.id, '', false);
     }
   }
 
-  async commandTKickBots(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'tkick_bots')) return;
+  async commandTKickBots(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'tkick_bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
       this.hb_room.room.kickPlayer(bot.id, '', false);
@@ -1724,8 +1697,8 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandNKickBots(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'nkick_bots')) return;
+  async commandNKickBots(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'nkick_bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
       this.hb_room.room.kickPlayer(bot.id, '', false);
@@ -1733,34 +1706,34 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandBanReload(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'ban_reload')) return;
+  async commandBanReload(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'ban_reload')) return;
     this.hb_room.players_game_state_manager.initAllGameState();
-    this.sendMsgToPlayer(player, `Przeładowałem network players state`);
+    this.sendMsgToPlayer(playerExt, `Przeładowałem network players state`);
   }
 
-  async commandPrintPlayerIp(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(player, 'ip')) return;
+  async commandPrintPlayerIp(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'ip')) return;
     let txt = '';
     for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, player);
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
       if (!cmdPlayer) continue;
-      if (cmdPlayer.id == player.id) continue;
+      if (cmdPlayer.id == playerExt.id) continue;
       txt += `${cmdPlayer.name}: ${cmdPlayer.real_ip} `;
     }
-    this.sendMsgToPlayer(player, `IP ${txt}`);
+    this.sendMsgToPlayer(playerExt, `IP ${txt}`);
   }
 
-  async keyboardLShiftDown(player: PlayerObject) {
-    this.hb_room.acceleration_tasks.startSprint(player.id);
+  async keyboardLShiftDown(playerExt: PlayerData) {
+    this.hb_room.acceleration_tasks.startSprint(playerExt.id);
   }
 
-  async keyboardLShiftUp(player: PlayerObject) {
-    this.hb_room.acceleration_tasks.stopSprint(player.id);
+  async keyboardLShiftUp(playerExt: PlayerData) {
+    this.hb_room.acceleration_tasks.stopSprint(playerExt.id);
   }
 
-  async keyboardADown(player: PlayerObject) {
-    this.hb_room.acceleration_tasks.slide(player.id);
+  async keyboardADown(playerExt: PlayerData) {
+    this.hb_room.acceleration_tasks.slide(playerExt.id);
   }
 }
 
@@ -1779,8 +1752,7 @@ class DiscordCommander extends BaseCommander {
     commander.commands['links_update'] = this.commandAllLinksUpdate;
   }
 
-  commandLinkDiscordAccount(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  commandLinkDiscordAccount(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level) {
       let dc = playerExt.discord_user;
       if (dc && dc.state) {
@@ -1788,24 +1760,22 @@ class DiscordCommander extends BaseCommander {
         return;
       }
       this.hb_room.discord_account.linkRequestedBy(playerExt).then(() => {
-        this.sendMsgToPlayer(player, `Token dla bota discordowego, napisz do niego na DM: !link ${playerExt.discord_token}`, Colors.BrightGreen);
+        this.sendMsgToPlayer(playerExt, `Token dla bota discordowego, napisz do niego na DM: !link ${playerExt.discord_token}`, Colors.BrightGreen);
       });
     }
   }
 
-  commandLinkUpdateDiscordAccount(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  commandLinkUpdateDiscordAccount(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level) {
       this.hb_room.discord_account.updateForPlayer(playerExt);
     }
   }
 
-  commandChatColor(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  commandChatColor(playerExt: PlayerData, cmds: string[]) {
     let dc = playerExt.discord_user
     if (dc && dc.state) {
       if (!cmds.length) {
-        this.sendMsgToPlayer(player, "Wpisz kolor w formacie DDEEFF albo 0xDDEEFF jako RGB, np stąd: https://haxball.ovh/kolor", Colors.BrightGreen);
+        this.sendMsgToPlayer(playerExt, "Wpisz kolor w formacie DDEEFF albo 0xDDEEFF jako RGB, np stąd: https://haxball.ovh/kolor", Colors.BrightGreen);
         return;
       }
       const hexColor = parseInt(cmds[0], 16);
@@ -1814,7 +1784,7 @@ class DiscordCommander extends BaseCommander {
       const blue = hexColor & 0xFF;
       const sum = red + green + blue;
       if (sum < 500) {
-        this.sendMsgToPlayer(player, `Nieprawidłowy kolor, suma(R+G+B) = ${sum} < 500`, Colors.DarkRed);
+        this.sendMsgToPlayer(playerExt, `Nieprawidłowy kolor, suma(R+G+B) = ${sum} < 500`, Colors.DarkRed);
         return;
       }
       dc.chat_color = hexColor;
@@ -1822,24 +1792,23 @@ class DiscordCommander extends BaseCommander {
     }
   }
 
-  commandAllLinksUpdate(player: PlayerObject, cmds: string[]) {
-    let playerExt = this.Pid(player.id);
+  commandAllLinksUpdate(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level) {
       let dc = playerExt.discord_user;
       if (dc && dc.state) {
-        this.hb_room.game_state.setDiscordUserNickname(dc.discord_id, player.name);
-        this.sendMsgToPlayer(playerExt, `Zmieniłeś nazwę na ${player.name} i od teraz ona będzie chroniona!`, Colors.BrightGreen);
+        this.hb_room.game_state.setDiscordUserNickname(dc.discord_id, playerExt.name);
+        this.sendMsgToPlayer(playerExt, `Zmieniłeś nazwę na ${playerExt.name} i od teraz ona będzie chroniona!`, Colors.BrightGreen);
       }
     }
   }
 
-  commandAllUsersUpdate(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  commandAllUsersUpdate(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.discord_account.updateDiscordUsers();
   }
 
-  commandLinkSetNickname(player: PlayerObject, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(player)) return;
+  commandLinkSetNickname(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.discord_account.updateDiscordLinks();
   }
 }

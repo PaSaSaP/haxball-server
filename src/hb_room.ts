@@ -673,6 +673,7 @@ export class HaxballRoom {
     this.gamePauseTimerReset();
     this.gameStopTimerReset();
     this.matchStatsTimerReset();
+    this.sendCommandsAfterGameStop();
     this.rejoice_maker.handleGameStop();
     this.gatekeeper.handleGameStop();
     for (let p of this.getPlayersExt()) {
@@ -722,6 +723,16 @@ export class HaxballRoom {
         this.addNewAdmin();
       }
     }, 1000);
+  }
+
+  sendCommandsAfterGameStop() {
+    for (let [playerId, player] of this.players_ext) {
+      let cmd = player.command_after_match_ends;
+      if (cmd.length) {
+        this.handlePlayerChatExt(player, cmd);
+        player.command_after_match_ends = '';
+      }
+    }
   }
 
   updatePlayerLeftState(matchPlayerStats: Map<number, PlayerMatchStatsData>, currentMatch: Match) {
@@ -904,8 +915,7 @@ export class HaxballRoom {
   }
 
   giveAdminToPlayerWithName(playerName: string) {
-    let cmdPlayer = this.getPlayerObjectByName(playerName, null);
-    if (!cmdPlayer) return;
+    let cmdPlayer = this.getPlayerDataByName(playerName, null);
     if (cmdPlayer != null) {
       hb_log(`# Giving admin by name to ${playerName}`);
       this.giveAdminTo(cmdPlayer);
@@ -936,7 +946,7 @@ export class HaxballRoom {
     if (this.checkForDiscordAccountNameValidity(playerExt)) return;
     if (this.players_game_state_manager.checkIfPlayerIsNotTimeKicked(player)) return;
     if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
-    if (this.checkIfDotPlayerIsHost(player)) return;
+    if (this.checkIfDotPlayerIsHost(playerExt)) return;
     if (this.checkForPlayerDuplicate(player)) return;
     try {
       let result = await this.game_state.getTrustAndAdminLevel(playerExt);
@@ -954,7 +964,7 @@ export class HaxballRoom {
         }
       }
       if (playerExt.auth_id && playerExt.trust_level == 0) {
-        this.captcha.askCaptcha(player);
+        this.captcha.askCaptcha(playerExt);
       }
       this.player_ids_by_auth.set(playerExt.auth_id, playerExt.id);
       this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
@@ -975,7 +985,7 @@ export class HaxballRoom {
       this.rejoice_maker.handlePlayerJoin(playerExt);
       this.welcome_message.sendWelcomeMessage(playerExt);
       const initialMute = playerExt.trust_level < 2;
-      this.anti_spam.addPlayer(player, initialMute);
+      this.anti_spam.addPlayer(playerExt, initialMute);
       if (this.anti_spam.enabled && initialMute) {
         this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
       }
@@ -1113,7 +1123,7 @@ export class HaxballRoom {
     return false;
   }
 
-  checkIfDotPlayerIsHost(player: PlayerObject) {
+  checkIfDotPlayerIsHost(player: PlayerData) {
     if (player.name.trim() === '.' && !this.isPlayerHost(player)) {
       this.room.kickPlayer(player.id, "Kropka Nienawiści!", false);
       return true;
@@ -1518,43 +1528,47 @@ export class HaxballRoom {
   }
 
   handlePlayerChat(player: PlayerObject, message: string): boolean {
+    let playerExt = this.P(player);
+    return this.handlePlayerChatExt(playerExt, message);
+  }
+
+  handlePlayerChatExt(playerExt: PlayerData, message: string): boolean {
     message = message.trim();
     if (!message) return false; // not interested in empty messages
-    const userLogMessage = (for_discord: boolean) => { this.game_state.logMessage(player.name, "chat", message, for_discord); return for_discord; }
+    const userLogMessage = (for_discord: boolean) => { this.game_state.logMessage(playerExt.name, "chat", message, for_discord); return for_discord; }
     if (!message.startsWith('!kb_')) { // to not spam
-      hb_log_to_console(player, message)
+      hb_log_to_console(playerExt, message)
     }
-    let playerExt = this.P(player);
     playerExt.activity.updateChat();
     // at first check captcha
-    if (this.captcha.hasPendingCaptcha(player)) {
-      this.captcha.checkAnswer(player, message);
+    if (this.captcha.hasPendingCaptcha(playerExt)) {
+      this.captcha.checkAnswer(playerExt, message);
       return userLogMessage(false); // wait till captcha passed at first
     }
     // then handle commands
     if (message[0] == '!') {
       // Handle last command
       if (message == "!!") {
-        let last_command_str = this.last_command.get(player.id);
+        let last_command_str = this.last_command.get(playerExt.id);
         if (last_command_str == null) {
-          this.sendMsgToPlayer(player, "Brak ostatniej komendy");
+          this.sendMsgToPlayer(playerExt, "Brak ostatniej komendy");
           return false;
         }
         message = last_command_str;
       }
-      this.last_command.set(player.id, message);
+      this.last_command.set(playerExt.id, message);
 
       message = message.substring(1);
       let message_split = message.split(" ");
       let command = message_split[0];
-      this.executeCommand(command, player, message_split.slice(1).filter(e => e));
+      this.executeCommand(command, playerExt, message_split.slice(1).filter(e => e));
       return false; // Returning false will prevent the message from being broadcasted
     }
     // then check for wide characters and if so then block any other action
     if (this.containsWideCharacters(message)) {
-      if (!this.isPlayerMuted(player)) {
-        this.addPlayerMuted(player);
-        this.sendMsgToPlayer(player, "Prosimy nie korzystać z dziwnych znaczków! Zostałeś zmutowany!", Colors.Warning);
+      if (!this.isPlayerMuted(playerExt)) {
+        this.addPlayerMuted(playerExt);
+        this.sendMsgToPlayer(playerExt, "Prosimy nie korzystać z dziwnych znaczków! Zostałeś zmutowany!", Colors.Warning);
       }
       return userLogMessage(false);
     }
@@ -1567,20 +1581,20 @@ export class HaxballRoom {
       return userLogMessage(false); // only trusted can write
     }
     // then if anti spam is enabled - check there
-    let anti_spam_muted = !this.anti_spam.canSendMessage(player, message);
-    if (this.checkPossibleSpamBot(player)) {
+    let anti_spam_muted = !this.anti_spam.canSendMessage(playerExt, message);
+    if (this.checkPossibleSpamBot(playerExt)) {
       return userLogMessage(false);
     }
     // OK, we can send message if is not muted nor filtered by anti spam
-    if (!this.isPlayerMuted(player) && !anti_spam_muted) {
+    if (!this.isPlayerMuted(playerExt) && !anti_spam_muted) {
       // there is team message
       if (message.startsWith("t ") || message.startsWith("T ")) {
-        this.sendMessageToSameTeam(player, message.slice(2));
+        this.sendMessageToSameTeam(playerExt, message.slice(2));
         return userLogMessage(false);
       }
       userLogMessage(true);
       if (playerExt.discord_user && playerExt.discord_user.state) {
-        this.sendMsgToAll(`${playerExt.flag}${Emoji.UserVerified}${player.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
+        this.sendMsgToAll(`${playerExt.flag}${Emoji.UserVerified}${playerExt.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
         return false;
       }
       if (playerExt.trust_level < 3) {
@@ -1591,7 +1605,7 @@ export class HaxballRoom {
           color = Colors.TrustTwo;
           bell = 1;
         }
-        this.sendMsgToAll(`${playerExt.flag}${player.name}: ${message}`, color, undefined, bell);
+        this.sendMsgToAll(`${playerExt.flag}${playerExt.name}: ${message}`, color, undefined, bell);
         return false;
       };
       // show as normal for trusted players
@@ -1601,7 +1615,7 @@ export class HaxballRoom {
     return false;
   }
 
-  async executeCommand(command: string, player: PlayerObject, args: string[] = []) {
+  async executeCommand(command: string, player: PlayerData, args: string[] = []) {
     const cmd = this.commander.commands[command];
 
     if (cmd) {
@@ -1611,7 +1625,7 @@ export class HaxballRoom {
     }
   }
 
-  async sendMessageToSameTeam(player: PlayerObject, message: string) {
+  async sendMessageToSameTeam(player: PlayerData, message: string) {
     let text = `T ${player.name}: ${message}`;
     let color = player.team == 0 ? Colors.TeamChatSpec : player.team == 1 ? Colors.TeamChatRed : Colors.TeamChatBlue;
     this.getPlayers().filter(e => e.team == player.team).forEach(e => {
@@ -1619,7 +1633,7 @@ export class HaxballRoom {
     });
   }
 
-  checkPossibleSpamBot(player: PlayerObject) {
+  checkPossibleSpamBot(player: PlayerData) {
     if (this.anti_spam.isSpammingSameMessage(player)) {
       if (this.auto_mode) this.players_game_state_manager.setPlayerTimeMuted(this.Pid(player.id), 5 * 60);
       else this.room.kickPlayer(player.id, "Nastepnym razem cie pokonam Hautameki", false);
@@ -1778,7 +1792,7 @@ export class HaxballRoom {
     });
   }
 
-  async kickAllTeamExceptTrusted(player: PlayerObject, team_id: number) {
+  async kickAllTeamExceptTrusted(player: PlayerData, team_id: number) {
     for (let p of this.getPlayersExt()) {
       if (player.id != p.id && p.team == team_id && !p.trust_level) this.room.kickPlayer(p.id, "", false);
     }
@@ -1845,10 +1859,10 @@ export class HaxballRoom {
     return result;
   }
 
-  getPlayerDataByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false, allPlayers = false): PlayerData | null {
+  getPlayerDataByName(playerName: string | string[], byPlayer: PlayerData | null, byPlayerIfNameNotSpecified = false, allPlayers = false): PlayerData | null {
     // TODO for now it checks all players, added parameter allPlayers, not yet impelmented
     if (!playerName.length) {
-      if (byPlayerIfNameNotSpecified && byPlayer) return this.Pid(byPlayer.id); // command refers to caller player
+      if (byPlayerIfNameNotSpecified && byPlayer) return byPlayer; // command refers to caller player
       return null; // no name specified, then cannot find player
     }
 
@@ -1873,31 +1887,6 @@ export class HaxballRoom {
     return cmdPlayer;
   }
 
-  getPlayerObjectByName(playerName: string | string[], byPlayer: PlayerObject | null, byPlayerIfNameNotSpecified = false): PlayerObject | null {
-    if (!playerName.length) {
-      if (byPlayerIfNameNotSpecified) return byPlayer; // command refers to caller player
-      return null; // no name specified, then cannot find player
-    }
-
-    let name = Array.isArray(playerName) ? playerName.join(" ") : playerName;
-    if (name.startsWith('#')) {
-      let cmdPlayerId = Number.parseInt(name.slice(1));
-      if (!isNaN(cmdPlayerId)) {
-        let cmdPlayer = this.getPlayers().find(e => e.id === cmdPlayerId);
-        if (cmdPlayer) return cmdPlayer;
-      }
-    }
-    if (name.startsWith('@')) name = name.slice(1);
-    let nameNormalized = normalizeNameString(name);
-    let cmdPlayer = this.getPlayers().find(e => this.Pid(e.id).name_normalized === nameNormalized) || null;
-    if (!cmdPlayer) {
-      if (byPlayer)
-        this.sendMsgToPlayer(byPlayer, `Nie mogę znaleźć gracza o nicku ${name}`, Colors.PlayerNotFound, 'bold');
-      return null;
-    }
-    return cmdPlayer;
-  }
-
   isGameInProgress() {
     return this.room.getScores() != null;
   }
@@ -1913,7 +1902,7 @@ export class HaxballRoom {
     return wideCharacterRegex.test(text);
   }
 
-  isPlayerHost(player: PlayerObject) {
+  isPlayerHost(player: PlayerData) {
     return this.isPlayerIdHost(player.id);
   }
 
@@ -1924,7 +1913,7 @@ export class HaxballRoom {
     return false;
   }
 
-  isGodPlayer(player: PlayerObject) {
+  isGodPlayer(player: PlayerData) {
     return player.id === this.god_player.id;
   }
 
