@@ -184,25 +184,7 @@ export class HaxballRoom {
     this.pinger = new Pinger(this.getSselector(), () => [this.players_ext.size, this.getAfkCount()]);
     this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
       roomConfig.selector, roomConfig.subselector);
-    const OnDelayJoinMinPlayers = 5;
-    const onDelayJoinCallback = (player: PlayerData) => {
-      if (player.trust_level) this.auto_bot.handlePlayerJoin(player);
-      else if (this.players_ext.size < OnDelayJoinMinPlayers) {
-        this.delay_joiner.addPlayerOnGameStop(player);
-        this.auto_bot.handlePlayerJoin(player);
-      } else this.room.kickPlayer(player.id, getBotKickMessage(), false);
-    };
-    const onGameStopCallback = (player: PlayerData) => {
-      if (!player.trust_level) this.room.kickPlayer(player.id, getBotKickMessage(), false);
-    }
-    const shouldBeDelayedInSecondsCallback = (player: PlayerData) => {
-      if (this.players_ext.size < OnDelayJoinMinPlayers) { // no players, allow to play all bots and players :D
-        if (!player.trust_level) return 10; // 10 seconds delay for non trusted
-        return 5; // 5 seconds delay for trusted
-      } else if (!player.trust_level) return 60; // 60 seconds delay for non trusted when more players
-      else return 5; // 5 seconds delay for trusted
-    };
-    this.delay_joiner = new DelayJoiner(onDelayJoinCallback, onGameStopCallback, shouldBeDelayedInSecondsCallback, this.auto_mode);
+    this.delay_joiner = this.createDelayJoincer();
     this.gatekeeper = new PlayerGatekeeper(this);
     this.pl_logger = new PlayerJoinLogger(this);
     this.discord_account = new DiscordAccountManager(this);
@@ -332,6 +314,33 @@ export class HaxballRoom {
     p.trust_level = 40;
     this.players_ext_all.set(p.id, p);
     return ppp;
+  }
+
+  private createDelayJoincer() {
+    const OnDelayJoinMinPlayers = 5;
+    const onDelayJoinCallback = (player: PlayerData) => {
+      if (player.trust_level) this.auto_bot.handlePlayerJoin(player);
+      else if (this.players_ext.size <= OnDelayJoinMinPlayers) {
+        this.delay_joiner.addPlayerOnGameStop(player);
+        this.auto_bot.handlePlayerJoin(player);
+      } else this.room.kickPlayer(player.id, getBotKickMessage(), false);
+    };
+    const onGameStopCallback = (player: PlayerData) => {
+      if (!player.trust_level) this.room.kickPlayer(player.id, getBotKickMessage(), false);
+    }
+    const shouldBeDelayedInSecondsCallback = (player: PlayerData) => {
+      if (this.players_ext.size <= OnDelayJoinMinPlayers) { // no players, allow to play all bots and players :D
+        if (!player.trust_level) return 10; // 10 seconds delay for non trusted
+        return 5; // 5 seconds delay for trusted
+      } else if (!player.trust_level) return 60; // 60 seconds delay for non trusted when more players
+      else return 5; // 5 seconds delay for trusted
+    };
+    const shouldKickOnGameStopCallback = () => {
+      return this.players_ext.size > OnDelayJoinMinPlayers;
+    }
+    let delay_joiner = new DelayJoiner(onDelayJoinCallback, onGameStopCallback, shouldBeDelayedInSecondsCallback,
+      shouldKickOnGameStopCallback, this.auto_mode);
+    return delay_joiner;
   }
 
   private getGodPlayer() {

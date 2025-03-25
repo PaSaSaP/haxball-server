@@ -309,6 +309,7 @@ class Commander extends BaseCommander {
       boti: this.commandPrintShortInfo,
       botradius: this.commandBotSetRadius,
       botstop: this.commandSwitchBotStoppingFlag,
+      ip: this.commandPrintPlayerIp,
 
       god: this.commandGodTest,
 
@@ -1736,6 +1737,18 @@ class Commander extends BaseCommander {
     if (this.warnIfPlayerIsNotHost(player, 'ban_reload')) return;
     this.hb_room.players_game_state_manager.initAllGameState();
     this.sendMsgToPlayer(player, `Przeładowałem network players state`);
+  }
+
+  async commandPrintPlayerIp(player: PlayerObject, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(player, 'ip')) return;
+    let txt = '';
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, player);
+      if (!cmdPlayer) continue;
+      if (cmdPlayer.id == player.id) continue;
+      txt += `${cmdPlayer.name}: ${cmdPlayer.real_ip} `;
+    }
+    this.sendMsgToPlayer(player, `IP ${txt}`);
   }
 
   async keyboardLShiftDown(player: PlayerObject) {

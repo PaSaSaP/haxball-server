@@ -5,6 +5,7 @@ export class DelayJoiner {
   onDelayJoin: (player: PlayerData) => void;
   onGameStop: (player: PlayerData) => void;
   shouldBeDelayedInSeconds: (player: PlayerData) => number;
+  shouldKickOnGameStop: () => boolean;
   enabled: boolean;
   kickZeroTrust: boolean;
   playersOnGameStop: PlayerData[];
@@ -12,6 +13,7 @@ export class DelayJoiner {
   constructor(onDelayJoin: (player: PlayerData) => void,
     onGameStop: (player: PlayerData) => void,
     shouldBeDelayed: (player: PlayerData) => number,
+    shouldKickOnGameStop: () => boolean,
     enabled: boolean) {
     this.playerTimers = new Map();
     this.enabled = enabled;
@@ -20,6 +22,7 @@ export class DelayJoiner {
     this.onDelayJoin = onDelayJoin;
     this.onGameStop = onGameStop;
     this.shouldBeDelayedInSeconds = shouldBeDelayed;
+    this.shouldKickOnGameStop = shouldKickOnGameStop;
   }
 
   addPlayerOnGameStop(player: PlayerData) {
@@ -44,6 +47,7 @@ export class DelayJoiner {
   }
 
   handleGameStop() {
+    if (!this.shouldKickOnGameStop()) return;
     this.playersOnGameStop.forEach(player => {
       this.onGameStop(player);
     })
