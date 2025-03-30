@@ -1,7 +1,7 @@
 // https://pastebin.com/f4PSNz7C
 // https://pastebin.com/2nHXPbvS
 
-import { tokenDatabase, ServerRow } from './token_database';
+import { setupTokenDatabase, tokenDatabase, ServerRow } from './db/token_database';
 import * as config from './config';
 import ChatLogger from './chat_logger';
 import { sleep, normalizeNameString } from './utils';
@@ -291,6 +291,7 @@ export class HaxballRoom {
       }).catch((error) => { hb_log(`!! getPaymentLink error: ${error}`) });
     }, this.getSselector());
     await this.discord_account.setupDiscordAccounts();
+    await setupTokenDatabase();
     hb_log("#I# InitData() done");
   }
 
@@ -400,7 +401,7 @@ export class HaxballRoom {
       connectable: true,
       active: true,
     }
-    tokenDatabase.saveServer(serverData);
+    tokenDatabase!.saveServer(serverData);
   }
 
   P(player: PlayerObject): PlayerData {

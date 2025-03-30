@@ -1,14 +1,15 @@
 import express, { Request, Response } from "express";
 import { createCanvas } from 'canvas';
-import { tokenDatabase } from '../../src/token_database';
+import { tokenDatabase, setupTokenDatabase } from '../../src/db/token_database';
 
 const router = express.Router();
 
-router.get('/', (req: Request, res: any) => {
+router.get('/', async (req: Request, res: any) => {
   const { token } = req.query;
   if (!token) return res.send("❌ Nieprawidłowy token!");
 
-  tokenDatabase.checkToken(token as string).then((row) => {
+  await setupTokenDatabase();
+  tokenDatabase!.checkToken(token as string).then((row) => {
     if (!row) return res.send("❌ To nie jest oryginalny serwer!");
 
     const currentTime = Date.now();

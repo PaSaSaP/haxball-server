@@ -51,5 +51,7 @@ HaxballJS.then((HBInit) => {
   console.error(`Got error at MAIN: ${e}`);
 });
 
-import { tokenDatabase } from './token_database';
-tokenDatabase.updateServerStatus(`${roomConfig.selector}_${roomConfig.subselector}`, false);
+import { setupTokenDatabase, tokenDatabase } from './db/token_database';
+setupTokenDatabase().then(() => {
+  tokenDatabase!.updateServerStatus(`${roomConfig.selector}_${roomConfig.subselector}`, false);
+});

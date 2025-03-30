@@ -9,7 +9,7 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 import * as fs from 'fs/promises';  // Użycie modułu z wersjami promisywnymi
 const express = require('express');
-import { tokenDatabase } from '../src/token_database';
+import { tokenDatabase, setupTokenDatabase } from '../src/db/token_database';
 import * as secrets from "../src/secrets";
 import { getTimestampHMS } from "../src/utils";
 
@@ -50,6 +50,10 @@ class ServerMonitor {
     setInterval(() => this.scaleServers(), this.checkInterval);
   }
 
+  async setup() {
+    await setupTokenDatabase();
+  }
+
   private async sendPrivateMessage(message: string) {
     try {
       const user = await this.client.users.fetch(this.userId);
@@ -86,18 +90,18 @@ class ServerMonitor {
 
   private handleServerTimeout(selector: string) {
     this.sendPrivateMessage(`Serwer ${selector} nie wysłał zapytania przez 30 sekund!`);
-    tokenDatabase.updateServerStatus(selector, false);
+    tokenDatabase!.updateServerStatus(selector, false);
   }
 
   private updateServerStatusForScaledOut() {
     const now = Date.now();
     if (now - this.lastServerActiveStatusUpdate < 60_000) return;
     this.lastServerActiveStatusUpdate = now;
-    tokenDatabase.getActiveServers().then(async (servers) => {
+    tokenDatabase!.getActiveServers().then(async (servers) => {
       for (let server of servers) {
         if (server.active && !(await this.shouldBeServerEnabled(server.selector))) {
           MLog(`should not be active ${server.selector}, so disable it in token db`);
-          tokenDatabase.updateServerStatus(server.selector, false);
+          tokenDatabase!.updateServerStatus(server.selector, false);
         }
       }
     }).catch((e) => MLog(`getActiveServers error ${e}`));
@@ -323,4 +327,5 @@ function MLog(txt: string) {
 }
 
 const monitor = new ServerMonitor();
+monitor.setup();
 monitor.startExpressServer();

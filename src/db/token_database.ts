@@ -1,7 +1,6 @@
 import sqlite3 from 'sqlite3';
-import { dbDir } from './config';
-
-const dbName = dbDir + '/verification.db';
+import { dbDir } from '../config';
+import { BaseDB } from './base_db';
 
 export interface ServerRow {
   selector: string;
@@ -15,38 +14,33 @@ export interface ServerRow {
 }
 
 // ServerData
-export class TokenDatabase {
-  private db: sqlite3.Database;
+export class TokenDatabase extends BaseDB {
+  constructor(db: sqlite3.Database) {
+    super(db);
+  }
 
-  constructor() {
-    this.db = new sqlite3.Database(dbName, (err) => {
-      if (err) {
-        console.error('Błąd połączenia z bazą danych:', err.message);
-      } else {
-        console.log('Połączono z bazą danych');
-        this.db.run(
-          `CREATE TABLE IF NOT EXISTS tokens (
-            token TEXT PRIMARY KEY,
-            player_name TEXT,
-            timestamp INTEGER
-          )`
-        );
-      }
-      // Tworzenie tabeli dla serwerów
-      this.db.run(
-        `CREATE TABLE IF NOT EXISTS servers (
-          selector TEXT PRIMARY KEY,
-          token TEXT,
-          link TEXT,
-          room_name TEXT,
-          player_num INTEGER,
-          player_max INTEGER,
-          connectable BOOLEAN,
-          active BOOLEAN,
-          FOREIGN KEY (token) REFERENCES tokens (token) ON DELETE CASCADE
-        )`
-      );
-    });
+  async setupDatabase(): Promise<void> {
+    await this.setupWalAndSync();
+    const createTokensTableQuery = `
+      CREATE TABLE IF NOT EXISTS tokens (
+        token TEXT PRIMARY KEY,
+        player_name TEXT,
+        timestamp INTEGER
+      )`;
+    const createServersTableQuery = `
+      CREATE TABLE IF NOT EXISTS servers (
+        selector TEXT PRIMARY KEY,
+        token TEXT,
+        link TEXT,
+        room_name TEXT,
+        player_num INTEGER,
+        player_max INTEGER,
+        connectable BOOLEAN,
+        active BOOLEAN,
+        FOREIGN KEY (token) REFERENCES tokens (token) ON DELETE CASCADE
+      )`;
+      await this.promiseQuery(createTokensTableQuery, 'tokens');
+      await this.promiseQuery(createServersTableQuery, 'servers');
   }
 
   saveToken(player_name: string, token: string): void {
@@ -159,5 +153,24 @@ export class TokenDatabase {
   }
 }
 
-const tokenDatabase = new TokenDatabase();
-export { tokenDatabase };
+async function setupTokenDatabase(): Promise<void> {
+  if (tokenDatabase) return;
+  const tokenDatabaseDb = await new Promise<sqlite3.Database>((resolve, reject) => {
+    const db = new sqlite3.Database(tokenDatabaseDbFile, (err) => {
+      if (err) {
+        console.error('Błąd połączenia z bazą danych:', err.message);
+        reject(err);
+      } else {
+        console.log('Połączono z bazą danych');
+        resolve(db);
+      }
+    });
+  });
+
+  tokenDatabase = new TokenDatabase(tokenDatabaseDb);
+  await tokenDatabase.setupDatabase();
+}
+
+const tokenDatabaseDbFile = dbDir + '/verification.db';
+let tokenDatabase: TokenDatabase | null = null;
+export { tokenDatabase, setupTokenDatabase };

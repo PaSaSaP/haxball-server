@@ -1,15 +1,16 @@
 import express, { Request, Response } from 'express';
-import { tokenDatabase, ServerRow } from '../src/token_database';
+import { tokenDatabase, setupTokenDatabase, ServerRow } from '../src/db/token_database';
 
 const router = express.Router();
 
 router.get('/', async (req: Request, res: Response) => {
-    try {
-        // Pobierz aktywne serwery
-        const activeServers = await tokenDatabase.getActiveServers();
+  try {
+    // Pobierz aktywne serwery
+    await setupTokenDatabase();
+    const activeServers = await tokenDatabase!.getActiveServers();
 
-        // Buduj HTML dla wyświetlenia
-        let htmlContent = `
+    // Buduj HTML dla wyświetlenia
+    let htmlContent = `
         <html>
           <head>
             <title>Active Servers</title>
@@ -50,34 +51,34 @@ router.get('/', async (req: Request, res: Response) => {
             <ul class="server-list">
       `;
 
-        // Przejdź po serwerach i generuj HTML dla każdego z nich
-        activeServers.forEach((server) => {
-            // Zabezpieczenie przed XSS - sprawdź i bezpiecznie wstaw linki i tokeny
-            const sanitizedLink = encodeURI(server.link);
-            const sanitizedRoomName = server.room_name.replace(/[^\w\s]/gi, ''); // Proste usunięcie niebezpiecznych znaków
-            if (server.player_num > server.player_max) server.player_num = server.player_max;
+    // Przejdź po serwerach i generuj HTML dla każdego z nich
+    activeServers.forEach((server) => {
+      // Zabezpieczenie przed XSS - sprawdź i bezpiecznie wstaw linki i tokeny
+      const sanitizedLink = encodeURI(server.link);
+      const sanitizedRoomName = server.room_name.replace(/[^\w\s]/gi, ''); // Proste usunięcie niebezpiecznych znaków
+      if (server.player_num > server.player_max) server.player_num = server.player_max;
 
-            htmlContent += `
+      htmlContent += `
           <li class="server-item">
             <a href="${sanitizedLink}" target="_blank">${sanitizedRoomName}</a>
             <div class="player-count">${server.player_num} / ${server.player_max} players</div>
           </li>
         `;
-        });
+    });
 
-        htmlContent += `
+    htmlContent += `
             </ul>
           </body>
         </html>
       `;
 
-        // Zwróć stronę z listą serwerów
-        res.send(htmlContent);
+    // Zwróć stronę z listą serwerów
+    res.send(htmlContent);
 
-    } catch (err) {
-        console.error('Błąd podczas pobierania danych serwerów:', err);
-        res.status(500).send('Wystąpił błąd');
-    }
+  } catch (err) {
+    console.error('Błąd podczas pobierania danych serwerów:', err);
+    res.status(500).send('Wystąpił błąd');
+  }
 });
 
 export default router;

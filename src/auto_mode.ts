@@ -5,7 +5,6 @@ import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
 import { AutoVoteHandler } from "./vote_kick";
 import { randomInt } from "crypto";
-import { timeStamp } from 'console';
 
 
 enum MatchState {
@@ -169,11 +168,6 @@ export class AutoBot {
 
   getCurrentLimit() {
     return this.currentLimit;
-  }
-
-  private static LobbyStates = [MatchState.lobby, MatchState.afterVictory];
-  isLobbyTimeV1() {
-    return this.currentMatch.isEnded() || AutoBot.LobbyStates.includes(this.matchState); // add players only while game
   }
 
   isLobbyTime(): boolean {
