@@ -3,7 +3,7 @@ import { dbDir } from './config';
 
 const dbName = dbDir + '/verification.db';
 
-interface ServerRow {
+export interface ServerRow {
   selector: string;
   token: string;
   link: string;
@@ -14,33 +14,7 @@ interface ServerRow {
   active: boolean;
 }
 
-export class ServerData implements ServerRow {
-  selector: string;
-  token: string;
-  link: string;
-  room_name: string;
-  player_num: number;
-  player_max: number;
-  connectable: boolean;
-  active: boolean;
-
-  constructor(selector: string, token: string, link: string, room_name: string, player_num: number, player_max: number, connectable: boolean, active: boolean) {
-    this.selector = selector;
-    this.token = token;
-    this.link = link;
-    this.room_name = room_name;
-    this.player_num = player_num;
-    this.player_max = player_max;
-    this.connectable = connectable;
-    this.active = active;
-  }
-
-  // Metoda do konwersji do formatu dla bazy danych
-  toDbFormat(): [string, string, string, string, number, number, boolean, boolean] {
-    return [this.selector, this.token, this.link, this.room_name, this.player_num, this.player_max, this.connectable, this.active];
-  }
-}
-
+// ServerData
 export class TokenDatabase {
   private db: sqlite3.Database;
 
@@ -99,7 +73,7 @@ export class TokenDatabase {
   }
 
   // Zapis serwera
-  saveServer(serverData: ServerData): void {
+  saveServer(serverData: ServerRow): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO servers (selector, token, link, room_name, player_num, player_max, connectable, active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -114,34 +88,20 @@ export class TokenDatabase {
   }
 
   // Odczyt serwera po selector, zwraca obiekt typu ServerData
-  getServerBySelector(selector: string): Promise<ServerData | null> {
+  getServerBySelector(selector: string): Promise<ServerRow | null> {
     return new Promise((resolve, reject) => {
-      this.db.get<ServerRow>('SELECT * FROM servers WHERE selector = ?', [selector], (err, row) => {
+      this.db.get<ServerRow>('SELECT * FROM servers WHERE selector = ?', [selector], (err, row: ServerRow|null) => {
         if (err) {
           console.error('Błąd podczas odczytu serwera po selector:', err.message);
           reject(err);
         }
-        if (row) {
-          const serverData = new ServerData(
-            row.selector,
-            row.token,
-            row.link,
-            row.room_name,
-            row.player_num,
-            row.player_max,
-            row.connectable,
-            row.active
-          );
-          resolve(serverData); // Zwraca obiekt typu ServerData
-        } else {
-          resolve(null); // Jeśli serwer nie został znaleziony, zwraca null
-        }
+        resolve(row ? row : null);
       });
     });
   }
 
   // Odczyt wszystkich aktywnych serwerów, zwraca tablicę obiektów typu ServerData
-  getActiveServers(): Promise<ServerData[]> {
+  getActiveServers(): Promise<ServerRow[]> {
     return new Promise((resolve, reject) => {
       this.db.all<ServerRow>('SELECT * FROM servers WHERE active = TRUE', [], (err, rows) => {
         if (err) {
@@ -149,16 +109,16 @@ export class TokenDatabase {
           reject(err);
         }
         const activeServers = rows.map((row) => {
-          return new ServerData(
-            row.selector,
-            row.token,
-            row.link,
-            row.room_name,
-            row.player_num,
-            row.player_max,
-            row.connectable,
-            row.active
-          );
+          return {
+            selector: row.selector,
+            token: row.token,
+            link: row.link,
+            room_name: row.room_name,
+            player_num: row.player_num,
+            player_max: row.player_max,
+            connectable: row.connectable,
+            active: row.active,
+          };
         });
         resolve(activeServers); // Zwraca tablicę obiektów typu ServerData
       });

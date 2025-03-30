@@ -1,9 +1,12 @@
 
+export type RoomConfigSelectorType = 'freestyle' | '1vs1' | '2vs2' | '3vs3' | '4vs4';
+
 type LimitsEntry = {
   score: number,
   time: number, // [minutes]
 }
 interface RoomLimits {
+  'freestyle': LimitsEntry;
   '1vs1': LimitsEntry;
   '2vs2': LimitsEntry;
   '3vs3': LimitsEntry;
@@ -11,13 +14,15 @@ interface RoomLimits {
 };
 
 const roomLimits: RoomLimits = {
+  'freestyle': {score: 3, time: 3},
   '1vs1': {score: 3, time: 1},
   '2vs2': {score: 3, time: 2},
   '3vs3': {score: 3, time: 3},
-  '4vs4': {score: 4, time: 4},
+  '4vs4': {score: 3, time: 4},
 }
 
 export interface OtherDbFiles {
+  'freestyle': string;
   '1vs1': string;
   '2vs2': string;
   '3vs3': string;
@@ -39,7 +44,7 @@ export interface RoomServerConfig {
   noPlayer: boolean;
   autoModeEnabled: boolean;
   token: string;
-  selector: '1vs1'|'3vs3'|'4vs4';
+  selector: RoomConfigSelectorType;
   subselector: string;
 }
 
@@ -53,6 +58,7 @@ export const localBackendService = 'http://www-server:3000';
 export const StripeKey = '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';
 
 export const AllOtherDbFiles: OtherDbFiles = {
+    'freestyle':  `${dbDir}/other_futsal_freestyle.db`,
     '1vs1':  `${dbDir}/other_futsal_1vs1.db`,
     '2vs2':  `${dbDir}/other_futsal_2vs2.db`,
     '3vs3':  `${dbDir}/other_futsal_3vs3.db`,
@@ -62,16 +68,16 @@ export const AllOtherDbFiles: OtherDbFiles = {
 const futsal_4vs4: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFiles: {
+    'freestyle': ``,
     '1vs1':  ``,
     '2vs2':  ``,
-    '3vs3':  ``,
-    // '3vs3':  `${dbDir}/other_futsal_3vs3.db`,
+    '3vs3':  AllOtherDbFiles['3vs3'],
     '4vs4':  AllOtherDbFiles['4vs4'],
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_4vs4.mpk",
   roomName: "🍌 FUTSAL 4vs4 XxX Banana League!",
-  isPublic: false,
+  isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   limits: roomLimits,
   playersInTeamLimit: 4,
@@ -87,6 +93,7 @@ const futsal_4vs4: RoomServerConfig = {
 const futsal_3vs3: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFiles: {
+    'freestyle': ``,
     '1vs1':  ``,
     '2vs2':  ``,
     '3vs3':  AllOtherDbFiles['3vs3'],
@@ -111,6 +118,7 @@ const futsal_3vs3: RoomServerConfig = {
 const futsal_1vs1: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFiles: {
+    'freestyle': ``,
     '1vs1':  AllOtherDbFiles["1vs1"],
     '2vs2':  ``,
     '3vs3':  ``,
@@ -118,6 +126,31 @@ const futsal_1vs1: RoomServerConfig = {
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_1vs1.mpk",
+  roomName: "🍌 FUTSAL 1vs1 XxX",
+  isPublic: true,
+  geo: { code: "it", lat: 40.0, lon: 14.0 },
+  limits: roomLimits,
+  playersInTeamLimit: 1,
+  maxPlayers: 11,
+  maxPlayersOverride: 9,
+  noPlayer: true,
+  autoModeEnabled: false,
+  token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
+  selector: '1vs1',
+  subselector: '1',
+};
+
+const futsal_freestyle: RoomServerConfig = {
+  playersDbFile: mainDbFile,
+  otherDbFiles: {
+    'freestyle':  AllOtherDbFiles["freestyle"],
+    '2vs2':  ``,
+    '1vs1':  ``,
+    '3vs3':  ``,
+    '4vs4':  ``,
+  },
+  vipDbFile: vipDbFile,
+  chatLogDbFile: "./haxball_player_chat_freestyle.mpk",
   roomName: "🍌 FUTSAL FreeStYLe XxX",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
@@ -128,19 +161,20 @@ const futsal_1vs1: RoomServerConfig = {
   noPlayer: true,
   autoModeEnabled: false,
   token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
-  selector: '1vs1',
+  selector: 'freestyle',
   subselector: '1',
 };
 
-function getChatLogDbFile(selector: string, subselector: string) {
+function getChatLogDbFile(selector: RoomConfigSelectorType, subselector: string) {
   return `./haxball_player_chat_${selector}_${subselector}.mpk`;
 }
 
-export const getRoomConfig = (selector: string, subselector: string = '1'): RoomServerConfig => {
+export const getRoomConfig = (selector: RoomConfigSelectorType, subselector: string = '1'): RoomServerConfig => {
   let config: RoomServerConfig;
   if (selector === '4vs4') config = futsal_4vs4;
   else if (selector === '3vs3') config = futsal_3vs3;
   else if (selector === '1vs1') config = futsal_1vs1;
+  else if (selector === 'freestyle') config = futsal_freestyle;
   else throw new Error(`There is no config with name ${selector}`);
   config.chatLogDbFile = getChatLogDbFile(selector, subselector);
   config.subselector = subselector;

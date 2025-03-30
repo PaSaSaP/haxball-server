@@ -18,12 +18,18 @@ HOUR=$(date +"%H")
 BACKUP_DIR="${DAY_DIR}/${TIMESTAMP}"
 mkdir -p "$BACKUP_DIR"
 
+for sselector in "4vs4_1" "3vs3_1" "1vs1_1"; do
+  "$SCRIPT_DIR/send_god_message.sh" "$sselector" '!anno Za 5 sekund Lagi, trzymajcie się!'
+done
+sleep 5
+
 # Wykonanie backupu dla każdej bazy
 for db_file in "$SOURCE_DIR"/*.db; do
   if [ -f "$db_file" ]; then
     db_name=$(basename "$db_file" .db)
-    sqlite3 "$db_file" ".backup '${BACKUP_DIR}/${db_name}.db'"
+    taskset -c 1 ionice -c 3 nice -n 10 sqlite3 "$db_file" ".backup '${BACKUP_DIR}/${db_name}.db'"
     echo "Backup wykonany: ${db_name}.db"
+    sleep 1
   fi
 done
 

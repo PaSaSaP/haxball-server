@@ -20,7 +20,7 @@ class Game {
   // TODO maybe map id to PlayerComposition?
   redCompositions: PlayerComposition[];
   blueCompositions: PlayerComposition[];
-  goals: Goal[];
+  // goals: Goal[];
   touchArray: BallTouch[];
   scores: ScoresObject | null;
 
@@ -28,7 +28,7 @@ class Game {
     this.date = Date.now();
     this.redCompositions = [];
     this.blueCompositions = [];
-    this.goals = [];
+    // this.goals = [];
     this.touchArray = [];
     this.scores = null;
   }
@@ -37,7 +37,7 @@ class Game {
     this.date = Date.now();
     this.redCompositions = [];
     this.blueCompositions = [];
-    this.goals = [];
+    // this.goals = [];
     this.touchArray = [];
     this.scores = null;
   }
@@ -73,9 +73,6 @@ class PlayerComposition {
 interface Position {
   x: number;
   y: number;
-}
-function pointDistance(p1: Position, p2: Position) {
-  return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
 }
 
 class BallTouch {
@@ -120,9 +117,9 @@ export class MatchStats {
   ballRadius: number;
   triggerDistance: number;
   game: Game;
-  goals: Map<number, number> = new Map<number, number>();
-  assists: Map<number, number> = new Map<number, number>();
-  ownGoals: Map<number, number> = new Map<number, number>();
+  goals: Map<number, number>;
+  assists: Map<number, number>;
+  ownGoals: Map<number, number>;
 
   constructor() {
     this.emptyBallTouch = new BallTouch(-1);
@@ -138,9 +135,9 @@ export class MatchStats {
     this.triggerDistance = this.getTriggerDistance();
     this.game = new Game();
 
-    this.goals = new Map<number, number>();
-    this.assists = new Map<number, number>();
-    this.ownGoals = new Map<number, number>();
+    this.goals = new Map();
+    this.assists = new Map();
+    this.ownGoals = new Map();
   }
 
   private addGoalFor(playerId: number) {
@@ -335,15 +332,18 @@ export class MatchStats {
     let currentGameTime = this.game.scores?.time ?? 0;
     let closestPlayer: PlayerData | null = null;
     let closestDistance = Infinity;
+    const rangeSq = (this.playerRadius + this.ballRadius) ** 2;
     for (let playerId of redTeam.concat(blueTeam)) {
       let player = players.get(playerId)!;
       if (!player.position) continue;
-      const distanceToBall = pointDistance(player.position, ballPosition);
-      if (distanceToBall < this.triggerDistance) {
+      const dx = player.position.x - ballPosition.x;
+      const dy = player.position.y - ballPosition.y;
+      const distanceToBallSq = dx * dx + dy * dy;
+      if (distanceToBallSq <= rangeSq) {
         if (this.playSituation === Situation.kickoff) this.playSituation = Situation.play;
-        if (closestPlayer === null || distanceToBall < closestDistance) {
+        if (distanceToBallSq < closestDistance) {
           closestPlayer = player;
-          closestDistance = distanceToBall;
+          closestDistance = distanceToBallSq;
         }
       }
     }
@@ -390,7 +390,7 @@ export class MatchStats {
   }
 
   private getGoalString(team: 1 | 2, players: Map<number, PlayerData>, redTeam: number[], blueTeam: number[]): [string, number, number, number] {
-    let currentGameTime = this.game.scores!.time ?? 0;
+    // let currentGameTime = this.game.scores!.time ?? 0;
     let goalString: string = '';
     let goalAttribution = this.getGoalAttribution(team, redTeam, blueTeam);
     let scoringPlayer: PlayerData | null = null;
@@ -405,26 +405,26 @@ export class MatchStats {
       if (scoringPlayer.team === team) {
         if (assistingPlayer && assistingPlayer.team == team) {
           goalString = `⚽ Gol dla ${scoringPlayer.name}! Asysta dla ${assistingPlayer.name}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
-          this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, assistingPlayer.id));
+          // this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, assistingPlayer.id));
           scoringPlayerId = scoringPlayer.id;
           assistingPlayerId = assistingPlayer.id;
           this.addGoalFor(scoringPlayerId);
           this.addAssistFor(assistingPlayerId);
         } else {
           goalString = `⚽ Gol dla ${scoringPlayer.name}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
-          this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, -1));
+          // this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, -1));
           scoringPlayerId = scoringPlayer.id;
           this.addGoalFor(scoringPlayerId);
         }
       } else {
         goalString = `😂 Samobój dla ${scoringPlayer.name}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
-        this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, -1));
+        // this.game.goals.push(new Goal(currentGameTime, team, scoringPlayer.id, -1));
         ownGoalPlayerId = scoringPlayer.id;
         this.addOwnGoalFor(ownGoalPlayerId);
       }
     } else {
       goalString = `⚽ Gol dla ${team === 1 ? 'Red' : 'Blue'}! Prędkość kulki: ${this.ballSpeed.toFixed(2)}km/h`;
-      this.game.goals.push(new Goal(currentGameTime, team, -1, -1));
+      // this.game.goals.push(new Goal(currentGameTime, team, -1, -1));
     }
     return [goalString, scoringPlayerId, assistingPlayerId, ownGoalPlayerId];
   }
@@ -531,12 +531,13 @@ export class MatchStats {
           blueGK = player;
           continue;
         }
-        if (player.position.x > blueGK?.position.x) {
+        if (player.position.x > blueGK.position.x) {
           blueGK = player;
           continue;
         }
       }
     }
+    // TODO optimize below...
     if (redGK) this.game.redCompositions.filter(e => e.player.id == redGK.id).forEach(e => e.GKTicks++);
     if (blueGK) this.game.blueCompositions.filter(e => e.player.id == blueGK.id).forEach(e => e.GKTicks++);
   }
@@ -569,8 +570,8 @@ export class MatchStats {
   }
 
   private getGoalGame() {
-    return this.game.goals.length;
-    // return this.game.scores.red + this.game.scores.blue;
+    return this.goals.size;
+    // return this.game.goals.length;
   }
   private getSpeedCoefficient(ballDisc: DiscPropertiesObject|null) {
     return 100 / (5 * (ballDisc?.invMass ?? 1.4) * ((ballDisc?.damping ?? 0.99) ** 60 + 1));

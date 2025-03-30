@@ -1,14 +1,14 @@
 import { BuyCoffee } from "./buy_coffee";
 import { HaxballRoom } from "./hb_room";
-import all_maps from "./maps";
+import { isValidMap } from "./maps";
 import { PlayerData, PlayerTopRatingDataShort, TransactionByPlayerInfo } from "./structs";
 import { sleep, getTimestampHM, toBoolean } from "./utils";
 import { generateVerificationLink } from "./verification";
 import { Colors } from "./colors";
 import * as config from './config';
 import { hb_log } from "./log";
-import e from "express";
 import { Emoji } from "./emoji";
+import { AutoBot } from "./auto_mode";
 
 class BaseCommander {
   hb_room: HaxballRoom;
@@ -112,6 +112,7 @@ class Commander extends BaseCommander {
       dodaj: this.commandAddPlayersToTeam,
       map: this.commandChangeMap,
       m: this.commandChangeMap,
+      mapc: this.commandChangeMapColored,
       ping: (player: PlayerData) => this.hb_room.sendMsgToPlayer(player, "Pong!"),
       mute: this.commandMute,
       muted: this.commandMuted,
@@ -120,6 +121,13 @@ class Commander extends BaseCommander {
       mute_all: this.commandMuteAll,
       unmute_all: this.commandUnmuteAll,
       unmuteall: this.commandUnmuteAll,
+      ignore: this.commandIgnore,
+      ignoruj: this.commandIgnore,
+      i: this.commandIgnore,
+      "ignore-": this.commandUnignore,
+      "ignoruj-": this.commandUnignore,
+      "i-": this.commandUnignore,
+
       afk: this.commandSwitchAfk,
       back: this.commandClearAfk,
       jj: this.commandClearAfk,
@@ -250,6 +258,10 @@ class Commander extends BaseCommander {
       t: this.commandTrust,
       tt: this.commandAutoTrust,
       ttt: this.commandShowTrust,
+      xt: this.commandTrustUntilDisconnected,
+      "xt-": this.commandUnTrustTemporary,
+      xtlist: this.commandShowTrustTemporary,
+      xtl: this.commandShowTrustTemporary,
       after: this.commandAfter,
 
       check_transaction: this.commandCheckPlayerTransaction,
@@ -278,6 +290,7 @@ class Commander extends BaseCommander {
       kawa: this.commandBuyCoffeeLink,
       wsparcie: this.commandBuyCoffeeLink,
       piwo: this.commandBuyCoffeeLink,
+      donate: this.commandBuyCoffeeLink,
 
       dc: this.commandShowDiscordAndWebpage,
       discord: this.commandShowDiscordAndWebpage,
@@ -302,6 +315,9 @@ class Commander extends BaseCommander {
       botradius: this.commandBotSetRadius,
       botstop: this.commandSwitchBotStoppingFlag,
       ip: this.commandPrintPlayerIp,
+      no_x: this.commandNoXEnable,
+      no_xd: this.commandNoXDisable,
+      ipv6: this.commandWhoHasIpv6,
 
       god: this.commandGodTest,
 
@@ -317,7 +333,7 @@ class Commander extends BaseCommander {
   }
 
   // commands below
-  async commandSendMessage(player: PlayerData, cmds: string[]) {
+  commandSendMessage(player: PlayerData, cmds: string[]) {
     if (cmds.length < 2) {
       this.sendMsgToPlayer(player, 'Uzycie:!pm/!pw/!w <@player_name> <message...>')
       return;
@@ -327,14 +343,16 @@ class Commander extends BaseCommander {
     if (cmdPlayer.id == player.id) return;
     let msg = cmds.slice(1).join(" ");
     this.sendMsgToPlayer(player, `PM>> ${cmdPlayer.name}: ${msg}`, 0xFFBF00, 'italic');
-    this.sendMsgToPlayer(cmdPlayer, `PM<< ${player.name}: ${msg}`, 0xFFBF00, 'italic', 1);
+    if (!cmdPlayer.ignores.has(player.id)) {
+      this.sendMsgToPlayer(cmdPlayer, `PM<< ${player.name}: ${msg}`, 0xFFBF00, 'italic', 1);
+    }
   }
 
-  async commandPressure(player: PlayerData) {
+  commandPressure(player: PlayerData) {
     this.sendMsgToPlayer(player, `Pressure: Red ${this.hb_room.pressure_right.toFixed(2)}s, Blue ${this.hb_room.pressure_left.toFixed(2)}s`);
   }
 
-  async commandChoosingPlayers(playerExt: PlayerData, cmds: string[]) {
+  commandChoosingPlayers(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) {
       this.sendMsgToPlayer(playerExt, "W trakcie meczu wybierz sobie graczy! Dostaniesz dostępnych! np: !wyb @player1 @player2... !wyb #5 #8 #13 #21...", Colors.Help, 'italic');
       this.sendMsgToPlayer(playerExt, "Nie będzie przerwy na wybieranie. Lista przetrwa do restartu, by ją wyczyścić, uzyj !wyb-", Colors.Help, 'italic');
@@ -355,7 +373,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Twoja obecna lista: ${playerExt.chosen_player_names.join(', ')}`, Colors.GameState, 'italic');
   }
 
-  async commandUnchoosingPlayers(playerExt: PlayerData, cmds: string[]) {
+  commandUnchoosingPlayers(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) {
       this.sendMsgToPlayer(playerExt, "Wyczyściłeś listę!", Colors.GameState, 'italic');
       playerExt.chosen_player_names = [];
@@ -373,7 +391,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandPauseRequested(player: PlayerData) {
+  commandPauseRequested(player: PlayerData) {
     if (!player.team) return;
     if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePauseRequest(player);
   }
@@ -391,14 +409,14 @@ class Commander extends BaseCommander {
     this.sendMsgToAll(`(!r) ${playerExt.name} zrobił restart meczu, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandRandomAndRestartMatch(playerExt: PlayerData) {
+  commandRandomAndRestartMatch(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     this.hb_room.makeRandomAndRestartMatch();
     this.sendMsgToAll(`(!rr) ${playerExt.name} zrobił losowanie drużyn${this.hb_room.getPrevWinnerLogTxt()}, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandWinStayNextMatch(playerExt: PlayerData) {
+  commandWinStayNextMatch(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     if (!this.hb_room.last_winner_team) this.hb_room.makeRandomAndRestartMatch();
@@ -406,18 +424,18 @@ class Commander extends BaseCommander {
     this.sendMsgToAll(`(!ws) ${playerExt.name} zostawił zwycięską druzynę${this.hb_room.getPrevWinnerLogTxt()}, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandStartMatch(playerExt: PlayerData) {
+  commandStartMatch(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.r().startGame();
   }
 
-  async commandStopMatch(playerExt: PlayerData) {
+  commandStopMatch(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.updateWinnerTeamBeforeGameStop();
     this.r().stopGame();
   }
 
-  async commandStartOrStopMatch(playerExt: PlayerData) {
+  commandStartOrStopMatch(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     let d = this.r().getScores();
     if (d) {
@@ -428,7 +446,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandSwapTeams(playerExt: PlayerData) {
+  commandSwapTeams(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     if (this.hb_room.isGameInProgress()) {
       this.sendMsgToPlayer(playerExt, 'Nie mozna zmieniać zespołów podczas meczu!')
@@ -448,7 +466,7 @@ class Commander extends BaseCommander {
     this.sendMsgToAll(`(!sr) ${playerExt.name} zmienił strony druzyn, limit: ${this.hb_room.limit} (!limit), zmiana mapy: !m 2, !m 3, !m 4`, Colors.GameState);
   }
 
-  async commandAddPlayersToTeam(playerExt: PlayerData) {
+  commandAddPlayersToTeam(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     let players = this.getPlayersExtList(true);
     this.hb_room.shuffleAllPlayers(players);
@@ -477,26 +495,26 @@ class Commander extends BaseCommander {
     if (any_added) this.sendMsgToAll(`(!a) ${playerExt.name} uzupełnił druzyny`, Colors.GameState);
   }
 
-  async commandHelp(playerExt: PlayerData) {
-    this.sendMsgToPlayer(playerExt, "Komendy: !wyb !p !pm/w !bb !ping !afk !back !afks !stat !top !ttop !wtop !pasek !discord !kebab !cieszynka !sklep", Colors.Help);
+  commandHelp(playerExt: PlayerData) {
+    this.sendMsgToPlayer(playerExt, ": !wyb !p !w !ignore !bb !ping !afk !back !afks !stat !top !ttop !wtop !pasek !discord !kebab !cieszynka !sklep", Colors.Help, "small-italic");
     if (playerExt.admin_level) {
-      this.sendMsgToPlayer(playerExt, "Dla Admina: !mute !unmute !r !s !swap !sr !rr !ws !a !map/m", Colors.Help);
-      this.sendMsgToPlayer(playerExt, "Dla Admina: !kick (auth) !tkick_5m/1h/1d, !tmute_5m/1h/1d (network) !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help);
+      this.sendMsgToPlayer(playerExt, "Dla Admina: !mute !unmute !r !s !swap !sr !rr !ws !a !map/m", Colors.Help, "small-italic");
+      this.sendMsgToPlayer(playerExt, "Dla Admina: !kick !tkick_5m/1h/1d !tmute_5m/1h/1d !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help, "small-italic");
     }
     if (playerExt.trust_level > 0) {
-      this.sendMsgToPlayer(playerExt, ": !thumb !thumb_up !thump_down !thumb_remove !report !verify", Colors.Help);
+      this.sendMsgToPlayer(playerExt, ": !thumb !thumb_up/down/remove !report !verify", Colors.Help, "small-italic");
     }
-    this.sendMsgToPlayer(playerExt, "By wywołać ostatnią komendę, uzyj !!", Colors.Help);
+    this.sendMsgToPlayer(playerExt, "By wywołać ostatnią komendę, uzyj !!", Colors.Help, "small-italic");
   }
 
-  async commandChangeMap(playerExt: PlayerData, cmds: string[]) {
+  commandChangeMap(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb');
+      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb futsal_huge/fh', Colors.GameState, 'italic');
       return;
     }
     let map_name = cmds[0].toLowerCase();
-    if (all_maps.has(map_name)) {
+    if (isValidMap(map_name)) {
       if (!this.hb_room.isGameInProgress()) {
         this.hb_room.setMapByName(map_name);
         this.sendMsgToAll(`${playerExt.name} zmienił mapę na ${map_name}`, Colors.GameState);
@@ -506,17 +524,38 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandMute(playerExt: PlayerData, cmds: string[]) {
+  commandChangeMapColored(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    if (cmdPlayer.id == playerExt.id) return;
-    this.hb_room.addPlayerMuted(cmdPlayer);
-    this.sendMsgToPlayer(cmdPlayer, "Zostałeś wyciszony!", Colors.Warning, undefined, 2);
-    this.sendMsgToPlayer(playerExt, `Muted: ${cmdPlayer.name}`);
+    if (cmds.length == 0) {
+      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb futsal_huge/fh', Colors.GameState, 'italic');
+      return;
+    }
+    let map_name = cmds[0].toLowerCase();
+    let bgColor = Number.parseInt(cmds[1]) || 0; // bg.color
+    let ballColor = Number.parseInt(cmds[2]) || 0; // discs[0].color
+    if (isValidMap(map_name)) {
+      if (!this.hb_room.isGameInProgress()) {
+        this.hb_room.setMapByName(map_name, bgColor, ballColor);
+        this.sendMsgToAll(`${playerExt.name} zmienił mapę na ${map_name}, bg(0x${bgColor.toString(16)}) ball(0x${ballColor.toString(16)})`, Colors.GameState);
+      }
+    } else {
+      this.sendMsgToPlayer(playerExt, 'Nie ma takiej mapy', Colors.Warning);
+    }
   }
 
-  async commandMuted(playerExt: PlayerData) {
+  commandMute(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (cmdPlayer.id == playerExt.id) return;
+      this.hb_room.addPlayerMuted(cmdPlayer);
+      this.sendMsgToPlayer(cmdPlayer, "Zostałeś wyciszony!", Colors.Warning, undefined, 2);
+      this.sendMsgToPlayer(playerExt, `Muted: ${cmdPlayer.name}`);
+    }
+  }
+
+  commandMuted(playerExt: PlayerData) {
     let muted: string[] = [];
     for (let p of this.getPlayersExt()) {
       if (this.hb_room.isPlayerMuted(p)) muted.push(p.name);
@@ -524,7 +563,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Muted: ${muted.join(" ")}`);
   }
 
-  async commandMuteAll(playerExt: PlayerData) {
+  commandMuteAll(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let p of this.getPlayersExt()) {
       this.hb_room.addPlayerMuted(p);
@@ -532,25 +571,59 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, "Muted all Players", Colors.GameState);
   }
 
-  async commandUnmute(playerExt: PlayerData, cmds: string[]) {
+  commandUnmute(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    if (playerExt.id == cmdPlayer.id) return;
-    if (!this.hb_room.isPlayerMuted(cmdPlayer)) return;
-    this.hb_room.removePlayerMuted(cmdPlayer);
-    this.hb_room.anti_spam.removePlayer(cmdPlayer);
-    this.sendMsgToPlayer(cmdPlayer, "Ju mozesz pisać!", Colors.Warning, undefined, 2);
-    this.sendMsgToPlayer(playerExt, `Unmuted: ${cmdPlayer.name}`);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      if (!this.hb_room.isPlayerMuted(cmdPlayer)) return;
+      this.hb_room.removePlayerMuted(cmdPlayer);
+      this.hb_room.anti_spam.removePlayer(cmdPlayer);
+      this.sendMsgToPlayer(cmdPlayer, "Ju mozesz pisać!", Colors.Warning, undefined, 2);
+      this.sendMsgToPlayer(playerExt, `Unmuted: ${cmdPlayer.name}`);
+    }
   }
 
-  async commandUnmuteAll(playerExt: PlayerData) {
+  commandUnmuteAll(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.muted_players.clear();
     this.sendMsgToPlayer(playerExt, "Unmuted all Players", Colors.GameState);
   }
 
-  async commandSwitchAfk(playerExt: PlayerData) {
+  commandIgnore(playerExt: PlayerData, cmds: string[]) {
+    if (!cmds.length) {
+      this.sendMsgToPlayer(playerExt, `Lista ignorowanych osób: ${Array.from(playerExt.ignores).map(e => `#${e}`).join(' ')}`, Colors.LightYellow, 'italic');
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer) return;
+    if (playerExt.id == cmdPlayer.id) return;
+    playerExt.ignores.add(cmdPlayer.id);
+    cmdPlayer.ignored_by.add(playerExt.id);
+    this.sendMsgToPlayer(playerExt, `Ignorujesz ${cmdPlayer.name}`, Colors.LightYellow, 'italic');
+  }
+
+  commandUnignore(playerExt: PlayerData, cmds: string[]) {
+    if (!cmds.length) {
+      playerExt.ignores.forEach(playerId => {
+        this.Pid(playerId).ignored_by.delete(playerExt.id);
+      });
+      playerExt.ignores.clear();
+      this.sendMsgToPlayer(playerExt, 'Lista ignorowanych osób jest teraz pusta!', Colors.LightYellow, 'italic');
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer) return;
+    if (playerExt.id == cmdPlayer.id) return;
+    if (playerExt.ignores.has(cmdPlayer.id)) {
+      playerExt.ignores.delete(cmdPlayer.id);
+      cmdPlayer.ignored_by.delete(playerExt.id);
+      this.sendMsgToPlayer(playerExt, `Juz nie ignorujesz ${cmdPlayer.name}`, Colors.LightYellow, 'italic');
+    }
+  }
+
+  commandSwitchAfk(playerExt: PlayerData) {
     // switch on/off afk
     if (!playerExt.afk) {
       this.commandSetAfkExt(playerExt);
@@ -560,7 +633,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandSetAfk(playerExt: PlayerData) {
+  commandSetAfk(playerExt: PlayerData) {
     this.commandSetAfkExt(playerExt);
   }
 
@@ -569,7 +642,7 @@ class Commander extends BaseCommander {
     if (playerExt.afk) return;
     playerExt.afk_switch_time = Date.now();
     playerExt.afk = true;
-    this.r().setPlayerAvatar(playerExt.id, '💤');
+    this.hb_room.setPlayerAvatarTo(playerExt, Emoji.Afk);
     this.sendMsgToAll(`${playerExt.name} poszedł AFK (!afk !back !jj)`, Colors.Afk);
     if (playerExt.team != 0) {
       this.r().setPlayerTeam(playerExt.id, 0);
@@ -577,27 +650,27 @@ class Commander extends BaseCommander {
     if (playerExt.admin) this.hb_room.updateAdmins(null);
   }
 
-  async commandClearAfk(playerExt: PlayerData) {
+  commandClearAfk(playerExt: PlayerData) {
     this.commandClearAfkExt(playerExt);
   }
 
   commandClearAfkExt(playerExt: PlayerData) {
     if (playerExt.afk) {
       const now = Date.now();
-      if (now - playerExt.afk_switch_time < 15_000) {
+      if (now - playerExt.afk_switch_time < HaxballRoom.MaxAllowedAfkNoMoveTimeMs) {
         this.sendMsgToPlayer(playerExt, "Nie da się tak szybko wstać z krzesła i usiąść!", Colors.Afk);
         return;
       }
       playerExt.afk = false;
-      this.r().setPlayerAvatar(playerExt.id, null);
+      this.hb_room.setPlayerAvatarTo(playerExt, '');
       this.sendMsgToAll(`${playerExt.name} wrócił z AFK (!afk !back !jj)`, Colors.Afk);
-      playerExt.activity.updateGame();
+      playerExt.activity.updateGame(now);
       if (this.hb_room.auto_mode) this.hb_room.auto_bot.handlePlayerBackFromAfk(playerExt);
     }
     this.hb_room.updateAdmins(null);
   }
 
-  async commandPrintAfkList(playerExt: PlayerData) {
+  commandPrintAfkList(playerExt: PlayerData) {
     var log_str = "AFK list: "
     for (let p of this.getPlayersExt()) {
       if (p.afk || p.afk_maybe) log_str += `${p.name}[${p.id}] `;
@@ -605,54 +678,58 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, log_str);
   }
 
-  async commandSetAfkOther(playerExt: PlayerData, cmds: string[]) {
+  commandSetAfkOther(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    let cmdPlayerExt = this.Pid(cmdPlayer.id);
-    if (!cmdPlayerExt.afk) this.commandSetAfkExt(cmdPlayerExt);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      let cmdPlayerExt = this.Pid(cmdPlayer.id);
+      if (!cmdPlayerExt.afk) this.commandSetAfkExt(cmdPlayerExt);
+    }
   }
 
-  async commandClearAfkOther(playerExt: PlayerData, cmds: string[]) {
+  commandClearAfkOther(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    let cmdPlayerExt = this.Pid(cmdPlayer.id);
-    this.commandClearAfkExt(cmdPlayerExt);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      let cmdPlayerExt = this.Pid(cmdPlayer.id);
+      this.commandClearAfkExt(cmdPlayerExt);
+    }
   }
 
-  async commandByeBye(playerExt: PlayerData) {
+  commandByeBye(playerExt: PlayerData) {
     this.r().kickPlayer(playerExt.id, "Bye bye!", false);
   }
 
-  async commandKick(playerExt: PlayerData, cmds: string[]) {
+  commandKick(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
       if (!cmdPlayer) continue;
       if (cmdPlayer.id == playerExt.id) continue;
       this.r().kickPlayer(cmdPlayer.id, "Kik!", false);
     }
   }
 
-  async commandKickAllExceptVerified(playerExt: PlayerData) {
+  commandKickAllExceptVerified(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let p of this.getPlayersExt()) {
       if (playerExt.id != p.id && !p.trust_level) this.r().kickPlayer(p.id, "", false);
     }
   }
 
-  async commandKickAllRed(playerExt: PlayerData) {
+  commandKickAllRed(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.kickAllTeamExceptTrusted(playerExt, 1);
   }
 
-  async commandKickAllBlue(playerExt: PlayerData) {
+  commandKickAllBlue(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.kickAllTeamExceptTrusted(playerExt, 2);
   }
 
-  async commandKickAllSpec(playerExt: PlayerData) {
+  commandKickAllSpec(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.kickAllTeamExceptTrusted(playerExt, 0);
   }
@@ -669,13 +746,15 @@ class Commander extends BaseCommander {
   commandTimeKickPlayerReset(playerExt: PlayerData, cmds: string[]) {
     this.execCommandTimeKickPlayer(playerExt, cmds, -1, false);
   }
-  async execCommandTimeKickPlayer(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+  execCommandTimeKickPlayer(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    if (playerExt.id == cmdPlayer.id) return;
-    this.hb_room.players_game_state_manager.setPlayerTimeKicked(cmdPlayer, seconds, kick);
-    if (seconds < 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś Player_kick dla ${cmdPlayer.name}`);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setPlayerTimeKicked(cmdPlayer, seconds, kick);
+      if (seconds <= 0) this.sendMsgToPlayer(playerExt, `Wyczyściłeś Player_kick dla ${cmdPlayer.name}`);
+    }
   }
 
   commandTimeMutePlayer5m(playerExt: PlayerData, cmds: string[]) {
@@ -691,13 +770,15 @@ class Commander extends BaseCommander {
     return this.execCommandTimeMutePlayer(playerExt, cmds, -1);
   }
 
-  async execCommandTimeMutePlayer(playerExt: PlayerData, cmds: string[], seconds: number) {
+  execCommandTimeMutePlayer(playerExt: PlayerData, cmds: string[], seconds: number) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    if (playerExt.id == cmdPlayer.id) return;
-    this.hb_room.players_game_state_manager.setPlayerTimeMuted(cmdPlayer, seconds);
-    this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setPlayerTimeMuted(cmdPlayer, seconds);
+      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    }
   }
 
   commandTimeKickNetwork5m(playerExt: PlayerData, cmds: string[]) {
@@ -713,13 +794,15 @@ class Commander extends BaseCommander {
     this.execCommandTimeKickNetwork(playerExt, cmds, -1, false);
   }
 
-  async execCommandTimeKickNetwork(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+  execCommandTimeKickNetwork(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    if (playerExt.id == cmdPlayer.id) return;
-    this.hb_room.players_game_state_manager.setNetworkTimeKicked(cmdPlayer, seconds, kick);
-    if (seconds < 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś Network_kick dla ${cmdPlayer.name}`);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setNetworkTimeKicked(cmdPlayer, seconds, kick);
+      if (seconds <= 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś Network_kick dla ${cmdPlayer.name}`);
+    }
   }
 
   commandTimeMuteNetwork5m(playerExt: PlayerData, cmds: string[]) {
@@ -735,16 +818,18 @@ class Commander extends BaseCommander {
     this.execCommandTimeMuteNetwork(playerExt, cmds, -1);
   }
 
-  async execCommandTimeMuteNetwork(playerExt: PlayerData, cmds: string[], seconds: number) {
+  execCommandTimeMuteNetwork(playerExt: PlayerData, cmds: string[], seconds: number) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
-    if (!cmdPlayer) return;
-    if (playerExt.id == cmdPlayer.id) return;
-    this.hb_room.players_game_state_manager.setNetworkTimeMuted(cmdPlayer, seconds);
-    this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setNetworkTimeMuted(cmdPlayer, seconds);
+      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    }
   }
 
-  async commandAutoMode(playerExt: PlayerData, values: string[]) {
+  commandAutoMode(playerExt: PlayerData, values: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, "auto_mode")) return;
     if (values.length == 0) return;
     const arg = values[0].toLowerCase();
@@ -764,7 +849,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandLimit(playerExt: PlayerData, values: string[]) {
+  commandLimit(playerExt: PlayerData, values: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'limit')) return;
     if (values.length == 0) return;
     try {
@@ -778,13 +863,13 @@ class Commander extends BaseCommander {
     } catch (e) { }
   }
 
-  async commandEmoji(playerExt: PlayerData) {
+  commandEmoji(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.emoji.turnOnOff();
     this.sendMsgToPlayer(playerExt, "Losowe Emoji, by włączyć/wyłączyć - odpal jeszcze raz komendę")
   }
 
-  async commandClaimAdmin(playerExt: PlayerData) {
+  commandClaimAdmin(playerExt: PlayerData) {
     if (this.hb_room.auto_mode) return; // no admin in auto mode
     if (playerExt.trust_level == 0) return;
     if (playerExt.admin_level > 0) {
@@ -793,7 +878,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandSelectOneAdmin(playerExt: PlayerData) {
+  commandSelectOneAdmin(playerExt: PlayerData) {
     if (this.hb_room.auto_mode) return; // no admin in auto mode
     if (playerExt.trust_level == 0) return;
     let currentAdmins: PlayerData[] = [];
@@ -825,7 +910,7 @@ class Commander extends BaseCommander {
     this.sendMsgToAll(`${chosenAdmin.name} jako gracz z najwyzszym zaufaniem i najdłuzej afczący zostaje wybrany na jedynego admina by zarządzać sytuacją kryzysową!`, 0xEE3333, 'bold', 2);
   }
 
-  async commandAdminStats(playerExt: PlayerData, cmds: string[]) {
+  commandAdminStats(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayer) return;
@@ -842,27 +927,27 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, txt);
   }
 
-  async commandSpecMoveRed(playerExt: PlayerData) {
+  commandSpecMoveRed(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(0, 1);
   }
 
-  async commandSpecMoveBlue(playerExt: PlayerData) {
+  commandSpecMoveBlue(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(0, 2);
   }
 
-  async commandRedMoveSpec(playerExt: PlayerData) {
+  commandRedMoveSpec(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(1, 0);
   }
 
-  async commandBlueMoveSpec(playerExt: PlayerData) {
+  commandBlueMoveSpec(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     this.hb_room.movePlayerBetweenTeams(2, 0);
   }
 
-  async commandSefin(playerExt: PlayerData) {
+  commandSefin(playerExt: PlayerData) {
     if (!this.hb_room.isPlayerHost(playerExt)) {
       this.sendMsgToPlayer(playerExt, "Nieznana komenda: sefin");
       return;
@@ -888,7 +973,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandSpamCheckDisable(playerExt: PlayerData, cmds: string[]) {
+  commandSpamCheckDisable(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'spam_disable')) return;
     cmds.forEach(player_name => {
       let cmdPlayer = this.getPlayerDataByName(player_name, null);
@@ -910,7 +995,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Ostatnie 5 nazw: ${(await lastPlayerNames).join(', ')}`);
   }
 
-  async commandVoteKick(playerExt: PlayerData, cmds: string[]) {
+  commandVoteKick(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) return this.commandVoteYes(playerExt, cmds); // no param means vote yes
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer || cmdPlayer.id == playerExt.id) return;
@@ -918,7 +1003,7 @@ class Commander extends BaseCommander {
     this.hb_room.auto_bot.autoVoter.requestVoteKick(cmdPlayerExt, playerExt);
   }
 
-  async commandVoteMute(playerExt: PlayerData, cmds: string[]) {
+  commandVoteMute(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) return this.commandVoteYes(playerExt, cmds); // no param means vote yes
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer || cmdPlayer.id == playerExt.id) return;
@@ -926,7 +1011,7 @@ class Commander extends BaseCommander {
     this.hb_room.auto_bot.autoVoter.requestVoteMute(cmdPlayerExt, playerExt);
   }
 
-  async commandVoteBotKick(playerExt: PlayerData, cmds: string[]) {
+  commandVoteBotKick(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) return this.commandVoteYes(playerExt, cmds); // no param means vote yes
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer || cmdPlayer.id == playerExt.id) return;
@@ -934,7 +1019,7 @@ class Commander extends BaseCommander {
     this.hb_room.auto_bot.autoVoter.requestVoteBotKick(cmdPlayerExt, playerExt);
   }
 
-  async commandVoteV4(playerExt: PlayerData, cmds: string[]) {
+  commandVoteV4(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.afk || playerExt.afk_maybe) {
       this.sendMsgToPlayer(playerExt, "Jesteś AFK, najpierw wyjdź z AFKa!", Colors.White);
       return;
@@ -942,21 +1027,21 @@ class Commander extends BaseCommander {
     this.hb_room.auto_bot.autoVoter.requestVote4(null, playerExt);
   }
 
-  async commandVoteReset(playerExt: PlayerData, cmds: string[]) {
+  commandVoteReset(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.auto_bot.autoVoter.reset();
     this.sendMsgToPlayer(playerExt, 'Głosowanie zresetowane');
   }
 
-  async commandVoteYes(playerExt: PlayerData, cmds: string[]) {
+  commandVoteYes(playerExt: PlayerData, cmds: string[]) {
     this.hb_room.auto_bot.autoVoter.handleYes(playerExt);
   }
 
-  async commandVoteNo(playerExt: PlayerData, cmds: string[]) {
+  commandVoteNo(playerExt: PlayerData, cmds: string[]) {
     this.hb_room.auto_bot.autoVoter.handleNo(playerExt);
   }
 
-  async commandReport(playerExt: PlayerData, cmds: string[]) {
+  commandReport(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     let report = cmds.join(" ").trim();
     if (!report) return;
@@ -964,7 +1049,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, 'Twoje zazalenie zostanie rozpatrzone oraz zignorowane juz wkrótce!');
   }
 
-  async commandMe(playerExt: PlayerData, cmds: string[]) {
+  commandMe(playerExt: PlayerData, cmds: string[]) {
     let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayerExt) return;
     let adminStr = playerExt.admin_level ? ` a:${cmdPlayerExt.admin_level}` : '';
@@ -977,7 +1062,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `${cmdPlayerExt.name} t:${cmdPlayerExt.trust_level}${verifiedStr}${adminStr}${shameStr}${penaltyStr} od:${dateStr}${afkStr}`, Colors.GameState, 'italic');
   }
 
-  async commandStat(playerExt: PlayerData, cmds: string[]) {
+  commandStat(playerExt: PlayerData, cmds: string[]) {
     let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayerExt) return;
     let stat = cmdPlayerExt.stat;
@@ -1002,7 +1087,7 @@ class Commander extends BaseCommander {
   commandTop10All(playerExt: PlayerData, cmds: string[]) {
     return this.execCommandTop10(playerExt, cmds, 'all');
   }
-  async execCommandTop10(playerExt: PlayerData, cmds: string[], type: "daily" | "weekly" | "all") {
+  execCommandTop10(playerExt: PlayerData, cmds: string[], type: "daily" | "weekly" | "all") {
     const rankings = {
       daily: { selector: 'top', data: this.hb_room.top10_daily,   prefix: ["TODAY",           "\u2007TOP\u2007"] },
       weekly: { selector: 'wtop', data: this.hb_room.top10_weekly, prefix: ["\u2007WEEK",      "\u2007TOP\u2007"] },
@@ -1032,7 +1117,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandTop10Ext(playerExt: PlayerData, cmds: string[]) {
+  commandTop10Ext(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, "topext")) return;
     this.hb_room.game_state.getTop10Players().then((results) => {
       let n = 3;
@@ -1044,12 +1129,12 @@ class Commander extends BaseCommander {
     }).catch((e) => hb_log(`!! commandTop10Ext error ${e}`));
   }
 
-  async commandUpdateTop10(playerExt: PlayerData, cmds: string[]) {
+  commandUpdateTop10(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, "update_top10")) return;
     this.hb_room.updateTop10();
   }
 
-  async commandPrintAuth(playerExt: PlayerData, cmds: string[]) {
+  commandPrintAuth(playerExt: PlayerData, cmds: string[]) {
     if (this.hb_room.isPlayerIdHost(playerExt.id) && cmds.length) {
       let cmdPlayerExt = this.getPlayerDataByName(cmds, playerExt);
       if (!cmdPlayerExt) return;
@@ -1059,7 +1144,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Twój auth ID to: ${playerExt.auth_id}`);
   }
 
-  async commandThumbVote(playerExt: PlayerData) {
+  commandThumbVote(playerExt: PlayerData) {
     if (playerExt.trust_level == 0) return;
     this.hb_room.game_state.getPlayerVotes(playerExt.auth_id).then(({ upvotes, downvotes }) => {
       this.sendMsgToPlayer(playerExt, `Masz ${upvotes} 👍 oraz ${downvotes} 👎, daj komuś kciuka w górę: !thumb_up @kebab`, Colors.Help);
@@ -1068,7 +1153,7 @@ class Commander extends BaseCommander {
     });
   }
 
-  async commandThumbVoteUp(playerExt: PlayerData, cmds: string[]) {
+  commandThumbVoteUp(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza któremu chcesz dać kciuka w górę!");
@@ -1081,7 +1166,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Dałeś ${cmdPlayerExt.name} kciuka w górę!`);
   }
 
-  async commandThumbVoteDown(playerExt: PlayerData, cmds: string[]) {
+  commandThumbVoteDown(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza któremu chcesz dać kciuka w dół!");
@@ -1094,7 +1179,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Dałeś ${cmdPlayerExt.name} kciuka w dół!`);
   }
 
-  async commandThumbVoteRemove(playerExt: PlayerData, cmds: string[]) {
+  commandThumbVoteRemove(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level == 0) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza któremu chcesz zabrać swojego kciuka!");
@@ -1107,7 +1192,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Zabrałeś ${cmdPlayerExt.name} kciuka!`);
   }
 
-  async commandRejoice(playerExt: PlayerData, cmds: string[]) {
+  commandRejoice(playerExt: PlayerData, cmds: string[]) {
     if (cmds.length === 0) {
       let names = this.hb_room.rejoice_maker.getRejoiceNames(playerExt.id);
       let txt = names.length === 0 ? "Nie masz dostępnych cieszynek :( Sprawdź !sklep" : `Twoje cieszynki: ${names.join(", ")}, Wpisz !cieszynka <nazwa> by ją zmienić!`;
@@ -1123,7 +1208,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandVip(playerExt: PlayerData, cmds: string[]) {
+  commandVip(playerExt: PlayerData, cmds: string[]) {
     if (cmds.length === 0) {
       let all_option_names = Array.from(this.hb_room.vip_option_prices.keys());
       let option_names = this.hb_room.vip_options.getOptionNames(playerExt.id);
@@ -1187,12 +1272,12 @@ class Commander extends BaseCommander {
     }).catch((e) => e && hb_log(`!! insertVipTransaction error ${e}`));
   }
 
-  async commandPrintAvailableRejoices(playerExt: PlayerData, cmds: string[]) {
+  commandPrintAvailableRejoices(playerExt: PlayerData, cmds: string[]) {
     let availableRejoices = Array.from(this.hb_room.rejoice_prices.keys());
     this.sendMsgToPlayer(playerExt, `Cieszynki dostępne do zakupu: ${availableRejoices.join(", ")}; Wpisz !cieszynka by sprawdzić listę Twoich cieszynek!`, Colors.DarkGreen);
   }
 
-  async commandBuyRejoice(playerExt: PlayerData, cmds: string[]) {
+  commandBuyRejoice(playerExt: PlayerData, cmds: string[]) {
     if (cmds.length === 0) {
       this.sendMsgToPlayer(playerExt, `By sprawdzić cenę: !sklep <nazwa>, By rozpocząć proces zakupu: !kup <nazwa> <liczba dni>`, Colors.DarkGreen);
       this.sendMsgToPlayer(playerExt, `Listę cieszynek dostępnych do kupienia sprawdzisz wołając !cieszynki, zainteresowany opcjami VIP? sprawdź !vip`, Colors.DarkGreen);
@@ -1252,7 +1337,7 @@ class Commander extends BaseCommander {
     }).catch((e) => e && hb_log(`!! insertRejoiceTransaction error ${e}`));
   }
 
-  async commandCheckPlayerTransaction(playerExt: PlayerData, cmds: string[]) {
+  commandCheckPlayerTransaction(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'check_transaction')) return;
     if (cmds.length === 0) {
       this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi?`);
@@ -1268,7 +1353,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Gracz ${playerExt.name} numer transakcji: ${transaction.transactionId}, link: ${transaction.link} status: ${transaction.status}`);
   }
 
-  async commandUpdateRejoiceForPlayer(playerExt: PlayerData, cmds: string[]) {
+  commandUpdateRejoiceForPlayer(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'update_rejoice')) return;
     if (cmds.length === 0) {
       this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi?`);
@@ -1281,13 +1366,13 @@ class Commander extends BaseCommander {
     }).catch((e) => e && hb_log(`!! rejoice_maker handlePlayerJoin error: ${e}`));
   }
 
-  async commandSetRejoiceForPlayer(playerExt: PlayerData, cmds: string[]) {
+  commandSetRejoiceForPlayer(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'set_rejoice')) return;
     if (cmds.length < 2) {
       this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi? I jaka cieszynka?`);
       return;
     }
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
+    let cmdPlayer = this.getPlayerDataByName(cmds[0], playerExt, true);
     if (!cmdPlayer) return;
     let rejoiceId = cmds[1];
     this.hb_room.game_state.updateOrInsertRejoice(cmdPlayer.auth_id, rejoiceId, 0, Date.now() + 60_000).then(((result) => {
@@ -1297,13 +1382,13 @@ class Commander extends BaseCommander {
     })).catch((e) => hb_log(`updateOrInsertRejoice error: ${e}`));
   }
 
-  async commandSetVipOptionForPlayer(playerExt: PlayerData, cmds: string[]) {
+  commandSetVipOptionForPlayer(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'vip_option')) return;
     if (cmds.length < 2) {
       this.sendMsgToPlayer(playerExt, `O jakiego gracza chodzi? I jaka opcja VIPowska?`);
       return;
     }
-    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
+    let cmdPlayer = this.getPlayerDataByName(cmds[0], playerExt, true);
     if (!cmdPlayer) return;
     let option = cmds[1];
     this.hb_room.game_state.updateOrInsertVipOption(cmdPlayer.auth_id, option, 0, Date.now() + 60_000).then(((result) => {
@@ -1313,14 +1398,14 @@ class Commander extends BaseCommander {
     })).catch((e) => hb_log(`updateOrInsertVipOption error: ${e}`));
   }
 
-  async commandVerify(playerExt: PlayerData) {
+  commandVerify(playerExt: PlayerData) {
     if (playerExt.trust_level == 0 || playerExt.verify_link_requested) return;
     const link = generateVerificationLink(playerExt.name);
     playerExt.verify_link_requested = true;
     this.sendMsgToPlayer(playerExt, `Twój link: ${link}`);
   }
 
-  async commandTrust(playerExt: PlayerData, cmds: string[]) {
+  commandTrust(playerExt: PlayerData, cmds: string[]) {
     // if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Uzycie: !t <@nick> <trust_level>");
@@ -1359,7 +1444,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Ustawiłeś trust level ${cmd_player_ext.name} na ${trust_level}`);
   }
 
-  async commandAutoTrust(playerExt: PlayerData, cmds: string[]) {
+  commandAutoTrust(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, `podkomendy: red/r blue/b spec/s all/a by dodać wszystkich z danego teamu do kolejki`);
@@ -1419,7 +1504,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `W kolejce do dodania czekają: ${[...to_be_trusted_names].join(" ")}`);
   }
 
-  async commandUnlockWriting(playerExt: PlayerData, cmds: string[]) {
+  commandUnlockWriting(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'u')) return;
     if (cmds.length == 0) {
       this.hb_room.anti_spam.clearMute(playerExt.id);
@@ -1436,7 +1521,7 @@ class Commander extends BaseCommander {
 
   static trustIndicators: string[] = ['❌', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
 
-  async commandShowTrust(playerExt: PlayerData, cmds: string[]) {
+  commandShowTrust(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     let rStr = '';
     let bStr = '';
@@ -1451,7 +1536,58 @@ class Commander extends BaseCommander {
 
   }
 
-  async commandAfter(playerExt: PlayerData, cmds: string[]) {
+  commandTrustUntilDisconnected(playerExt: PlayerData, cmds: string[]) {
+    if (playerExt.trust_level < 2) return;
+    if (cmds.length == 0) {
+      this.sendMsgToPlayer(playerExt, "Uzycie: !xt <@nick>");
+      return;
+    }
+    let txt = '';
+    cmds.forEach(cmd => {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (cmdPlayer) {
+        if (cmdPlayer.id != playerExt.id && cmdPlayer.trust_level === 0) {
+          cmdPlayer.trust_level = 1; // set here but not in DB
+          this.hb_room.temporarily_trusted.add(cmdPlayer.id);
+          txt += `${cmdPlayer.name} `;
+        }
+      }
+    });
+    if (txt.length) this.sendMsgToPlayer(playerExt, `Nadano tymczasowe zaufanie dla: ${txt}`);
+  }
+
+  commandUnTrustTemporary(playerExt: PlayerData, cmds: string[]) {
+    if (playerExt.trust_level < 2) return;
+    if (cmds.length == 0) {
+      this.sendMsgToPlayer(playerExt, "Uzycie: !xt- <@nick>");
+      return;
+    }
+    let txt = '';
+    cmds.forEach(cmd => {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (cmdPlayer) {
+        if (cmdPlayer.id != playerExt.id && this.hb_room.temporarily_trusted.has(cmdPlayer.id)) {
+          cmdPlayer.trust_level = 0;
+          this.hb_room.temporarily_trusted.delete(cmdPlayer.id);
+          this.hb_room.delay_joiner.addPlayerOnGameStop(cmdPlayer);
+          txt += `${cmdPlayer.name} `;
+        }
+      }
+    });
+    if (txt.length) this.sendMsgToPlayer(playerExt, `Zabrano tymczasowe zaufanie dla: ${txt}`);
+  }
+
+  commandShowTrustTemporary(playerExt: PlayerData, cmds: string[]) {
+    if (playerExt.trust_level < 2) return;
+    let txt = '';
+    this.hb_room.players_ext.forEach(player => {
+      if (this.hb_room.temporarily_trusted.has(player.id) && player.trust_level === 1)
+          txt += `${player.name} `;
+    })
+    if (txt.length) this.sendMsgToPlayer(playerExt, `Gracze z tymczasowym zaufaniem: ${txt}`);
+  }
+
+  commandAfter(playerExt: PlayerData, cmds: string[]) {
     let cmd = cmds.join(" ");
     if (cmd.length && !cmd.startsWith('!')) cmd = '!' + cmd;
     playerExt.command_after_match_ends = cmd;
@@ -1466,33 +1602,33 @@ class Commander extends BaseCommander {
     return `${hours}:${minutes}:${seconds}`;
   }
 
-  async commandUptime(playerExt: PlayerData) {
+  commandUptime(playerExt: PlayerData) {
     let txt = this.formatUptime(Date.now() - this.hb_room.server_start_time);
     this.sendMsgToPlayer(playerExt, `Server uptime: ${txt}`);
   }
 
-  async commandPasek(playerExt: PlayerData) {
+  commandPasek(playerExt: PlayerData) {
     this.sendMsgToPlayer(playerExt, 'Mniejsza kulka wskazuje presję na połowie przeciwnika, większa kulka określa posiadanie piłki');
   }
 
-  async commandBuyCoffeeLink(playerExt: PlayerData) {
+  commandBuyCoffeeLink(playerExt: PlayerData) {
     let link = 'https://' + BuyCoffee.buy_coffe_link;
     let random_text = BuyCoffee.buy_coffee_link_texts[Math.floor(Math.random() * BuyCoffee.buy_coffee_link_texts.length)];
     this.sendMsgToPlayer(playerExt, `${random_text} ${link}`, 0xFF4444, 'bold', 2);
   }
 
-  async commandShowDiscordAndWebpage(playerExt: PlayerData) {
+  commandShowDiscordAndWebpage(playerExt: PlayerData) {
     this.sendMsgToPlayer(playerExt, `Chcesz pogadać? 💬 ${config.discordLink} 💬 Strona serwera: 🌐 ${config.webpageLink} 🌐`);
   }
 
-  async commandDumpPlayers(playerExt: PlayerData) {
+  commandDumpPlayers(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     for (let p of this.getPlayersExt()) {
       this.sendMsgToPlayer(playerExt, `${p.name} [${p.id}] auth: ${p.auth_id.substring(0, 16)} conn: ${p.conn_id}`);
     }
   }
 
-  async commandAntiSpam(playerExt: PlayerData, cmds: string[]) {
+  commandAntiSpam(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'anti_spam')) return;
     if (cmds.length == 0) return;
     let new_state = toBoolean(cmds[0]);
@@ -1505,7 +1641,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandTriggerCaptcha(playerExt: PlayerData, cmds: string[]) {
+  commandTriggerCaptcha(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'captcha')) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Podkomendy: gen, clear, gen_me, set [0/1]");
@@ -1528,7 +1664,7 @@ class Commander extends BaseCommander {
     });
   }
 
-  async commandOnlyTrustedJoin(playerExt: PlayerData, cmds: string[]) {
+  commandOnlyTrustedJoin(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'only_trusted_join')) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "wołaj z on/off");
@@ -1539,7 +1675,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Tylko trusted connecting: ${new_state}`);
   }
 
-  async commandOnlyTrustedChat(playerExt: PlayerData, cmds: string[]) {
+  commandOnlyTrustedChat(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'only_trusted_chat')) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "wołaj z on/off");
@@ -1550,26 +1686,26 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Tylko trusted chatting: ${new_state}`);
   }
 
-  async commandWhitelistNonTrustedNick(playerExt: PlayerData, cmds: string[]) {
+  commandWhitelistNonTrustedNick(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     cmds.forEach(player_name => {
       this.hb_room.whitelisted_nontrusted_player_names.add(player_name);
     });
   }
 
-  async commandAutoDebug(playerExt: PlayerData, cmds: string[]) {
+  commandAutoDebug(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'auto_debug')) return;
     if (!this.hb_room.ratings_for_all_games) {
       this.hb_room.player_duplicate_allowed = true;
       this.hb_room.limit = Number.parseInt(cmds[0]) || 3;
       this.hb_room.auto_afk = false;
-      this.hb_room.auto_bot.MaxMatchTime = Number.parseInt(cmds[1]) || 150;
+      AutoBot.MaxMatchTime = Number.parseInt(cmds[1]) || 150;
       this.hb_room.auto_bot.autoVoter.setRequiredVotes(2);
       this.commandAutoMode(playerExt, ["on"]);
     } else {
       this.hb_room.player_duplicate_allowed = false;
       this.hb_room.auto_afk = true;
-      this.hb_room.auto_bot.MaxMatchTime = 6*60;
+      AutoBot.MaxMatchTime = 6*60;
       this.hb_room.auto_bot.autoVoter.setRequiredVotes(3);
       this.commandAutoMode(playerExt, ["off"]);
     }
@@ -1577,13 +1713,13 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
   }
 
-  async commandSetWelcomeMsg(playerExt: PlayerData, cmds: string[]) {
+  commandSetWelcomeMsg(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'welcome')) return;
     if (!cmds.length) return;
     this.hb_room.welcome_message.setMessage(cmds.join(' '));
   }
 
-  async commandSendAnnoToAllPlayers(playerExt: PlayerData, cmds: string[]) {
+  commandSendAnnoToAllPlayers(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'welcome')) return;
     if (!cmds.length) return;
     this.hb_room.sendMsgToAll(`${cmds.join(' ')}`, Colors.AzureBlue, 'bold');
@@ -1600,20 +1736,20 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandGodTest(playerExt: PlayerData, cmds: string[]) {
+  commandGodTest(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'server_restart')) return;
     let cmd = cmds.join(" ");
     this.sendMsgToPlayer(playerExt, `trying to exec: ${cmd}`);
     this.r().onPlayerChat(this.hb_room.god_player, cmd);
   }
 
-  async commandSwitchBotStoppingFlag(playerExt: PlayerData, cmds: string[]) {
+  commandSwitchBotStoppingFlag(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     this.hb_room.bot_stopping_enabled = !this.hb_room.bot_stopping_enabled;
       this.sendMsgToPlayer(playerExt, `Obecny stan: ${this.hb_room.bot_stopping_enabled}`);
   }
 
-  async commandPrintShortInfo(playerExt: PlayerData, cmds: string[]) {
+  commandPrintShortInfo(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let players = this.r().getPlayerList();
     let txt = '';
@@ -1624,7 +1760,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt,txt);
   }
 
-  async commandBotSetRadius(playerExt: PlayerData, cmds: string[]) {
+  commandBotSetRadius(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'botmin')) return;
     let newRadius = Number.parseFloat(cmds[0]);
     if (isNaN(newRadius)) newRadius = 15;
@@ -1634,7 +1770,7 @@ class Commander extends BaseCommander {
       })
   }
 
-  async commandCheckBots(playerExt: PlayerData, cmds: string[]) {
+  commandCheckBots(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot).map(e => e.name);
     if (bots.length)
@@ -1643,7 +1779,7 @@ class Commander extends BaseCommander {
       this.sendMsgToPlayer(playerExt, `Nie znalazłem botów`);
   }
 
-  async commandWhoIsNotBot(playerExt: PlayerData, cmds: string[]) {
+  commandWhoIsNotBot(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => !e.bot).map(e => e.name);
     if (bots.length)
@@ -1652,7 +1788,7 @@ class Commander extends BaseCommander {
       this.sendMsgToPlayer(playerExt, `Nie znalazłem Człowieka`);
   }
 
-  async commandMarkBot(playerExt: PlayerData, cmds: string[]) {
+  commandMarkBot(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'bot')) return;
     let txt = '';
     for (let cmd of cmds) {
@@ -1666,7 +1802,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `BOT dodałem ${txt}`);
   }
 
-  async commandUnmarkBot(playerExt: PlayerData, cmds: string[]) {
+  commandUnmarkBot(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'bot')) return;
     let txt = '';
     for (let cmd of cmds) {
@@ -1680,7 +1816,7 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `BOT usunąłem ${txt}`);
   }
 
-  async commandKickBots(playerExt: PlayerData, cmds: string[]) {
+  commandKickBots(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
@@ -1688,7 +1824,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandTKickBots(playerExt: PlayerData, cmds: string[]) {
+  commandTKickBots(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'tkick_bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
@@ -1697,7 +1833,7 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandNKickBots(playerExt: PlayerData, cmds: string[]) {
+  commandNKickBots(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'nkick_bots')) return;
     let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
     for (let bot of bots) {
@@ -1706,13 +1842,13 @@ class Commander extends BaseCommander {
     }
   }
 
-  async commandBanReload(playerExt: PlayerData, cmds: string[]) {
+  commandBanReload(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'ban_reload')) return;
     this.hb_room.players_game_state_manager.initAllGameState();
     this.sendMsgToPlayer(playerExt, `Przeładowałem network players state`);
   }
 
-  async commandPrintPlayerIp(playerExt: PlayerData, cmds: string[]) {
+  commandPrintPlayerIp(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'ip')) return;
     let txt = '';
     for (let cmd of cmds) {
@@ -1724,16 +1860,45 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `IP ${txt}`);
   }
 
-  async keyboardLShiftDown(playerExt: PlayerData) {
+  keyboardLShiftDown(playerExt: PlayerData) {
     this.hb_room.acceleration_tasks.startSprint(playerExt.id);
   }
 
-  async keyboardLShiftUp(playerExt: PlayerData) {
+  keyboardLShiftUp(playerExt: PlayerData) {
     this.hb_room.acceleration_tasks.stopSprint(playerExt.id);
   }
 
-  async keyboardADown(playerExt: PlayerData) {
+  keyboardADown(playerExt: PlayerData) {
     this.hb_room.acceleration_tasks.slide(playerExt.id);
+  }
+
+  commandNoXEnable(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'no_x')) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer) return;
+    if (cmdPlayer.id === playerExt.id) return;
+    this.r().setPlayerNoX(cmdPlayer.id, true);
+    this.sendMsgToPlayer(playerExt, `Włączyłeś no_x dla ${cmdPlayer.name}`);
+  }
+
+  commandNoXDisable(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'no_x')) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer) return;
+    if (cmdPlayer.id === playerExt.id) return;
+    this.r().setPlayerNoX(cmdPlayer.id, false);
+    this.sendMsgToPlayer(playerExt, `Wyłączyłeś no_x dla ${cmdPlayer.name}`);
+  }
+
+  commandWhoHasIpv6(playerExt: PlayerData, cmds: string[]) {
+    let txt = '';
+    if (this.warnIfPlayerIsNotHost(playerExt, 'no_x')) return;
+    this.hb_room.players_ext.forEach(p => {
+      if (p.id !== playerExt.id && p.real_ip.includes(':')) {
+        txt += playerExt.name + ' ';
+      }
+    })
+    this.sendMsgToPlayer(playerExt, `Gracze z ipv6: ${txt}`);
   }
 }
 
@@ -1792,7 +1957,7 @@ class DiscordCommander extends BaseCommander {
     }
   }
 
-  commandAllLinksUpdate(playerExt: PlayerData, cmds: string[]) {
+  commandLinkSetNickname(playerExt: PlayerData, cmds: string[]) {
     if (playerExt.trust_level) {
       let dc = playerExt.discord_user;
       if (dc && dc.state) {
@@ -1807,7 +1972,7 @@ class DiscordCommander extends BaseCommander {
     this.hb_room.discord_account.updateDiscordUsers();
   }
 
-  commandLinkSetNickname(playerExt: PlayerData, cmds: string[]) {
+  commandAllLinksUpdate(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.discord_account.updateDiscordLinks();
   }

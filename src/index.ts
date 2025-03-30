@@ -18,7 +18,7 @@ import HaxballJS from 'haxball.js';
 import { hb_room_main } from './hb_room';
 import * as config from './config';
 
-async function getTokenFromFile(selector: string, subselector: string): Promise<string> {
+async function getTokenFromFile(selector: config.RoomConfigSelectorType, subselector: string): Promise<string> {
   try {
     const filePath = `./dynamic/token_${selector}_${subselector}.txt`;
     const data = (await fs.readFile(filePath, "utf8")).trim();
@@ -31,7 +31,7 @@ async function getTokenFromFile(selector: string, subselector: string): Promise<
   }
 }
 
-const roomConfig = config.getRoomConfig(process.env.HX_ROOM_CONFIG_SELECTOR, process.env.HX_ROOM_CONFIG_SUBSELECTOR);
+const roomConfig = config.getRoomConfig(process.env.HX_ROOM_CONFIG_SELECTOR as config.RoomConfigSelectorType, process.env.HX_ROOM_CONFIG_SUBSELECTOR);
 
 HaxballJS.then((HBInit) => {
   // Same as in Haxball Headless Host Documentation

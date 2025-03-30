@@ -24,7 +24,7 @@ export class PlayerJoinLogger {
 
   handlePlayerJoin(playerExt: PlayerData) {
     const now = new Date().toISOString();
-    this.appendLineToFile(this.filename, `${now},${playerExt.auth_id},${playerExt.name},${playerExt.real_ip}`);
+    this.appendLineToFile(this.filename, `${now},${playerExt.auth_id},${playerExt.conn_id},${playerExt.name},${playerExt.real_ip},${playerExt.name}`);
     this.hbRoom.game_state.probableBotExists(playerExt.auth_id, playerExt.conn_id).then((isBot) => {
       if (isBot) {
         playerExt.bot = true;
@@ -34,6 +34,7 @@ export class PlayerJoinLogger {
   }
 
   handleGameTick(players: PlayerData[]) {
+    if (!this.positionsEnabled && !this.hbRoom.bot_stopping_enabled) return;
     for (let player of players) {
       // if (player.trust_level) continue; // person
       // if (player.bot) continue; // currently discovered

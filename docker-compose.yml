@@ -6,10 +6,11 @@ services:
     restart: unless-stopped
     ports:
       - "0.0.0.0:50000-50100:50000-50100/udp"
+      - "[::]:50000-50100:50000-50100/udp"
     environment:
       - MONITORING=monitoring
-      - HTTP_PROXY=http://mitmproxy:8080
-      - HTTPS_PROXY=http://mitmproxy:8080
+      - HTTP_PROXY=http://proxy-futsal-3vs3:8080
+      - HTTPS_PROXY=http://proxy-futsal-3vs3:8080
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - HX_ROOM_CONFIG_SELECTOR=3vs3
       - HX_ROOM_CONFIG_SUBSELECTOR=1
@@ -33,52 +34,89 @@ services:
       retries: 5
       start_period: 60s
     command: ["futsal_3vs3_1"]
-  futsal-3vs3-2:
+  # futsal-3vs3-2:
+  #   image: hx-puppeteer:1.0
+  #   container_name: haxball-server-futsal-3vs3-2
+  #   restart: unless-stopped
+  #   ports:
+  #     - "0.0.0.0:51000-51100:51000-51100/udp"
+  #     - "[::]:51000-51100:51000-51100/udp"
+  #   environment:
+  #     - MONITORING=monitoring
+  #     - HTTP_PROXY=http://ssh-proxy:3132
+  #     - HTTPS_PROXY=http://ssh-proxy:3132
+  #     - NODE_TLS_REJECT_UNAUTHORIZED=0
+  #     - HX_ROOM_CONFIG_SELECTOR=3vs3
+  #     - HX_ROOM_CONFIG_SUBSELECTOR=2
+  #     - TZ=Europe/Warsaw
+  #     - NODE_TZ=Europe/Warsaw
+  #   volumes:
+  #     - .:/src
+  #     - /mnt/sqlite_ram/db:/src/db
+  #   cap_add:
+  #     - SYS_ADMIN
+  #     - CAP_NET_ADMIN
+  #   shm_size: "1gb"
+  #   sysctls:
+  #     - net.ipv4.ip_local_port_range=51000 51100
+  #   networks:
+  #     - app_network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 60s
+  #   command: ["futsal_3vs3_2"]
+  # futsal-3vs3-3:
+  #   image: hx-puppeteer:1.0
+  #   container_name: haxball-server-futsal-3vs3-3
+  #   restart: unless-stopped
+  #   ports:
+  #     - "0.0.0.0:52000-52100:52000-52100/udp"
+  #     - "[::]:52000-52100:52000-52100/udp"
+  #   environment:
+  #     - MONITORING=monitoring
+  #     - HTTP_PROXY=http://ssh-proxy:3133
+  #     - HTTPS_PROXY=http://ssh-proxy:3133
+  #     - NODE_TLS_REJECT_UNAUTHORIZED=0
+  #     - HX_ROOM_CONFIG_SELECTOR=3vs3
+  #     - HX_ROOM_CONFIG_SUBSELECTOR=3
+  #     - TZ=Europe/Warsaw
+  #     - NODE_TZ=Europe/Warsaw
+  #   volumes:
+  #     - .:/src
+  #     - /mnt/sqlite_ram/db:/src/db
+  #   cap_add:
+  #     - SYS_ADMIN
+  #     - CAP_NET_ADMIN
+  #   shm_size: "1gb"
+  #   sysctls:
+  #     - net.ipv4.ip_local_port_range=52000 52100
+  #   networks:
+  #     - app_network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 60s
+  #   command: ["futsal_3vs3_3"]
+############
+  freestyle:
     image: hx-puppeteer:1.0
-    container_name: haxball-server-futsal-3vs3-2
+    container_name: haxball-server-freestyle
     restart: unless-stopped
     ports:
-      - "0.0.0.0:52000-52100:52000-52100/udp"
+      - "0.0.0.0:53000-53100:53000-53100/udp"
+      - "[::]:53000-53100:53000-53100/udp"
     environment:
       - MONITORING=monitoring
       - HTTP_PROXY=http://ssh-proxy:3132
       - HTTPS_PROXY=http://ssh-proxy:3132
       - NODE_TLS_REJECT_UNAUTHORIZED=0
-      - HX_ROOM_CONFIG_SELECTOR=3vs3
-      - HX_ROOM_CONFIG_SUBSELECTOR=2
-      - TZ=Europe/Warsaw
-      - NODE_TZ=Europe/Warsaw
-    volumes:
-      - .:/src
-      - /mnt/sqlite_ram/db:/src/db
-    cap_add:
-      - SYS_ADMIN
-      - CAP_NET_ADMIN
-    shm_size: "1gb"
-    sysctls:
-      - net.ipv4.ip_local_port_range=52000 52100
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    command: ["futsal_3vs3_2"]
-  futsal-3vs3-3:
-    image: hx-puppeteer:1.0
-    container_name: haxball-server-futsal-3vs3-3
-    restart: unless-stopped
-    ports:
-      - "0.0.0.0:53000-53100:53000-53100/udp"
-    environment:
-      - MONITORING=monitoring
-      - HTTP_PROXY=http://ssh-proxy:3133
-      - HTTPS_PROXY=http://ssh-proxy:3133
-      - NODE_TLS_REJECT_UNAUTHORIZED=0
-      - HX_ROOM_CONFIG_SELECTOR=3vs3
-      - HX_ROOM_CONFIG_SUBSELECTOR=3
+      - HX_ROOM_CONFIG_SELECTOR=freestyle
+      - HX_ROOM_CONFIG_SUBSELECTOR=1
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
     volumes:
@@ -98,14 +136,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    command: ["futsal_3vs3_3"]
-############
+    command: ["futsal_freestyle"]
+######
   futsal-1vs1:
     image: hx-puppeteer:1.0
     container_name: haxball-server-futsal-1vs1
     restart: unless-stopped
     ports:
-      - "0.0.0.0:51000-51100:51000-51100/udp"
+      - "0.0.0.0:54000-54100:54000-54100/udp"
+      - "[::]:54000-54100:54000-54100/udp"
     environment:
       - MONITORING=monitoring
       - HTTP_PROXY=http://proxy-futsal-1vs1:8080
@@ -123,7 +162,7 @@ services:
       - CAP_NET_ADMIN
     shm_size: "1gb"
     sysctls:
-      - net.ipv4.ip_local_port_range=51000 51100
+      - net.ipv4.ip_local_port_range=54000 54100
     networks:
       - app_network
     healthcheck:
@@ -139,11 +178,15 @@ services:
     container_name: haxball-server-futsal-4vs4-1
     restart: unless-stopped
     ports:
-      - "0.0.0.0:54000-54100:54000-54100/udp"
+      - "0.0.0.0:55000-55100:55000-55100/udp"
+      - "[::]:55000-55100:55000-55100/udp"
     environment:
       - MONITORING=monitoring
-      - HTTP_PROXY=http://ssh-proxy:3133
-      - HTTPS_PROXY=http://ssh-proxy:3133
+      - HTTP_PROXY=http://proxy-freestyle:8080
+      - HTTPS_PROXY=http://proxy-freestyle:8080
+      - HTTP_PROXY_IPV6=true
+      # - HTTP_PROXY=http://ssh-proxy:3133
+      # - HTTPS_PROXY=http://ssh-proxy:3133
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - HX_ROOM_CONFIG_SELECTOR=4vs4
       - HX_ROOM_CONFIG_SUBSELECTOR=1
@@ -157,7 +200,7 @@ services:
       - CAP_NET_ADMIN
     shm_size: "1gb"
     sysctls:
-      - net.ipv4.ip_local_port_range=54000 54100
+      - net.ipv4.ip_local_port_range=55000 55100
     networks:
       - app_network
     healthcheck:
@@ -179,6 +222,7 @@ services:
       - NODE_TZ=Europe/Warsaw
     ports:
       - "0.0.0.0:3000:3000/tcp"
+      - "[::]:3000:3000/tcp"
     networks:
       - app_network
     user: node
@@ -198,7 +242,7 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run discord_3vs3
-  discord-1vs1:
+  discord-freestyle:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped
     volumes:
@@ -211,7 +255,7 @@ services:
       - app_network
     user: node
     working_dir: /src
-    entrypoint: npm run discord_1vs1
+    entrypoint: npm run discord_freestyle
   discord-accounts:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped

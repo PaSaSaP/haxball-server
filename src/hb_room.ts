@@ -1,7 +1,7 @@
 // https://pastebin.com/f4PSNz7C
 // https://pastebin.com/2nHXPbvS
 
-import { tokenDatabase, ServerData } from './token_database';
+import { tokenDatabase, ServerRow } from './token_database';
 import * as config from './config';
 import ChatLogger from './chat_logger';
 import { sleep, normalizeNameString } from './utils';
@@ -16,7 +16,7 @@ import {
   GameModeType
 } from './structs';
 import { Colors } from './colors';
-import all_maps from './maps';
+import {isValidMap, getMap } from './maps';
 import { BuyCoffee } from './buy_coffee';
 import { DBHandler, GameState } from './game_state';
 import Commander from './commands';
@@ -47,13 +47,14 @@ export class HaxballRoom {
   room: RoomObject;
   room_config: config.RoomServerConfig;
   server_start_time: number;
+  current_time: number;
   scores: ScoresObject|null;
   pressure_left: number;
   pressure_right: number;
   pressure_total: number;
-  last_tick: number;
+  last_match_time: number;
+  game_tick_counter: number;
   pressure_bar_length: number;
-  last_discs_update_time: number;
   feature_pressure: boolean;
   feature_pressure_stadium: boolean;
   players_ext_all: Map<number, PlayerData>; // all players connected since server started
@@ -117,19 +118,23 @@ export class HaxballRoom {
   pl_logger: PlayerJoinLogger;
   discord_account: DiscordAccountManager;
   bot_stopping_enabled = false;
+  temporarily_trusted: Set<number>;
+
+  game_tick_array: number[];
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
     this.room_config = roomConfig;
 
     this.server_start_time = Date.now();
+    this.current_time = this.server_start_time;
     this.scores = null;
     this.pressure_left = 0.0;
     this.pressure_right = 0.0;
     this.pressure_total = 0.0;
-    this.last_tick = 0.0;
+    this.last_match_time = 0.0;
+    this.game_tick_counter = 0;
     this.pressure_bar_length = 300;
-    this.last_discs_update_time = 0;
     this.feature_pressure = true;
     this.feature_pressure_stadium = false;
     this.players_ext_all = new Map();
@@ -188,13 +193,16 @@ export class HaxballRoom {
     this.gatekeeper = new PlayerGatekeeper(this);
     this.pl_logger = new PlayerJoinLogger(this);
     this.discord_account = new DiscordAccountManager(this);
+    this.temporarily_trusted = new Set();
+
+    this.game_tick_array = [];
 
     this.ratings.isEnabledPenaltyFor = (playerId: number) => {
       let playerExt = this.Pid(playerId);
       return playerExt.trust_level === 0 || (playerExt.trust_level > 0 && playerExt.penalty_counter >= 3);
     };
     this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
-    this.welcome_message.setMessageNonTrusted(`By móc grać musisz zyskać pierwszy stopień zaufania, sprawdź Discord! 💬 ${config.discordLink} 💬`);
+    this.welcome_message.setMessageNonTrusted(`By móc grać musisz zyskać pierwszy stopień zaufania, sprawdź Discord! 💬 ${config.discordLink} 💬`);
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -379,10 +387,19 @@ export class HaxballRoom {
 
   makeRoomDataSync() {
     // TODO connectable should be updated by another thread?job? async independent from that
-    let playersMax = this.room_config.maxPlayersOverride;
-    let playersCur = this.players_num > playersMax ? playersMax : this.players_num;
-    let serverData = new ServerData(this.getSselector(),
-      this.room_config.token, this.room_link, this.room_config.roomName, playersCur, playersMax, true, true);
+    const playersMax = this.room_config.maxPlayersOverride;
+    const ps = this.players_ext.size;
+    let playersCur = ps > playersMax ? playersMax : ps;
+    const serverData: ServerRow = {
+      selector: this.getSselector(),
+      token: this.room_config.token,
+      link: this.room_link,
+      room_name: this.room_config.roomName,
+      player_num: playersCur,
+      player_max: playersMax,
+      connectable: true,
+      active: true,
+    }
     tokenDatabase.saveServer(serverData);
   }
 
@@ -405,39 +422,51 @@ export class HaxballRoom {
     this.pressure_left = 0.0;
     this.pressure_right = 0.0;
     this.pressure_total = 0.0;
-    this.last_tick = 0.0;
+    this.last_match_time = 0.0;
+    this.game_tick_counter = 0;
+  }
+
+  private countTicksPerSecond(currentTime: number) {
+    if (this.game_tick_counter % 60 === 0) this.game_tick_array.push(currentTime); // TODO debug, need to verify
+    if (this.game_tick_array.length === 60) {
+      for (let i = 0; i < this.game_tick_array.length-1; ++i) {
+        this.game_tick_array[i] = this.game_tick_array[i + 1] - this.game_tick_array[i];
+      }
+      hb_log(`TICK ARRAY ${this.game_tick_array}`);
+      this.game_tick_array.length = 0;
+    }
   }
 
   async handleGameTick() {
-    this.pinger.sendKeepAlive();
-    // Current time in ms
+    const currentTime = Date.now(); // [ms]
+    this.current_time = currentTime;
+    ++this.game_tick_counter;
+    // this.countTicksPerSecond(currentTime);
+    this.pinger.sendKeepAlive(currentTime);
     let scores = this.room.getScores();
     this.scores = scores;
     let players = this.getPlayersExtList(true);
-    let current_tick = scores.time;
-    let delta_time = current_tick - this.last_tick;
-    this.last_tick = current_tick;
+    let currentMatchTime = scores.time;
+    let deltaTime = currentMatchTime - this.last_match_time;
+    this.last_match_time = currentMatchTime;
     const ball_position = this.room.getDiscProperties(0);
     this.pl_logger.handleGameTick(players);
 
     if (this.feature_pressure) {
-
-      if (delta_time > 0) {
-
+      if (deltaTime > 0 && ball_position) {
         // Calc pressure
         if (ball_position.x < 0) {
-          this.pressure_left += delta_time;
+          this.pressure_left += deltaTime;
         } else if (ball_position.x > 0) {
-          this.pressure_right += delta_time;
+          this.pressure_right += deltaTime;
         } else {
-          this.pressure_left += delta_time;
-          this.pressure_right += delta_time;
+          this.pressure_left += deltaTime;
+          this.pressure_right += deltaTime;
         }
-        this.pressure_total += delta_time;
+        this.pressure_total += deltaTime;
 
-        if (this.feature_pressure_stadium && current_tick - this.last_discs_update_time > 1) {
-          this.last_discs_update_time += 1; // update every second
-
+        // update every second
+        if (this.feature_pressure_stadium && this.game_tick_counter % 60 === 0) {
           let blue_pressure = (this.pressure_left / this.pressure_total) * 100;
           let red_pressure = (this.pressure_right / this.pressure_total) * 100;
           let pressure_disc_color;
@@ -452,7 +481,7 @@ export class HaxballRoom {
             pressure_disc_color = 0x202020;
             pressure_disc_pos_x = 0.0;
           }
-          let pressure_dist_prop: any = this.room.getDiscProperties(6)
+          let pressure_dist_prop = this.room.getDiscProperties(6)
           this.room.setDiscProperties(6, { // Pressure disc properties (id: 6)
             xspeed: (pressure_disc_pos_x - pressure_dist_prop.x) / 60,
             color: pressure_disc_color,
@@ -476,7 +505,7 @@ export class HaxballRoom {
             possesion_disc_color = 0x424242;
             possesion_disc_pos_x = 0.0;
           }
-          let possesion_disc_prop: any = this.room.getDiscProperties(5);
+          let possesion_disc_prop = this.room.getDiscProperties(5);
           this.room.setDiscProperties(5, { // Possesion disc properties (id: 5)
             xspeed: (possesion_disc_pos_x - possesion_disc_prop.x) / 60,
             color: possesion_disc_color,
@@ -485,42 +514,65 @@ export class HaxballRoom {
       }
     }
 
-    let current_time = Date.now();
-    let afk_players_num = 0;
-    // check for AFK
-    if (this.auto_afk && (!this.auto_mode || (this.auto_mode && !this.auto_bot.isLobbyTime()))) {
-      const MaxAllowedNoMoveTime = 15.0 * 1000; // [ms]
-      players.forEach(player_ext => {
-        if (player_ext.team) {
-          const afkTime = current_time - player_ext.activity.game; // [ms]
-          if (afkTime > MaxAllowedNoMoveTime) {
-            if (!player_ext.afk) { this.commander.commandSetAfkExt(player_ext); player_ext.afk_switch_time -= 15_000; } // do not block auto detected
-            else if (player_ext.afk_maybe) this.moveAfkMaybeToSpec(player_ext);
-          } else if (afkTime > MaxAllowedNoMoveTime - 9 * 1000) {
-            let idx = Math.min(8 - Math.floor((MaxAllowedNoMoveTime - afkTime) / 1000), 8);
-            player_ext.afk_avatar = Emoji.CountdownEmojis[idx];
-            this.room.setPlayerAvatar(player_ext.id, player_ext.afk_avatar);
+    let afkPlayersNum = 0;
+    // check for AFK, twice per second
+    if (this.auto_afk && this.game_tick_counter % 30 === 0) {
+      if (!this.auto_mode || (this.auto_mode && !this.auto_bot.isLobbyTime())) {
+        players.forEach(playerExt => {
+          if (playerExt.team) {
+            const afkTime = ((currentTime - playerExt.activity.game) / 1000)|0; // [s]
+            if (afkTime > HaxballRoom.MaxAllowedAfkNoMoveTime) {
+              if (!playerExt.afk) {
+                this.markPlayerAsAutoAfk(playerExt, currentTime);
+              }
+              else if (playerExt.afk_maybe) this.moveAfkMaybeToSpec(playerExt);
+            } else if (afkTime > HaxballRoom.MaxAllowedAfkNoMoveTimeEmojiCooldown) {
+              let idx = afkTime - HaxballRoom.MaxAllowedAfkNoMoveTimeEmojiCooldown;
+              idx = idx < 0 ? 0 : idx > 8 ? 8 : idx;
+              this.setPlayerAvatarTo(playerExt, Emoji.CountdownEmojis[idx]);
+            }
+            if (playerExt.afk) afkPlayersNum++;
           }
-          if (player_ext.afk) afk_players_num++;
+        });
+      }
+      if (!this.auto_mode) {
+        if (afkPlayersNum == players.length) {
+          this.allPlayersAfking(players);
         }
-      });
-    }
-
-    if (!this.auto_mode) {
-      if (afk_players_num == players.length) {
-        this.allPlayersAfking(players);
       }
     }
     this.acceleration_tasks.update();
-    this.ball_possesion_tracker.trackPossession();
+    this.ball_possesion_tracker.trackPossession(currentMatchTime, ball_position, players);
     if (this.auto_mode) this.auto_bot.handleGameTick(scores);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(players);
     this.match_stats.handleGameTick(scores, ball_position, this.players_ext_all, redTeam, blueTeam);
     this.rejoice_maker.handleGameTick();
   }
+  static readonly MaxAllowedAfkNoMoveTime = 15; // [s]
+  static readonly MaxAllowedAfkNoMoveTimeMs = this.MaxAllowedAfkNoMoveTime * 1000; // [ms]
+  static readonly MaxAllowedAfkNoMoveTimeEmojiCooldown = this.MaxAllowedAfkNoMoveTime - 10; // [s]
+
+  setPlayerAvatarTo(playerExt: PlayerData, avatar: string) {
+    if (playerExt.avatar === avatar) return;
+    playerExt.avatar = avatar;
+    this.room.setPlayerAvatar(playerExt.id, avatar.length? avatar: null);
+  }
+
+  markPlayerAsAutoAfk(playerExt: PlayerData, now: number) {
+    // set on afk
+    if (playerExt.afk) return;
+    playerExt.afk_switch_time = now - HaxballRoom.MaxAllowedAfkNoMoveTimeMs; // do not block auto detected
+    playerExt.afk = true;
+    this.setPlayerAvatarTo(playerExt, Emoji.Afk);
+    this.sendMsgToAll(`${playerExt.name} zapomniał o nas, jest teraz AFK (!afk !back !jj)`, Colors.Afk);
+    if (playerExt.team != 0) {
+      this.room.setPlayerTeam(playerExt.id, 0);
+    }
+    if (!this.auto_mode && playerExt.admin) this.updateAdmins(null);
+  }
 
   moveAfkMaybeToSpec(player: PlayerData) {
-    this.room.setPlayerAvatar(player.id, Emoji.Afk);
+    this.setPlayerAvatarTo(player, Emoji.AfkMaybe);
     this.room.setPlayerTeam(player.id, 0);
   }
 
@@ -530,10 +582,10 @@ export class HaxballRoom {
     players.forEach(player => {
       let player_ext = this.Pid(player.id);
       if (player_ext.afk || !player_ext.afk_maybe) {
-        this.room.setPlayerAvatar(player_ext.id, Emoji.AfkMaybe);
+        this.setPlayerAvatarTo(player_ext, Emoji.AfkMaybe);
         player_ext.afk_maybe = true;
       } else {
-        this.room.setPlayerAvatar(player_ext.id, null);
+        this.setPlayerAvatarTo(player_ext, '');
       }
       player_ext.activity.game = current_time;
       player_ext.afk = false;
@@ -560,15 +612,15 @@ export class HaxballRoom {
     }
   }
 
-  setMapByName(map_name: string) {
-    if (!all_maps.has(map_name)) return;
+  setMapByName(map_name: string, bg_color: number = 0, ball_color: number = 0) {
+    if (!isValidMap(map_name)) return;
     if (['1', '2', 'f'].includes(map_name)) map_name = 'futsal';
     else if (['3', 'fb'].includes(map_name)) map_name = 'futsal_big';
     else if (['4', 'fh'].includes(map_name)) map_name = 'futsal_huge';
     if (this.last_selected_map_name != map_name) {
-      let next_map = all_maps.get(map_name);
+      let next_map = getMap(map_name, bg_color, ball_color);
       if (next_map) {
-        this.room.setCustomStadium(next_map);
+        this.room.setCustomStadiumJson(next_map);
         this.last_selected_map_name = map_name;
       }
     }
@@ -594,10 +646,10 @@ export class HaxballRoom {
   }
 
   async handleGameStart(byPlayer: PlayerObject | null) {
+    this.game_tick_array = [];
     this.pinger.stop();
     this.pl_logger.handleGameStart();
     this.last_winner_team = 0;
-    this.last_discs_update_time = 0;
     this.time_limit_reached = false;
     this.resetPressureStats();
     if (byPlayer) this.Pid(byPlayer.id).admin_stat_start_stop();
@@ -607,7 +659,7 @@ export class HaxballRoom {
       p.activity.game = now;
 
       if (p.trust_level < 2) { // TODO Debug
-        this.room.setPlayerAvatar(p.id, `<${p.trust_level}`);
+        this.setPlayerAvatarTo(p, `<${p.trust_level}`);
       }
     }
     this.gameStopTimerReset();
@@ -623,6 +675,7 @@ export class HaxballRoom {
           + `${anyPlayerProperties?.damping} ${ballProperties?.radius} ${ballProperties?.damping}`);
       }
       this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
+      this.ball_possesion_tracker.updateRadius(anyPlayerProperties, ballProperties);
     }, 1000);
     this.kickLongAfkingPlayers();
   }
@@ -703,12 +756,11 @@ export class HaxballRoom {
       }
     }
     this.scores = null;
-    if (this.auto_mode) {
-      return; // do not start below timer
-    }
 
     this.game_stopped_timer = setInterval(() => {
       let current_time = Date.now();
+      this.current_time = current_time; // update time here also
+      if (this.auto_mode) return;
       let random_new_admin = false;
       for (let p of this.getPlayersExt()) {
         if (current_time - this.last_player_team_changed_by_admin_time > MaxAllowedGameStopTime) {
@@ -754,7 +806,7 @@ export class HaxballRoom {
     }
   }
 
-  getSelectorFromMatch(match: Match) {
+  getSelectorFromMatch(match: Match): GameModeType {
     const selector = match.matchType;
     if (selector !== 'none') return selector;
     return this.room_config.selector;
@@ -792,7 +844,8 @@ export class HaxballRoom {
           if (sId === undefined) continue;
           let stat = this.player_stats.get(sId)!;
           let teamId: 1 | 2 = currentMatch.redTeam.includes(stat.id) ? 1 : 2;
-          this.game_state.insertNewMatchPlayerStats(selector, matchId, authId, teamId, stat.currentMatch).catch((e) => e && hb_log(`!! insertNewMatchPlayerStats error: ${e}`));
+          this.game_state.insertNewMatchPlayerStats(selector, matchId, authId, teamId, stat.currentMatch)
+            .catch((e: any) => e && hb_log(`!! insertNewMatchPlayerStats error: ${e}`));
         }
       }).catch((e) => e && hb_log(`!! insertNewMatch error: ${e}`));
     }
@@ -928,15 +981,16 @@ export class HaxballRoom {
 
   async handlePlayerJoin(player: PlayerObject) {
     this.players_num += 1;
-    hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}]`);
+    hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}] auth: ${player.auth} conn: ${player.conn} ip: ${player.real_ip}`);
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
     let playerExt = this.Pid(player.id);
-    // hb_log(`FLAG = ${player.country} IP = ${player.real_ip}`)
-    if (player.country && player.country.length && player.real_ip && player.real_ip.length) {
+    if (player.country && player.country.length) {
       if (player.country.toLowerCase() === 'pl') playerExt.flag = '🇵🇱';
       else playerExt.flag = '🇪🇺';
-      playerExt.real_ip = player.real_ip;
+    }
+    if (player.real_ip && player.real_ip.length) {
+      playerExt.real_ip = player.real_ip.toString();
     }
 
     this.pl_logger.handlePlayerJoin(playerExt);
@@ -990,7 +1044,7 @@ export class HaxballRoom {
         this.sendMsgToPlayer(player, `Jesteś wyciszony na 30 sekund; You are muted for 30 seconds`, Colors.Admin, 'bold');
       }
       if (playerExt.trust_level < 2) {
-        this.room.setPlayerAvatar(playerExt.id, `<${playerExt.trust_level}`);
+        this.setPlayerAvatarTo(playerExt, `<${playerExt.trust_level}`);
       }
       // this.sendOnlyTo(player, `Mozesz aktywować sterowanie przyciskami (Link: https://tinyurl.com/HaxballKeyBinding): Lewy Shift = Sprint, A = Wślizg`, 0x22FF22);
       this.sendMsgToPlayer(player, `Sprawdź dostępne komendy: !help !wyb !sklep`, Colors.Help);
@@ -1175,6 +1229,9 @@ export class HaxballRoom {
     this.match_stats.handlePlayerLeave(playerExt);
     this.delay_joiner.handlePlayerLeave(playerExt);
     if (this.auto_mode) this.auto_bot.handlePlayerLeave(playerExt);
+    playerExt.ignored_by.forEach(playerId => {
+      this.Pid(playerId).ignores.delete(playerExt.id);
+    })
     playerExt.mark_disconnected();
     this.players_ext.delete(player.id);
   }
@@ -1230,9 +1287,9 @@ export class HaxballRoom {
     this.feature_pressure_stadium = true;
     if (`${t} Classic BAR` === newStadiumName) this.last_selected_map_name = 'classic';
     else if (`${t} Big BAR` === newStadiumName) this.last_selected_map_name = 'big';
-    else if (`${t} Winky's Medium Futsal BAR` === newStadiumName) this.last_selected_map_name = 'futsal';
-    else if (`${t} Winky's Futsal BAR` === newStadiumName) this.last_selected_map_name = 'futsal_big';
-    else if (`${t} Winky's Huge Futsal BAR` === newStadiumName) this.last_selected_map_name = 'futsal_huge';
+    else if (`${t} 2 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal';
+    else if (`${t} 3 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal_big';
+    else if (`${t} 4 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal_huge';
     else {
       this.feature_pressure_stadium = false;
       this.last_selected_map_name = '';
@@ -1308,13 +1365,13 @@ export class HaxballRoom {
   async handlePlayerTeamChange(changedPlayer: PlayerObject, byPlayer: PlayerObject | null) {
     if (changedPlayer && !changedPlayer.name) return;
     let changed_player_ext = this.P(changedPlayer);
-    changed_player_ext.activity.updateGame(); // reset timer
+    changed_player_ext.activity.updateGame(this.current_time); // reset timer
     if (changed_player_ext.team != 0) {
       if (changed_player_ext.afk) {
         if (byPlayer != null) {
           // TODO block it?
           changed_player_ext.afk_maybe = true;
-          this.room.setPlayerAvatar(changed_player_ext.id, Emoji.AfkMaybe);
+          this.setPlayerAvatarTo(changed_player_ext, Emoji.AfkMaybe);
           this.sendMsgToPlayer(byPlayer, `${changed_player_ext.name} był AFK! Czy na pewno wrócił?`, Colors.Afk);
         }
       }
@@ -1322,8 +1379,8 @@ export class HaxballRoom {
     if (byPlayer != null) {
       this.last_player_team_changed_by_admin_time = Date.now();
       let p = this.P(byPlayer);
-      p.activity.updateChat();
-      p.activity.updateMove();
+      p.activity.updateChat(this.current_time);
+      p.activity.updateMove(this.current_time);
       p.admin_stat_team();
     }
     if (this.auto_mode) this.auto_bot.handlePlayerTeamChange(changed_player_ext);
@@ -1332,17 +1389,18 @@ export class HaxballRoom {
   }
 
   async handlePlayerActivity(player: PlayerObject) {
-    let p = this.Pid(player.id);
-    p.activity.updateGame();
-    p.activity.updateMove();
-    if (p.afk || p.afk_maybe) {
-      p.afk = false;
-      p.afk_maybe = false;
+    let playerExt = this.Pid(player.id);
+    playerExt.activity.updateGame(this.current_time);
+    playerExt.activity.updateMove(this.current_time);
+    if (playerExt.isAfk()) {
+      playerExt.afk = false;
+      playerExt.afk_maybe = false;
       // TODO AM player is back
     }
-    if (p.afk_avatar) {
-      this.room.setPlayerAvatar(p.id, null);
-      p.afk_avatar = null;
+    if (playerExt.avatar.length) {
+      if (playerExt.trust_level < 2) { // TODO Debug
+        this.setPlayerAvatarTo(playerExt, `<${playerExt.trust_level}`);
+      } else this.setPlayerAvatarTo(playerExt, ''); // reset here not afk
     }
   }
 
@@ -1409,7 +1467,7 @@ export class HaxballRoom {
             }
             let g = stat.glickoPlayer!;
             this.game_state.updatePlayerRating(selector, playerExt.auth_id, newMu, newMu - oldMu, newRd, g.getVol())
-              .catch((e) => hb_log(`!! updatePlayerRating ${selector} error: ${e}`));
+              .catch((e: any) => hb_log(`!! updatePlayerRating ${selector} error: ${e}`));
             saved++;
           }
           this.updateRankChanges(inMatch, rankChanges).catch((e) => hb_log(`!! updateRankChanges ${selector} error: ${e}`));
@@ -1522,24 +1580,25 @@ export class HaxballRoom {
     this.rejoice_maker.handlePositionsReset();
     this.players_ext.forEach(p => {
       if (p.trust_level < 2) {
-        this.room.setPlayerAvatar(p.id, `<${p.trust_level}`);
+        this.setPlayerAvatarTo(p, `<${p.trust_level}`);
       }
     })
   }
 
   handlePlayerChat(player: PlayerObject, message: string): boolean {
     let playerExt = this.P(player);
-    return this.handlePlayerChatExt(playerExt, message);
+    this.handlePlayerChatExt(playerExt, message);
+    return false;
   }
 
-  handlePlayerChatExt(playerExt: PlayerData, message: string): boolean {
+  async handlePlayerChatExt(playerExt: PlayerData, message: string) {
     message = message.trim();
-    if (!message) return false; // not interested in empty messages
-    const userLogMessage = (for_discord: boolean) => { this.game_state.logMessage(playerExt.name, "chat", message, for_discord); return for_discord; }
+    if (!message) return; // not interested in empty messages
+    const userLogMessage = (for_discord: boolean) => { this.game_state.logMessage(playerExt.name, "chat", message, for_discord); }
     if (!message.startsWith('!kb_')) { // to not spam
       hb_log_to_console(playerExt, message)
     }
-    playerExt.activity.updateChat();
+    playerExt.activity.updateChat(this.current_time);
     // at first check captcha
     if (this.captcha.hasPendingCaptcha(playerExt)) {
       this.captcha.checkAnswer(playerExt, message);
@@ -1552,7 +1611,7 @@ export class HaxballRoom {
         let last_command_str = this.last_command.get(playerExt.id);
         if (last_command_str == null) {
           this.sendMsgToPlayer(playerExt, "Brak ostatniej komendy");
-          return false;
+          return;
         }
         message = last_command_str;
       }
@@ -1562,7 +1621,7 @@ export class HaxballRoom {
       let message_split = message.split(" ");
       let command = message_split[0];
       this.executeCommand(command, playerExt, message_split.slice(1).filter(e => e));
-      return false; // Returning false will prevent the message from being broadcasted
+      return; // Returning false will prevent the message from being broadcasted
     }
     // then check for wide characters and if so then block any other action
     if (this.containsWideCharacters(message)) {
@@ -1594,8 +1653,8 @@ export class HaxballRoom {
       }
       userLogMessage(true);
       if (playerExt.discord_user && playerExt.discord_user.state) {
-        this.sendMsgToAll(`${playerExt.flag}${Emoji.UserVerified}${playerExt.name}: ${message}`, playerExt.discord_user.chat_color, undefined, 1);
-        return false;
+        this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${Emoji.UserVerified}${playerExt.name}: ${message}`, playerExt.discord_user.chat_color, 1);
+        return;
       }
       if (playerExt.trust_level < 3) {
         let color = Colors.TrustZero;
@@ -1605,19 +1664,28 @@ export class HaxballRoom {
           color = Colors.TrustTwo;
           bell = 1;
         }
-        this.sendMsgToAll(`${playerExt.flag}${playerExt.name}: ${message}`, color, undefined, bell);
-        return false;
+        this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${playerExt.name}: ${message}`, color, bell);
+        return;
       };
       // show as normal for trusted players
-      if (playerExt.trust_level > 2) return true;
-      return false;
+      this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${playerExt.name}: ${message}`, 0xFFFFFF, 1);
     }
-    return false;
   }
 
-  async executeCommand(command: string, player: PlayerData, args: string[] = []) {
-    const cmd = this.commander.commands[command];
+  sendMessageToAllWithIgnoreList(byPlayer: PlayerData, msg: string, color: number, sound: number) {
+    if (!byPlayer.ignored_by.size) {
+      this.sendMsgToAll(msg, color, undefined, sound);
+      return;
+    }
+    this.players_ext.forEach(player => {
+      if (!byPlayer.ignored_by.has(player.id)) {
+        this.sendMsgToPlayer(player, msg, color, undefined, sound);
+      }
+    })
+  }
 
+  executeCommand(command: string, player: PlayerData, args: string[] = []) {
+    const cmd = this.commander.commands[command];
     if (cmd) {
       cmd.call(this.commander, player, args);
     } else if (player.id != -100) {
@@ -1625,7 +1693,7 @@ export class HaxballRoom {
     }
   }
 
-  async sendMessageToSameTeam(player: PlayerData, message: string) {
+  sendMessageToSameTeam(player: PlayerData, message: string) {
     let text = `T ${player.name}: ${message}`;
     let color = player.team == 0 ? Colors.TeamChatSpec : player.team == 1 ? Colors.TeamChatRed : Colors.TeamChatBlue;
     this.getPlayers().filter(e => e.team == player.team).forEach(e => {
@@ -1920,76 +1988,6 @@ export class HaxballRoom {
   getSselector() {
     return `${this.room_config.selector}_${this.room_config.subselector}`;
   }
-}
-
-/////// helper functions
-function giveAdminToPlayerWithName(player_name: string) {
-  if (!hb_room) { console.warn('hb_room==null'); return; }
-  hb_room.giveAdminToPlayerWithName(player_name);
-}
-
-function banPlayersByPrefix(prefix: string) {
-  if (!hb_room) { console.warn('hb_room==null'); return; }
-  let players = hb_room.room.getPlayerList();
-  players.forEach(player => {
-    if (hb_room && player.name.startsWith(prefix)) {
-      hb_room.room.kickPlayer(player.id, "xD", true);
-    }
-  });
-}
-
-function consoleDumpPlayers() {
-  if (!hb_room) { console.warn('hb_room==null'); return; }
-  let players = hb_room.room.getPlayerList();
-  players.forEach(player => {
-    console.log(`Player(${player.id}): ${player.name}`);
-  });
-}
-
-function giveAdminOnlyTo(player_name: string) {
-  if (!hb_room) { console.warn('hb_room==null'); return; }
-  let players = hb_room.room.getPlayerList();
-  players.forEach(player => {
-    if (hb_room) {
-      if (player.name == player_name) {
-        hb_room.giveAdminTo(player);
-      } else {
-        hb_room.takeAdminFrom(player);
-      }
-    }
-  });
-}
-
-function kickAllExceptMe() {
-  if (!hb_room) { console.warn('hb_room==null'); return; }
-  let players = hb_room.room.getPlayerList();
-  players.forEach(player => {
-    if (hb_room && player.name != '.') {
-      hb_room.room.kickPlayer(player.id, "Bye bye!", false);
-    }
-  });
-}
-
-function setPlayerAvatarTo(player_name: string, avatar: string) {
-  if (!hb_room) { console.warn('hb_room==null'); return; }
-  let players = hb_room.room.getPlayerList();
-  players.forEach(player => {
-    if (hb_room && player.name == player_name) {
-      hb_room.room.setPlayerAvatar(player.id, avatar);
-      return;
-    }
-  });
-}
-
-function clearPlayerAvatar(player_name: string) {
-  if (!hb_room) { console.warn('hb_room==null'); return; }
-  let players = hb_room.room.getPlayerList();
-  players.forEach(player => {
-    if (hb_room && player.name == player_name) {
-      hb_room.room.setPlayerAvatar(player.id, null);
-      return;
-    }
-  });
 }
 
 let hb_room: HaxballRoom | null = null;

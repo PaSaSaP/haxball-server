@@ -48,10 +48,11 @@ interface DBHandlerOtherType {
 }
 
 export class DBHandler {
-  static GameModes: GameModeType[] = ['1vs1', '2vs2', '3vs3', '4vs4'];
+  static GameModes: GameModeType[] = ['freestyle', '1vs1', '2vs2', '3vs3', '4vs4'];
   mainMode: GameModeType;
   playersDb: sqlite3.Database;
   otherDb: {
+    'freestyle': DBHandlerOtherType | null,
     '1vs1': DBHandlerOtherType | null,
     '2vs2': DBHandlerOtherType | null,
     '3vs3': DBHandlerOtherType | null,
@@ -101,7 +102,7 @@ export class DBHandler {
     this.discordAuthLinks = new DiscordAuthLinksDB(this.playersDb);
     this.discordUsers = new DiscordUsersDB(this.playersDb);
     // and second table
-    this.otherDb = { '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null };
+    this.otherDb = { 'freestyle': null, '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null };
     for (let selector of DBHandler.GameModes) {
       if (!otherDbFiles[selector] || !otherDbFiles[selector].length) continue;
       this.otherDb[selector] = this.createOtherDb(otherDbFiles[selector]);
@@ -371,7 +372,7 @@ export class GameState {
     if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(-1);
     return this.dbHandler.getMatches(selector).insertNewMatch(match, fullTimeMatchPlayed);
   }
-  
+
   insertNewMatchPlayerStats(selector: GameModeType, match_id: number, auth_id: string, team_id: 0 | 1 | 2, stat: PlayerMatchStatsData) {
     if (!this.dbHandler.isValidSelector(selector)) return Promise.resolve(null);
     return this.dbHandler.getMatchStats(selector).insertNewMatchPlayerStats(match_id, auth_id, team_id, stat);

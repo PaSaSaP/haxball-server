@@ -67,7 +67,7 @@ async function fetchMatches(cache: Cache) {
     newLastMatchId = cache.matches.at(-1)?.match_id ?? -1;
     console.log(`Got ${results.length} new matches, now there is ${cache.matches.length} matches, lastMatchId=${cache.lastMatchId}, newLastMatchId=${newLastMatchId}`);
 
-    const removeOlderMatches = false; // debug switch
+    const removeOlderMatches = true; // debug switch
     if (removeOlderMatches) {
       // also remove matches older than 7 days
       let currentDate = await matchesDb.getCurrentDate(); // for example 2025-03-12

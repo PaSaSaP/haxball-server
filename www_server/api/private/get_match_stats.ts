@@ -73,7 +73,7 @@ async function fetchMatchStats(cache: Cache) {
     console.log(`(${cache.which}) Got ${results.length} new match stats, now there is ${cache.matchStats.length} matches, lastRowId=${cache.lastRowId}, rowId=${rowId}`);
     newRowId = rowId;
 
-    const removeOlderMatches = false; // debug switch
+    const removeOlderMatches = true; // debug switch
     if (removeOlderMatches) {
       let firstMatchId = -1;
       if (cache.which === "1vs1") firstMatchId = getFirstMatchId1vs1();

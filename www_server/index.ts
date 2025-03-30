@@ -50,6 +50,6 @@ app.get("*", (req, res) => {
 });
 // TODO fix that long ../.. paths, somewhere is big misunderstanding...
 
-app.listen(port, () => {
+app.listen(port, '::', () => {
     console.log(`Serwer działa na http://localhost:${port}`);
 });

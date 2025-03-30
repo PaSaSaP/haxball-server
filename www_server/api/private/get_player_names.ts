@@ -11,7 +11,6 @@ let roomConfig = config.getRoomConfig("3vs3");
 
 interface Cache {
   which: "global";
-  playerNames: PlayerNameEntry[];
   playerNamesByAuth: Map<string, string>;
   playerIdsByNormalizedName: Map<string, number>;
   playerEntryByAuth: Map<string, PlayerNameEntry>;
@@ -22,7 +21,7 @@ interface Cache {
   lastFetchTime: number;
 }
 let globalCache: Cache = {
-  which: "global", playerNames: [],
+  which: "global",
   playerNamesByAuth: new Map(),
   playerIdsByNormalizedName: new Map(),
   playerEntryByAuth: new Map(),
@@ -49,14 +48,14 @@ async function fetchPlayerNames(cache: Cache) {
         cache.playerEntryByAuth.set(playerNameEntry.auth_id, playerNameEntry);
         cache.playerEntryById.set(playerNameEntry.id, playerNameEntry);
       }
-      newLastPlayerGlobalId = cache.playerNames.at(-1)?.id ?? -1;
+      if (results.length) newLastPlayerGlobalId = results.at(-1)!.id;
       console.log(`Got ${results.length} new names, now there is ${cache.playerNamesByAuth.size} names, lastId=${cache.lastPlayerGlobalId}, newId=${newLastPlayerGlobalId}`);
     } catch (e) { console.error(`Error for player names: ${e}`) };
   }
   cache.lastPlayerGlobalId = newLastPlayerGlobalId;
   let cacheAllMap: Map<string, [number, string]> = new Map();
-  for (let p of cache.playerNames) {
-    cacheAllMap.set(p.auth_id, [p.id, p.name]);
+  for (let [authId, p] of cache.playerEntryByAuth) {
+    cacheAllMap.set(authId, [p.id, p.name]);
   }
   cache.cache = Object.fromEntries(cache.playerNamesByAuth);
   cache.cacheAll = Object.fromEntries(cacheAllMap);

@@ -1,7 +1,7 @@
 export class Colors {
   static White = 0xFFFFFF;
-  static TeamChatRed = 0xDD2222;
-  static TeamChatBlue = 0x2222DD;
+  static TeamChatRed = 0xFF4D6A;
+  static TeamChatBlue = 0x80FFFF;
   static TeamChatSpec = 0xAAAAAA;
   static GameState = 0xBBBBBB;
   static Admin = 0xBBBBBB;
@@ -19,6 +19,7 @@ export class Colors {
   static BrightBlue = 0x4DA6FF;
   static AzureBlue = 0x0080FF;
   static OrangeTangelo = 0xF54900;
+  static LightYellow = 0xFFFFC4;
   static Stats = 0xEFDECD;
   static Goal = 0xEFEF8D;
 }

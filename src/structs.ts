@@ -22,9 +22,9 @@ export class PlayerActivity {
     this.move = now;
   }
 
-  updateChat() { this.chat = Date.now(); }
-  updateGame() { this.game = Date.now(); }
-  updateMove() { this.move = Date.now(); }
+  updateChat(t: number) { this.chat = t; }
+  updateGame(t: number) { this.game = t; }
+  updateMove(t: number) { this.move = t; }
   last() { return this.chat > this.game ? this.chat : this.game; }
 }
 
@@ -118,6 +118,8 @@ export class PlayerData {
   stat: PlayerStat;
   afk: boolean;
   afk_maybe: boolean;
+  ignores: Set<number>;
+  ignored_by: Set<number>;
   activity: PlayerActivity;
   auth_id: string;
   conn_id: string;
@@ -128,7 +130,7 @@ export class PlayerData {
   join_time: number;
   timer_give_back_admin: any;
   verify_link_requested: boolean;
-  afk_avatar: string|null;
+  avatar: string;
   afk_switch_time: number;
   chosen_player_names: string[];
   pendingRejoiceTransaction: TransactionByPlayerInfo | null;
@@ -157,6 +159,8 @@ export class PlayerData {
     this.stat = new PlayerStat(this.id);
     this.afk = false;
     this.afk_maybe = false;
+    this.ignores = new Set();
+    this.ignored_by = new Set();
     this.activity = new PlayerActivity(); /// @type {PlayerActivity | null}
     this.auth_id = player.auth || ''; /// @type string
     this.conn_id = player.conn; /// @type string
@@ -167,7 +171,7 @@ export class PlayerData {
     this.join_time = Date.now();
     this.timer_give_back_admin = null;
     this.verify_link_requested = false;
-    this.afk_avatar = null;
+    this.avatar = '';
     this.afk_switch_time = Date.now();
     this.chosen_player_names = [];
     this.pendingRejoiceTransaction = null;
@@ -184,6 +188,7 @@ export class PlayerData {
     this.position = player.position;
   }
 
+  isAfk() { return this.afk || this.afk_maybe; }
   mark_disconnected() { this.connected = false; this.reset_timers(); }
   reset_timers() {
     if (this.timer_give_back_admin) {
@@ -365,7 +370,7 @@ export enum MatchStatsProcessingState {
   updated
 }
 
-export type GameModeType = '1vs1' | '2vs2' | '3vs3' | '4vs4';
+export type GameModeType = config.RoomConfigSelectorType;
 export type MatchType = 'none' | GameModeType;
 export class Match {
   matchId: number; // relates to match_id from DB, changed after insertion into DB

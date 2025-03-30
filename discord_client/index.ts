@@ -9,11 +9,11 @@ if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
 console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
 console.log('HX_SUBSELECTOR:', process.env.HX_SUBSELECTOR);
 
-const selector = process.env.HX_SELECTOR;
+const selector = process.env.HX_SELECTOR as config.RoomConfigSelectorType;
 const subselector = process.env.HX_SUBSELECTOR;
 const roomConfig = config.getRoomConfig(selector, subselector);
 let channelId = '';
-if (selector == '1vs1') {
+if (selector == 'freestyle') {
   if (subselector === '1') {
     channelId = '1345442311684751491';
   } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);

@@ -41,7 +41,7 @@ const onHBLoaded = function(cb) {
 (function(va) {
 
   const AvatarMaxLength = 2; // Argh, no effect :(
-  global.PlayerFlagByPlayerId = new Map();
+  global.PlayerNoX = new Set();
   function ActionLog(txt) {
     console.log(`#ACTION# ${txt}`);
   }
@@ -187,7 +187,7 @@ const onHBLoaded = function(cb) {
       this.a =
         b
     }
-    Da(a) {
+    Da(a) { // called from CollectionSynchronizer for every player ping value
       let b = this.a;
       a >>>= 0;
       this.Ia(b + BufferWriter.xg(a));
@@ -723,7 +723,8 @@ const onHBLoaded = function(cb) {
       this.ne = !1;
       this.Db = this.Vf = null;
       this.Eb = 0;
-      this.Ub = !1
+      this.Ub = !1;
+      // this.NoX = false;
     }
     P(a) {
       a.f(this.Ub ? 1 : 0);
@@ -907,7 +908,7 @@ const onHBLoaded = function(cb) {
       ActionHandler.$(MapDataCompressionHandler);
       ActionHandler.$(GameStartStopSwitcher);
       ActionHandler.$(ValueChangeHandler);
-      ActionHandler.$(ConditionBasedStateActionHandler);
+      ActionHandler.$(GiveAdminActionHandler);
       ActionHandler.$(ContextualActionHandler);
       ActionHandler.$(StateChangeActionHandler);
       ActionHandler.$(CollectionSynchronizer);
@@ -3007,13 +3008,23 @@ const onHBLoaded = function(cb) {
             }) : c(ja)
           },
           setPlayerAdmin: function(h, n) {
-            c(ConditionBasedStateActionHandler.V(h, n))
+            c(GiveAdminActionHandler.V(h, n))
           },
           setPlayerTeam: function(h, n) {
             c(GameStartStopSwitcher.V(h, 1 == n ? HaxballActionContext.fa : 2 == n ? HaxballActionContext.ta : HaxballActionContext.na))
           },
           setPlayerAvatar: function(h, n) {
             c(AvatarHandler2.V(h, n))
+          },
+          setPlayerNoX: function(h, n) {
+            // h = y.R(h);
+            // console.log(`setPlayerNoX ${h} = ${n}`);
+            if (h) {
+              // h.noX = n;
+              if (n) global.PlayerNoX.add(h);
+              else global.PlayerNoX.delete(h);
+              console.log(`setPlayerNoX ${h} = ${n} Done`);
+            }
           },
           kickPlayer: function(h, n, v) {
             null == n && (n = "");
@@ -4259,7 +4270,7 @@ const onHBLoaded = function(cb) {
     }
   }
   const U = ValueSetterActionHandler;
-  class ConditionBasedStateActionHandler extends ActionHandler {
+  class GiveAdminActionHandler extends ActionHandler {
     constructor() {
       super()
     }
@@ -4280,14 +4291,15 @@ const onHBLoaded = function(cb) {
       this.sd = 0 != a.C()
     }
     static V(a, b) {
-      let c = new ConditionBasedStateActionHandler;
+      let c = new GiveAdminActionHandler;
       c.Fb = a;
       c.sd = b;
       return c
     }
   }
-  const ba = ConditionBasedStateActionHandler;
+  const ba = GiveAdminActionHandler;
   class AvatarUpdaterActionHandler extends ActionHandler {
+    // avatar set by player
     constructor() {
       super()
     }
@@ -4412,7 +4424,6 @@ const onHBLoaded = function(cb) {
       if (0 == this.B) {
         var b = new HaxballPlayerData;
         // ActionLog(`ma=${this.ma} name=${this.name} me=${this.me} Db=${this.Db}`) // TODO
-        global.PlayerFlagByPlayerId.set(this.ma, this.me);
         b.ma = this.ma; // playerId
         b.oa = this.name; // playerName
         b.country = this.me; // country
@@ -4446,6 +4457,7 @@ const onHBLoaded = function(cb) {
   }
   const Z = PlayerRegistrationHandler;
   class AvatarHandler2 extends ActionHandler {
+    // avatar set by server
     constructor() {
       super()
     }
@@ -4455,8 +4467,8 @@ const onHBLoaded = function(cb) {
       null != a && 0 == this.B && (a.Vf = this.Ea)
     }
     P(a) {
-      a.Ca(this.Ea);
-      a.w(this.sb)
+      a.Ca(this.Ea); // avatar
+      a.w(this.sb) // player id
     }
     W(a) {
       this.Ea = a.Ya();
@@ -4512,11 +4524,11 @@ const onHBLoaded = function(cb) {
       null != b && CallbackInvoker.sa(a.Ji, b, this.Pa)
     }
     P(a) {
-      a.Tb(HaxballStringUtils.truncate(this.Pa, 140))
+      a.Tb(HaxballStringUtils.truncate(this.Pa, 240))
     }
     W(a) {
       this.Pa = a.mb();
-      if (140 < this.Pa.length) throw r.s("message too long");
+      if (240 < this.Pa.length) throw r.s("message too long");
     }
   }
   const la = ChatMessageHandler;
@@ -4527,15 +4539,27 @@ const onHBLoaded = function(cb) {
     apply(a) {
       let b = a.R(this.B);
       if (null != b) {
+        // changing here gives only desync!!!
+        // console.log(`a=${a} b=${b} aN=${a.noX} bN=${b.noX} auf=${a.uf} bn=${b.N} eg=${this.eg} fg=${this.fg}`);
+        // if (global.PlayerNoX.has(this.B)) {
+        //   this.input = this.input & 15;
+        // }
         var c = this.input;
         0 == (b.Jb & 16) && 0 != (c & 16) &&
           (b.Cb = !0);
         b.Jb = c;
-        // ActionLog(`PlayerInputHandler ${this.input}`); // TODO
+        // ActionLog(`PlayerInputHandler ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
         null != a.uf && null != b.N && a.uf(b, this.input, this.eg, this.fg)
+
+        // if (b.ne) { // if desynchronised, kick!
+        //   StringHelper2.remove(a.ba, b);
+        //   HaxballCallbackExecutor.executeCallback(a.Fh,
+        //     b, 'desync', false, null);
+        // }
       }
     }
     P(a) {
+      if (global.PlayerNoX.has(this.B)) this.input = this.input & 15;
       a.xa(this.input)
     }
     W(a) {
@@ -5070,10 +5094,10 @@ const onHBLoaded = function(cb) {
   Object.assign(ValueSetterActionHandler.prototype, {
     h: ValueSetterActionHandler
   });
-  ConditionBasedStateActionHandler.b = !0;
-  ConditionBasedStateActionHandler.J = ActionHandler;
-  Object.assign(ConditionBasedStateActionHandler.prototype, {
-    h: ConditionBasedStateActionHandler
+  GiveAdminActionHandler.b = !0;
+  GiveAdminActionHandler.J = ActionHandler;
+  Object.assign(GiveAdminActionHandler.prototype, {
+    h: GiveAdminActionHandler
   });
   AvatarUpdaterActionHandler.b = !0;
   AvatarUpdaterActionHandler.J = ActionHandler;
@@ -5320,7 +5344,7 @@ const onHBLoaded = function(cb) {
     ca: !1,
     delay: !1
   });
-  ConditionBasedStateActionHandler.U = ActionHandler.Z({
+  GiveAdminActionHandler.U = ActionHandler.Z({
     ca: !1,
     delay: !1
   });

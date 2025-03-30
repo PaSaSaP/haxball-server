@@ -96,6 +96,7 @@ class ServerMonitor {
     tokenDatabase.getActiveServers().then(async (servers) => {
       for (let server of servers) {
         if (server.active && !(await this.shouldBeServerEnabled(server.selector))) {
+          MLog(`should not be active ${server.selector}, so disable it in token db`);
           tokenDatabase.updateServerStatus(server.selector, false);
         }
       }

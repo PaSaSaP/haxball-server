@@ -119,7 +119,7 @@ class RadiusMultiplierRejoice implements IRejoice {
 }
 
 class GettingBiggerRejoice extends RadiusMultiplierRejoice {
-  name = 'getting_bigger';
+  name = 'bigger';
   constructor(playerId: number, properties: DiscPropertiesHandler) {
     super(playerId, 3, properties);
   }
@@ -302,7 +302,7 @@ class SmileRejoice {
     this.duration = 2250;
     this.startTime = 0;
     this.radius = 200;
-  
+
     this.centerPlayer = -1;
     this.players = [];
 
@@ -331,7 +331,7 @@ class SmileRejoice {
       this.reset();
       return;
     }
-  
+
     this.properties.setPlayerDiscProperties(this.centerPlayer, { x: 0, y: 0 });
     for (let i = 0; i < this.players.length && i < this.playerPositions.length; i++) {
       this.properties.setPlayerDiscProperties(this.players[i], this.playerPositions[i]);
@@ -378,6 +378,80 @@ class SmileRejoice {
     this.inProgress = false;
   }
 }
+
+class BigBallRejoice {
+  name: string = 'big_ball';
+  playerId: number;
+  inProgress: boolean;
+  ballRadius: number;
+  startPosX: number;
+  endPosX: number;
+  duration: number;
+  startTime: number;
+  properties: DiscPropertiesHandler;
+  constructor(playerId: number, properties: DiscPropertiesHandler) {
+    this.name = 'big_ball';
+    this.playerId = playerId;
+    this.inProgress = false;
+    this.ballRadius = 0;
+    this.startPosX = 0;
+    this.endPosX = 0;
+    this.properties = properties;
+    this.duration = 2250;
+    this.startTime = 0;
+  }
+
+  isInProgress() {
+    return this.inProgress;
+  }
+
+  async handleGameTick() {
+    if (!this.isInProgress()) return;
+    const elapsed = Date.now() - this.startTime;
+    if (elapsed > this.duration) {
+      this.reset();
+      return;
+    }
+    const xspeed = (this.endPosX - this.startPosX) / (this.duration / 1000);
+    const x = this.startPosX + xspeed * (elapsed / 1000);
+    this.properties.setDiscProperties(0, { x: x, y: 0, xspeed: xspeed });
+  }
+
+  async handlePositionsReset() {
+    this.reset();
+  }
+
+  async handleTeamGoal() {
+    const props = this.properties.getDiscProperties(0);
+    if (!props) return;
+    this.ballRadius = props.radius;
+    let [redTeam, blueTeam] = this.properties.getRedBluePlayerIds();
+    this.startPosX = redTeam.includes(this.playerId) ? -1 : 1;
+    let newRadius = 230;
+    if (redTeam.length + blueTeam.length > 6) {
+      this.startPosX *= 450;
+      newRadius = 350;
+    } else if (redTeam.length + blueTeam.length > 4) {
+      this.startPosX *= 400;
+      newRadius = 300;
+    } else this.startPosX *= 300;
+    this.endPosX = -this.startPosX;
+    const xspeed = Math.sign(this.endPosX - this.startPosX) * 10;
+    this.properties.setDiscProperties(0, { radius: newRadius, x: this.startPosX, y: 0, xspeed: xspeed });
+    this.startTime = Date.now();
+    this.inProgress = true;
+  }
+
+  async handleGameStop() {
+    this.reset();
+  }
+
+  reset() {
+    this.properties.setDiscProperties(0, { radius: this.ballRadius });
+    this.inProgress = false;
+  }
+};
+
 
 class PlayerRejoices {
   selected: string;
@@ -529,21 +603,22 @@ export class RejoiceMaker {
     }
     // only getting bigger allowed for both players
     if (ar.name === sr.name) {
-      if (ar.name !== "getting_bigger") this.playingRejoices.length = 1;
+      if (ar.name !== "bigger") this.playingRejoices.length = 1;
       return;
     }
-    if (ar.name === 'getting_bigger' || sr.name === 'getting_bigger') {
-      return; // allow that combination so one player has getting_bigger, the second one has another
+    if (ar.name === 'bigger' || sr.name === 'bigger') {
+      return; // allow that combination so one player has bigger, the second one has another
     }
     // in any other case prefer scorer, not assister
     this.playingRejoices.length = 1;
   }
   private createRejoiceByName(rejoiceId: string, playerId: number) {
-    if (rejoiceId === "getting_bigger") return new GettingBiggerRejoice(playerId, this.dpHandler);
+    if (rejoiceId === "bigger") return new GettingBiggerRejoice(playerId, this.dpHandler);
     if (rejoiceId === "gravity") return new GravityRejoice(playerId, this.dpHandler);
     if (rejoiceId === "explosion") return new ExplosionRejoice(playerId, this.dpHandler);
     if (rejoiceId === "slowmo") return new SlowMotionRejoice(playerId, this.dpHandler);
     if (rejoiceId === "smile") return new SmileRejoice(playerId, this.dpHandler);
+    if (rejoiceId === "big_ball") return new BigBallRejoice(playerId, this.dpHandler);
     return null;
   }
   private getOwnGoalRejoice(playerId: number) {

@@ -1,6 +1,6 @@
-getting_bigger,3,7
-getting_bigger,7,14
-getting_bigger,20,21
+bigger,3,7
+bigger,7,14
+bigger,20,21
 gravity,3,7
 gravity,7,14
 gravity,20,21
@@ -13,3 +13,6 @@ slowmo,20,21
 smile,3,12
 smile,7,24
 smile,20,36
+big_ball,3,7
+big_ball,7,14
+big_ball,20,21

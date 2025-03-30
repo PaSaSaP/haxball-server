@@ -15,7 +15,7 @@ class Pinger {
   private async sendRequest() {
     const [playerNum, afkPlayersNum] = this.playerParamGetter();
     const url = `http://monitoring/ping/${this.selector}/${playerNum}/${afkPlayersNum}`;
-  
+
     try {
       const response = await fetch(url);
       // Sprawdzanie statusu odpowiedzi
@@ -29,8 +29,7 @@ class Pinger {
     }
   }
 
-  public sendKeepAlive() {
-    const now = Date.now();
+  public sendKeepAlive(now: number = Date.now()) {
     if (now - this.lastPingTime >= 5000) {
       this.lastPingTime = now;
       this.sendRequest();

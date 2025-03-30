@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { tokenDatabase, ServerData } from '../src/token_database';
+import { tokenDatabase, ServerRow } from '../src/token_database';
 
 const router = express.Router();
 
@@ -51,7 +51,7 @@ router.get('/', async (req: Request, res: Response) => {
       `;
 
         // Przejdź po serwerach i generuj HTML dla każdego z nich
-        activeServers.forEach((server: ServerData) => {
+        activeServers.forEach((server) => {
             // Zabezpieczenie przed XSS - sprawdź i bezpiecznie wstaw linki i tokeny
             const sanitizedLink = encodeURI(server.link);
             const sanitizedRoomName = server.room_name.replace(/[^\w\s]/gi, ''); // Proste usunięcie niebezpiecznych znaków
