@@ -1888,7 +1888,13 @@ const onHBLoaded = function(cb) {
       a = a.canBeStored;
       return null != a ? HaxballTypeHelper.l(a, Ya) : !0
     }
+
     kh(a) {
+      let d = JSON5.parse(a);
+      return khJson(d);
+    }
+
+    khJson(d) {
       function b(k) {
         let l = HaxballTypeHelper.l(k[0], z);
         k = HaxballTypeHelper.l(k[1], z);
@@ -1913,7 +1919,7 @@ const onHBLoaded = function(cb) {
               }
             }
       }
-      let d = JSON5.parse(a);
+
       this.v = [];
       this.I = [];
       this.Y = [];
@@ -1926,7 +1932,7 @@ const onHBLoaded = function(cb) {
       this.Qd = this.Kb(d, "maxViewWidth") | 0;
       "player" == d.cameraFollow && (this.Bd = 1);
       this.Ma = 200;
-      a = d.spawnDistance;
+      let a = d.spawnDistance;
       null != a && (this.Ma = HaxballTypeHelper.l(a, z));
       a = d.bg;
       let e;
@@ -2997,7 +3003,7 @@ const onHBLoaded = function(cb) {
               italic: 2,
               small: 3,
               "small-bold": 4,
-              "small-italic": 5
+              "small-italic": 5,
             } [G];
             null == G && (G = 0);
             null == v && (v = -1);
@@ -3047,6 +3053,15 @@ const onHBLoaded = function(cb) {
             let n = new HaxballMapsManager;
             try {
               n.kh(h)
+            } catch (v) {
+              throw r.s(r.Vb(v).Hb());
+            }
+            c(MapDataCompressionHandler.V(n))
+          },
+          setCustomStadiumJson: function(h) {
+            let n = new HaxballMapsManager;
+            try {
+              n.khJson(h)
             } catch (v) {
               throw r.s(r.Vb(v).Hb());
             }
@@ -3434,12 +3449,18 @@ const onHBLoaded = function(cb) {
       this.qa = new RTCPeerConnection({
         iceServers: b
       }, RtcConnectionHandler.Fg);
+      // console.log(`ICE iceServers: ${JSON.stringify(b, null, 2)}`);
       let d;
       this.Ye = new Promise(function(f) {
         d = f
       });
       let e = this;
       this.qa.onicecandidate = function(f) {
+        // if (f.candidate) {
+        //   console.log("ICE Candidate:", f.candidate.candidate);
+        // } else {
+        //   console.log("End of candidates");
+        // }
         null == f.candidate ? d(e.Ld) : (f = f.candidate, null != f.candidate && "" != f.candidate && (null != e
           .Td && e.Td(f), e.Ld.push(f)))
       };
@@ -4353,8 +4374,10 @@ const onHBLoaded = function(cb) {
       super()
     }
     apply(a) {
+      // console.log(`MapDataCompressionHandler apply`);
       if (a.za(this.B)) {
         var b = a.R(this.B);
+        // console.log(`MapDataCompressionHandler apply for ${this.B}`);
         null == a.D && (a.ea = this.vd, null != a.Hf && a.Hf(b, this.vd))
       }
     }
@@ -4363,13 +4386,16 @@ const onHBLoaded = function(cb) {
       this.vd.G(b);
       b = pako.deflateRaw(b.Bb());
       a.Oa(b.byteLength);
+      // console.log(`MapDataCompressionHandler deflate raw ${a.byteLength}`);
       a.pb(b)
     }
     W(a) {
       a = pako.inflateRaw(a.La(a.kc()));
+      // console.log(`MapDataCompressionHandler inflate raw ${a.byteLength}`);
       this.vd = HaxballMapsManager.pa(new HaxballDataParser(new DataView(a.buffer, a.byteOffset, a.byteLength)))
     }
     static V(a) {
+      // console.log("MapDataCompressionHandler static ctor");
       let b = new MapDataCompressionHandler;
       b.vd = a;
       return b
@@ -4524,11 +4550,11 @@ const onHBLoaded = function(cb) {
       null != b && CallbackInvoker.sa(a.Ji, b, this.Pa)
     }
     P(a) {
-      a.Tb(HaxballStringUtils.truncate(this.Pa, 240))
+      a.Tb(HaxballStringUtils.truncate(this.Pa, 140))
     }
     W(a) {
       this.Pa = a.mb();
-      if (240 < this.Pa.length) throw r.s("message too long");
+      if (140 < this.Pa.length) throw r.s("message too long");
     }
   }
   const la = ChatMessageHandler;
