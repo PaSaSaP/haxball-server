@@ -9,6 +9,7 @@ import { BallPossessionTracker } from "./possesion_tracker";
 import { getTimestampHM, normalizeNameString } from "./utils";
 import Glicko2 from 'glicko2';
 import { DiscordUserEntry } from "./db/discord_users";
+import { MapPhysicsType } from "./maps";
 
 export class PlayerActivity {
   chat: number; // if is writing or is moving players from team to team
@@ -140,6 +141,7 @@ export class PlayerData {
   discord_user: DiscordUserEntry | null;
   discord_token: string;
   command_after_match_ends: string;
+  selected_ball: MapPhysicsType;
 
   bot = false;
 
@@ -180,6 +182,7 @@ export class PlayerData {
     this.discord_user = null;
     this.discord_token = '';
     this.command_after_match_ends = '';
+    this.selected_ball = 'vehax';
   }
 
   update(player: PlayerObject) {

@@ -16,7 +16,7 @@ import {
   GameModeType
 } from './structs';
 import { Colors } from './colors';
-import {isValidMap, getMap } from './maps';
+import {isValidMap, getMap, MapPhysicsType, updateMapPhysics } from './maps';
 import { BuyCoffee } from './buy_coffee';
 import { DBHandler, GameState } from './game_state';
 import Commander from './commands';
@@ -37,6 +37,7 @@ import { PlayerJoinLogger } from './ip_logger';
 import { VipOptionsHandler } from './vip_options';
 import { getBotKickMessage } from './spam_data';
 import { DiscordAccountManager } from './discord_account';
+import { GhostPlayers } from './ghost_players';
 
 
 declare global {
@@ -93,6 +94,7 @@ export class HaxballRoom {
   commander: Commander;
   default_map_name: string;
   last_selected_map_name: string | null;
+  last_selected_ball: MapPhysicsType;
   time_limit_reached: boolean;
   players_num: number;
   room_link: string;
@@ -117,6 +119,7 @@ export class HaxballRoom {
   gatekeeper: PlayerGatekeeper;
   pl_logger: PlayerJoinLogger;
   discord_account: DiscordAccountManager;
+  ghost_players: GhostPlayers;
   bot_stopping_enabled = false;
   temporarily_trusted: Set<number>;
 
@@ -193,6 +196,7 @@ export class HaxballRoom {
     this.gatekeeper = new PlayerGatekeeper(this);
     this.pl_logger = new PlayerJoinLogger(this);
     this.discord_account = new DiscordAccountManager(this);
+    this.ghost_players = new GhostPlayers(this);
     this.temporarily_trusted = new Set();
 
     this.game_tick_array = [];
@@ -228,6 +232,7 @@ export class HaxballRoom {
     this.commander = new Commander(this);
     this.default_map_name = 'futsal';
     this.last_selected_map_name = null;
+    this.last_selected_ball = 'vehax';
     this.time_limit_reached = false;
     this.players_num = 0;
     this.room.setDefaultStadium("Classic");
@@ -547,6 +552,7 @@ export class HaxballRoom {
     if (this.auto_mode) this.auto_bot.handleGameTick(scores);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(players);
     this.match_stats.handleGameTick(scores, ball_position, this.players_ext_all, redTeam, blueTeam);
+    this.ghost_players.handleGameTick(scores, redTeam, blueTeam);
     this.rejoice_maker.handleGameTick();
   }
   static readonly MaxAllowedAfkNoMoveTime = 15; // [s]
@@ -613,13 +619,17 @@ export class HaxballRoom {
     }
   }
 
-  setMapByName(map_name: string, bg_color: number = 0, ball_color: number = 0) {
+  setMapByName(map_name: string, bg_color: number = 0, ball_color: number = 0, ballPhysics: MapPhysicsType = 'vehax') {
     if (!isValidMap(map_name)) return;
     if (['1', '2', 'f'].includes(map_name)) map_name = 'futsal';
     else if (['3', 'fb'].includes(map_name)) map_name = 'futsal_big';
     else if (['4', 'fh'].includes(map_name)) map_name = 'futsal_huge';
-    if (this.last_selected_map_name != map_name) {
+    if (this.last_selected_map_name !== map_name || this.last_selected_ball !== ballPhysics) {
       let next_map = getMap(map_name, bg_color, ball_color);
+      if (this.last_selected_ball !== ballPhysics) {
+        updateMapPhysics(next_map, ballPhysics);
+        this.last_selected_ball = ballPhysics;
+      }
       if (next_map) {
         this.room.setCustomStadiumJson(next_map);
         this.last_selected_map_name = map_name;
@@ -635,13 +645,13 @@ export class HaxballRoom {
       else if (player.team == 2) blue++;
     });
     if (red >= 4 && blue >= 4) {
-      this.setScoreTimeLimit(4, 4);
+      this.setScoreTimeLimitByMode("4vs4");
       this.setMapByName("futsal_huge");
     }  else if ((red >= 2 && blue >= 3) || (red >= 3 && blue >= 2)) {
-      this.setScoreTimeLimit(3, 3);
+      this.setScoreTimeLimitByMode("3vs3");
       this.setMapByName("futsal_big");
     } else {
-      this.setScoreTimeLimit(3, 2);
+      this.setScoreTimeLimitByMode("2vs2");
       this.setMapByName("futsal");
     }
   }
@@ -678,6 +688,7 @@ export class HaxballRoom {
       this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
       this.ball_possesion_tracker.updateRadius(anyPlayerProperties, ballProperties);
     }, 1000);
+    this.ghost_players.handleGameStart();
     this.kickLongAfkingPlayers();
   }
 
@@ -730,6 +741,7 @@ export class HaxballRoom {
     this.sendCommandsAfterGameStop();
     this.rejoice_maker.handleGameStop();
     this.gatekeeper.handleGameStop();
+    this.ghost_players.handleGameStop();
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
     }
@@ -978,10 +990,17 @@ export class HaxballRoom {
     }
   }
 
-
+  filterOutHostInfo(player: PlayerObject) {
+    // config.hostAuthId
+    if ((player.auth && player.auth === config.hostAuthId) || (player.conn && player.conn === config.hostConnId)) {
+      player.real_ip = '127.0.0.1';
+      player.conn = '3132372E302E302E31';
+    }
+  }
 
   async handlePlayerJoin(player: PlayerObject) {
     this.players_num += 1;
+    this.filterOutHostInfo(player);
     hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}] auth: ${player.auth} conn: ${player.conn} ip: ${player.real_ip}`);
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
@@ -1247,8 +1266,7 @@ export class HaxballRoom {
   }
 
   setDefaultScoreTimeLimit() {
-    this.room.setScoreLimit(3);
-    this.room.setTimeLimit(this.limit == 1 ? 2 : 3);
+    this.setScoreTimeLimitByMode("2vs2");
   }
 
   setScoreTimeLimit(score: number, time: number) {

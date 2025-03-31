@@ -1,6 +1,6 @@
 import { BuyCoffee } from "./buy_coffee";
 import { HaxballRoom } from "./hb_room";
-import { isValidMap } from "./maps";
+import { isValidMap, MapPhysicsType } from "./maps";
 import { PlayerData, PlayerTopRatingDataShort, TransactionByPlayerInfo } from "./structs";
 import { sleep, getTimestampHM, toBoolean } from "./utils";
 import { generateVerificationLink } from "./verification";
@@ -77,6 +77,7 @@ class BaseCommander {
 class Commander extends BaseCommander {
   commands: Record<string, Function>;
   discordCommander: DiscordCommander;
+  ghostCommander: GhostCommander;
 
   constructor(hb_room: HaxballRoom) {
     super(hb_room);
@@ -263,6 +264,7 @@ class Commander extends BaseCommander {
       xtlist: this.commandShowTrustTemporary,
       xtl: this.commandShowTrustTemporary,
       after: this.commandAfter,
+      ball: this.commandSetBallPhysics,
 
       check_transaction: this.commandCheckPlayerTransaction,
       check_tr: this.commandCheckPlayerTransaction,
@@ -318,6 +320,9 @@ class Commander extends BaseCommander {
       no_x: this.commandNoXEnable,
       no_xd: this.commandNoXDisable,
       ipv6: this.commandWhoHasIpv6,
+      disc_info: this.commandDiscInfo,
+      auto_afk_on: this.commandAutoAfkOn,
+      auto_afk_off: this.commandAutoAfkOff,
 
       god: this.commandGodTest,
 
@@ -330,6 +335,8 @@ class Commander extends BaseCommander {
 
     this.discordCommander = new DiscordCommander(hb_room);
     this.discordCommander.update(this);
+    this.ghostCommander = new GhostCommander(hb_room);
+    this.ghostCommander.update(this);
   }
 
   // commands below
@@ -1426,13 +1433,14 @@ class Commander extends BaseCommander {
     const amIhost = this.hb_room.isPlayerIdHost(playerExt.id);
     let trust_level = parseInt(cmds[1] ?? 1, 10);
     trust_level = isNaN(trust_level) ? 0 : trust_level;
+    const temporary_trusted = this.hb_room.temporarily_trusted.has(cmd_player_ext.id);
     if (!amIhost && trust_level <= 0) {
       this.sendMsgToPlayer(playerExt, `Wartość nie moze być mniejsza ani równa zero: ${trust_level}`);
       return;
     } else if (trust_level >= callerExt.trust_level) {
       this.sendMsgToPlayer(playerExt, `Nie możesz nadać poziomu ${trust_level}, ponieważ Twój własny poziom to ${callerExt.trust_level}. Możesz przyznać jedynie poziomy niższe od swojego.`);
       return;
-    } else if (trust_level === cmd_player_ext.trust_level) {
+    } else if (trust_level === cmd_player_ext.trust_level && !temporary_trusted) {
         this.sendMsgToPlayer(playerExt, `Gracz ma juz dany poziom zaufania`);
         return;
     } else if (callerExt.trust_level < 10 && trust_level < cmd_player_ext.trust_level) {
@@ -1440,6 +1448,7 @@ class Commander extends BaseCommander {
       return;
     }
     cmd_player_ext.trust_level = trust_level;
+    if (temporary_trusted) this.hb_room.temporarily_trusted.delete(cmd_player_ext.id);
     this.hb_room.game_state.setTrustLevel(cmd_player_ext, trust_level, callerExt);
     this.sendMsgToPlayer(playerExt, `Ustawiłeś trust level ${cmd_player_ext.name} na ${trust_level}`);
   }
@@ -1592,6 +1601,22 @@ class Commander extends BaseCommander {
     if (cmd.length && !cmd.startsWith('!')) cmd = '!' + cmd;
     playerExt.command_after_match_ends = cmd;
     this.sendMsgToPlayer(playerExt, `Po meczu zostanie wywołana komenda: ${cmd}`, Colors.DarkGreen, 'italic');
+  }
+
+  commandSetBallPhysics(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.auto_mode) return; // only in auto mode
+    if (!cmds.length) {
+      this.sendMsgToPlayer(playerExt, `Jako wybierający w Red mozesz wybrać piłkę meczową z dostępnych: vehax, winky, bff. `
+        + `Obecna to ${this.hb_room.last_selected_ball}`, Colors.DarkGreen, 'italic');
+      return;
+    }
+    let physics = cmds[0].toLowerCase();
+    if (!['winky', 'vehax', 'bff'].includes(physics)) {
+      this.sendMsgToPlayer(playerExt, `Piłka ${physics} nie jest dostępna! Dostępne piłki: vehax, winky, bff`, Colors.DarkGreen, 'italic');
+      return;
+    }
+    playerExt.selected_ball = physics as MapPhysicsType;
+    this.sendMsgToPlayer(playerExt, `Piłka meczowa zmieniona na ${physics}!`, Colors.DarkGreen, 'italic');
   }
 
   formatUptime(ms: number) {
@@ -1891,14 +1916,40 @@ class Commander extends BaseCommander {
   }
 
   commandWhoHasIpv6(playerExt: PlayerData, cmds: string[]) {
-    let txt = '';
     if (this.warnIfPlayerIsNotHost(playerExt, 'no_x')) return;
+    let txt = '';
     this.hb_room.players_ext.forEach(p => {
       if (p.id !== playerExt.id && p.real_ip.includes(':')) {
         txt += playerExt.name + ' ';
       }
     })
     this.sendMsgToPlayer(playerExt, `Gracze z ipv6: ${txt}`);
+  }
+
+  filterOutXY(p: DiscPropertiesObject) {
+    const { x, y, xspeed, yspeed, xgravity, ygravity, ...filteredD } = p;
+    return filteredD;
+  }
+
+  commandDiscInfo(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'disc_info')) return;
+    const d = this.hb_room.getAnyPlayerDiscProperties();
+    if (!d) return;
+    const b = this.r().getDiscProperties(0);
+    if (!b) return;
+    const filteredD = this.filterOutXY(d);
+    const filteredB = this.filterOutXY(b);
+    this.sendMsgToPlayer(playerExt, `player: ${JSON.stringify(filteredD)}`);
+    this.sendMsgToPlayer(playerExt, `ball  : ${JSON.stringify(filteredB)}`);
+  }
+
+  commandAutoAfkOn(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'auto_afk_on')) return;
+    this.hb_room.auto_afk = true;
+  }
+  commandAutoAfkOff(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'auto_afk_off')) return;
+    this.hb_room.auto_afk = false;
   }
 }
 
@@ -1918,6 +1969,10 @@ class DiscordCommander extends BaseCommander {
   }
 
   commandLinkDiscordAccount(playerExt: PlayerData, cmds: string[]) {
+    if (this.hb_room.temporarily_trusted.has(playerExt.id)) {
+      this.sendMsgToPlayer(playerExt, 'Masz tymczasowe zaufanie (!xt), musisz zdobyć stałe zaufanie (!t)', Colors.BrightGreen);
+      return;
+    }
     if (playerExt.trust_level) {
       let dc = playerExt.discord_user;
       if (dc && dc.state) {
@@ -1931,16 +1986,21 @@ class DiscordCommander extends BaseCommander {
   }
 
   commandLinkUpdateDiscordAccount(playerExt: PlayerData, cmds: string[]) {
-    if (playerExt.trust_level) {
+    if (playerExt.trust_level && !this.hb_room.temporarily_trusted.has(playerExt.id)) {
       this.hb_room.discord_account.updateForPlayer(playerExt);
     }
   }
 
   commandChatColor(playerExt: PlayerData, cmds: string[]) {
-    let dc = playerExt.discord_user
-    if (dc && dc.state) {
+    let dc = playerExt.discord_user;
+    if (!dc && playerExt.trust_level) {
+      this.sendMsgToPlayer(playerExt, "Komenda tylko dla zweryfikowanego konta, by to zrobić wpisz !link, "
+        + "potem napisz do bota na discordzie !link <token>, potem tutaj na serwerze !link_update", Colors.BrightBlue, 'italic');
+      return;
+    }
+    else if (dc && dc.state) {
       if (!cmds.length) {
-        this.sendMsgToPlayer(playerExt, "Wpisz kolor w formacie DDEEFF albo 0xDDEEFF jako RGB, np stąd: https://haxball.ovh/kolor", Colors.BrightGreen);
+        this.sendMsgToPlayer(playerExt, `Wpisz kolor w formacie DDEEFF albo 0xDDEEFF jako RGB, np stąd: ${config.webpageLink}/kolor`, Colors.BrightGreen);
         return;
       }
       const hexColor = parseInt(cmds[0], 16);
@@ -1975,6 +2035,28 @@ class DiscordCommander extends BaseCommander {
   commandAllLinksUpdate(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
     this.hb_room.discord_account.updateDiscordLinks();
+  }
+}
+
+class GhostCommander extends BaseCommander {
+  constructor(hb_room: HaxballRoom) {
+    super(hb_room);
+  }
+
+  update(commander: Commander) {
+    commander.commands['ghost_enable'] = this.comandGhostEnable;
+    commander.commands['ghost_disable'] = this.comandGhostDisable;
+  }
+
+  comandGhostEnable(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'ghost_enable')) return;
+    this.hb_room.ghost_players.setEnabled(true);
+    this.sendMsgToPlayer(playerExt, "Ghost Mode ON");
+  }
+  comandGhostDisable(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'ghost_disable')) return;
+    this.hb_room.ghost_players.setEnabled(false);
+    this.sendMsgToPlayer(playerExt, "Ghost Mode OFF");
   }
 }
 

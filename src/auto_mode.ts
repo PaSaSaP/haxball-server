@@ -5,6 +5,8 @@ import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
 import { AutoVoteHandler } from "./vote_kick";
 import { randomInt } from "crypto";
+import { threadId } from 'worker_threads';
+import { MapPhysicsType } from './maps';
 
 
 enum MatchState {
@@ -194,13 +196,13 @@ export class AutoBot {
       added = false;
     }
     if (added) {
-      if (limit == 3) {
-        if (rl == 3 && bl == 3) {
+      if (limit === 3) {
+        if (rl === 3 && bl === 3) {
           if (this.hb_room.last_selected_map_name != 'futsal_big') { // start ranked
             this.justStopGame();
           } // else it was ranked and player joined
         } // they still should play at futsal map
-      } // for now handle only limit==3
+      } // for now here handle only limit===3
     } // else player not added, do nothing
   }
 
@@ -213,13 +215,13 @@ export class AutoBot {
     let blueLeft = false;
     if (!redLeft) blueLeft = this.removePlayerInBlue(playerExt);
     if (!redLeft && !blueLeft) {
-      AMLog(`${playerExt.name} leaved some other universum`); // should not happen but happens...
+      // AMLog(`${playerExt.name} leaved some other universum`); // when player was not in autobot inserted
       return;
     }
     if (this.isLobbyTime()) return; // add players only while game
     if (redLeft || blueLeft) {
       this.setPlayerLeftStatusTo(playerExt, PlayerLeavedDueTo.leftServer);
-      this.fillMissingGapsInTeams(redLeft);
+      this.handlePlayerLeaveTeam(redLeft);
     }
   }
 
@@ -233,18 +235,27 @@ export class AutoBot {
     let blueLeft = false;
     this.autoVoter.handleChangeAssignment(changedPlayer);
     if (this.isPlayerInSpec(changedPlayer) && changedPlayer.team) {
-      this.changeAssignment(changedPlayer.id, this.specTeam, changedPlayer.team == 1 ? this.redTeam : this.blueTeam);
+      this.changeAssignment(changedPlayer.id, this.specTeam, changedPlayer.team === 1 ? this.redTeam : this.blueTeam);
     } else if (this.isPlayerInRed(changedPlayer) && changedPlayer.team != 1) {
-      this.changeAssignment(changedPlayer.id, this.redTeam, changedPlayer.team == 0 ? this.specTeam : this.blueTeam);
-      if (changedPlayer.team == 0) redLeft = true;
+      this.changeAssignment(changedPlayer.id, this.redTeam, changedPlayer.team === 0 ? this.specTeam : this.blueTeam);
+      if (changedPlayer.team === 0) redLeft = true;
     } else if (this.isPlayerInBlue(changedPlayer) && changedPlayer.team != 2) {
-      this.changeAssignment(changedPlayer.id, this.blueTeam, changedPlayer.team == 0 ? this.specTeam : this.redTeam);
-      if (changedPlayer.team == 0) blueLeft = true;
+      this.changeAssignment(changedPlayer.id, this.blueTeam, changedPlayer.team === 0 ? this.specTeam : this.redTeam);
+      if (changedPlayer.team === 0) blueLeft = true;
     }
     if (this.isLobbyTime()) return; // add players only while game
     if (redLeft || blueLeft) {
       if (changedPlayer.afk || changedPlayer.afk_maybe)
         this.setPlayerLeftStatusTo(changedPlayer, PlayerLeavedDueTo.afk);
+      this.handlePlayerLeaveTeam(redLeft);
+    }
+  }
+
+  private handlePlayerLeaveTeam(redLeft: boolean) {
+    const limit = this.limit();
+    if (limit === 1) {
+      this.onPlayerLeaveEndMatch1vs1();
+    } else {
       this.fillMissingGapsInTeams(redLeft);
     }
   }
@@ -253,9 +264,9 @@ export class AutoBot {
     // AMLog(`${this.matchState} handler player returning from AFK ${playerExt.name}`);
     if (this.isLobbyTime()) return; // add players only while game
     const limit = this.limit();
+    let rl = this.redTeam.length;
+    let bl = this.blueTeam.length;
     if (limit === 3 || limit === 4) {
-      let rl = this.redTeam.length;
-      let bl = this.blueTeam.length;
       if (rl === bl && bl === limit) return;
       if (rl === bl && rl < limit || rl < bl) {
         this.movePlayerToRed(playerExt, this.specTeam);
@@ -267,6 +278,12 @@ export class AutoBot {
       }
       if (limit === 3 && rl === 3 && bl === 3 && this.hb_room.last_selected_map_name !== 'futsal_big') {
         this.justStopGame();
+      }
+    } else if (limit === 1) {
+      if (rl === 0) {
+        this.movePlayerToRed(playerExt, this.specTeam);
+      } else if (bl === 0) {
+        this.movePlayerToBlue(playerExt, this.specTeam);
       }
     }
   }
@@ -290,6 +307,28 @@ export class AutoBot {
       }
       this.tryToRebalance3V3or4V4();
     }
+  }
+
+  private tryToRebalance1v1() {
+    // just check
+  }
+
+  private onPlayerLeaveEndMatch1vs1() {
+    const limit = this.limit();
+    if (limit !== 1) return;
+    const rl = this.redTeam.length;
+    const bl = this.blueTeam.length;
+    if (rl === bl && bl === limit) return; // just in case
+    if (!this.currentMatch.isEnded()) {
+      if (!this.currentMatch.winnerTeam && this.currentScores) {
+        if (rl > 0) this.setLastWinner(1);
+        else this.setLastWinner(2);
+      }
+      this.currentMatch.setScore(this.currentScores);
+      this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked);
+    }
+    this.hb_room.sendMsgToAll("Przeciwnik sobie poszedł, gramy następny mecz!", Colors.GameState, "italic");
+    this.justStopGame(); // 2v2, 3v1, 2v1...
   }
 
   private tryToRebalance3V3or4V4() {
@@ -334,8 +373,9 @@ export class AutoBot {
     if (this.ranked) {
       const limit = this.limit();
       if (this.redTeam.length < limit || this.blueTeam.length < limit) {
-        this.hb_room.sendMsgToAll("Niecierpliwi uciekli, dobieramy albo z listy albo z góry", Colors.GameState, "italic");
-        this.fillByPreparedSelection();
+        if (limit > 1)
+          this.hb_room.sendMsgToAll("Niecierpliwi uciekli, dobieramy albo z listy albo z góry", Colors.GameState, "italic");
+        this.fillByPreparedSelectionOrEnd1vs1();
       }
     }
 
@@ -359,7 +399,8 @@ export class AutoBot {
     this.autoVoter.resetOnMatchStarted();
     let matchType: MatchType = 'none';
     if (this.ranked) {
-      if (this.limit() === 3) matchType = '3vs3';
+      if (this.limit() === 1) matchType = '1vs1';
+      else if (this.limit() === 3) matchType = '3vs3';
       else if (this.limit() === 4) matchType = '4vs4';
     }
     this.currentMatch = new Match(matchType);
@@ -458,8 +499,10 @@ export class AutoBot {
   private showChosingPlayerReminder(scores: ScoresObject) {
     if (scores.time > this.chosingPlayerNextReminder) {
       this.specTeam.forEach(p => {
-        if (!p.afk && !p.afk_maybe) this.hb_room.sendMsgToPlayer(p, `Wybierz graczy do drużyny, wpisz: !wyb @anusiak @czesio @konieczko @maślana @zajkowski`, Colors.DarkGreen, 'bold');
-        else this.hb_room.sendMsgToPlayer(p, "Jesteś AFK! Chcesz zagrać? Wpisz !afk lub !back by wrócić do gry, !afks by sprawdzić kto afczy!", Colors.BrightGreen, 'bold');
+        if (!p.afk && !p.afk_maybe) {
+          if (this.limit() !== 1)
+            this.hb_room.sendMsgToPlayer(p, `Wybierz graczy do drużyny, wpisz: !wyb @anusiak @czesio @konieczko @maślana @zajkowski`, Colors.DarkGreen, 'bold');
+        } else this.hb_room.sendMsgToPlayer(p, "Jesteś AFK! Chcesz zagrać? Wpisz !afk lub !back by wrócić do gry, !afks by sprawdzić kto afczy!", Colors.BrightGreen, 'bold');
       });
       this.chosingPlayerNextReminder += 60;
     }
@@ -748,17 +791,16 @@ export class AutoBot {
       }
 
       // if no more players then go below
-      if ([3, 4].includes(limit)) {
+      if ([1, 3, 4].includes(limit)) {
         // AMLog("NO I ZACZYNAMY GRE");
-        AMLog(`ZACZYNAMY: r:${this.redTeam.map(e => e.name).join(",")} b:${this.blueTeam.map(e => e.name).join(",")} s:${this.specTeam.map(e=>e.name).join(",")}`);
+        AMLog(`ZACZYNAMY: r:${pNames(this.redTeam)} b:${pNames(this.blueTeam)} s:${pNames(this.specTeam)}`);
         this.clearMatchStartedTimer();
         this.stopLobbyMonitoringTimer();
         this.room.reorderPlayers(this.specTeam.map(e => e.id), true);
         // AMLog(`REORDERED: s:${this.specTeam.map(e=>e.name).join(",")}`);
         if (rl === limit && bl === limit) {
-          const mapName = limit === 3 ? "futsal_big" : "futsal_huge";
-          this.hb_room.setScoreTimeLimitByMode(limit === 4 ? '4vs4' : '3vs3');
-          this.hb_room.setMapByName(mapName);
+          this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(limit));
+          this.hb_room.setMapByName(this.getMapNameByLimit(limit), 0, 0, this.getBallPhysics());
           await sleep(500);
           this.matchState = MatchState.started;
           if (!this.ranked) {
@@ -768,8 +810,8 @@ export class AutoBot {
           this.ranked = true;
           this.room.startGame();
         } else {
-          this.hb_room.setScoreTimeLimitByMode('2vs2');
-          this.hb_room.setMapByName("futsal");
+          this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(2));
+          this.hb_room.setMapByName(this.getMapNameByLimit(2), 0, 0, this.getBallPhysics());
           await sleep(500);
           this.matchState = MatchState.started;
           this.ranked = false;
@@ -778,6 +820,25 @@ export class AutoBot {
         }
       }
     }, AutoBot.LobbyMonitoringTimeout);
+  }
+
+  private getBallPhysics(): MapPhysicsType {
+    let player = this.redTeam.at(0);
+    if (!player) return 'vehax';
+    return player.selected_ball;
+  }
+
+  private getMapNameByLimit(limit: number) {
+    if (limit === 3) return "futsal_big";
+    if (limit === 4) return "futsal_huge";
+    return "futsal";
+  }
+
+  private getScoreTimeLimitMode(limit: number) {
+    if (limit === 3) return "3vs3";
+    if (limit === 4) return "4vs4";
+    if (limit === 2) return "2vs2";
+    return "1vs1";
   }
 
   static ShortMatchHelp = 'Restart: !r, Pauza: !p, !votekick !votemute';
@@ -792,12 +853,13 @@ export class AutoBot {
     let redTeam = rl == 0;
     if (redTeam) this.movePlayerToRed(spec, this.specTeam);
     else this.movePlayerToBlue(spec, this.specTeam);
+    let limit = this.limit() - 1;
+    if (limit === 0) return;
     // AMLog(`${spec.name} CZY WYBRAŁ SOBIE DO SKŁADU KOGOŚ: ${spec.chosen_player_names.join(" ")}`);
     if (!spec.chosen_player_names.length) {
       this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} nikogo nie wybrał, dostał pierwszych dostępnych z oczekujących! ${AutoBot.ShortMatchHelp}`, Colors.GameState, 'italic');
       return;
     }
-    let limit = this.limit() - 1;
     let foundPlayers = this.specTeam
       .filter(e => !e.isAfk() && spec.chosen_player_names.includes(e.name_normalized))
       .sort((a, b) => {
@@ -815,9 +877,18 @@ export class AutoBot {
     else this.hb_room.sendMsgToAll(`(!wyb) ${spec.name} kogoś wybrał, lecz ich nie dostał! ${AutoBot.ShortMatchHelp}`, Colors.GameState, 'italic');
   }
 
+  private fillByPreparedSelectionOrEnd1vs1() {
+    const limit = this.limit();
+    if (limit === 1) {
+      this.onPlayerLeaveEndMatch1vs1();
+    } else {
+      this.fillByPreparedSelection();
+    }
+  }
+
   private fillByPreparedSelection() {
     // AMLog("fillByPreparedSelection");
-    let limit = this.limit();
+    const limit = this.limit();
     if (this.redTeam.length < limit) {
       this.fillByPreparedSelectionTeam(this.redTeam, 1);
     }
@@ -898,14 +969,14 @@ export class AutoBot {
 
   private updateLimit() {
     let nonAfkPlayers = this.getNonAfkAllCount();
-    if (this.hb_room.limit === 4 && nonAfkPlayers >= 8) {
-      if (this.currentLimit != 4)
+    if (this.hb_room.limit === 4) {
+      if (nonAfkPlayers >= 8 && this.currentLimit != 4) {
         AMLog(`Zmieniam limit na 4, bo mamy non afk: ${nonAfkPlayers}`);
-      this.currentLimit = 4;
-    } else {
-      if (this.currentLimit != 3)
+        this.currentLimit = 4;
+      } else {
         AMLog(`Zmieniam limit na 3, bo mamy non afk: ${nonAfkPlayers}`);
-      this.currentLimit = 3;
+        this.currentLimit = 3;
+      }
     }
   }
 

@@ -15,7 +15,7 @@ interface RoomLimits {
 
 const roomLimits: RoomLimits = {
   'freestyle': {score: 3, time: 3},
-  '1vs1': {score: 3, time: 1},
+  '1vs1': {score: 3, time: 2},
   '2vs2': {score: 3, time: 2},
   '3vs3': {score: 3, time: 3},
   '4vs4': {score: 3, time: 4},
@@ -52,6 +52,7 @@ export const dbDir = "./db";
 const mainDbFile = `${dbDir}/main_futsal_players.db`;
 const vipDbFile = `${dbDir}/main_vip.db`;
 export const hostAuthId = 'QrInL5KJCKDFUyBjgPxMeq392ZB0XjYksePfN6cm3BY';
+export const hostConnId = '34362E3230352E3139372E3438';
 export const discordLink = 'https://discord.gg/XrtXvMNKZT';
 export const webpageLink = 'https://haxball.ovh';
 export const localBackendService = 'http://www-server:3000';
