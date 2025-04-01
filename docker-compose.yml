@@ -25,6 +25,15 @@ services:
     shm_size: "1gb"
     sysctls:
       - net.ipv4.ip_local_port_range=50000 50100
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+    cpu_shares: 2048
+    mem_swappiness: 10
+    mem_limit: 1G
+    memswap_limit: 2G
+    oom_score_adj: -500
     networks:
       - app_network
     healthcheck:
@@ -128,6 +137,15 @@ services:
     shm_size: "1gb"
     sysctls:
       - net.ipv4.ip_local_port_range=53000 53100
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+    cpu_shares: 2048
+    mem_swappiness: 10
+    mem_limit: 1G
+    memswap_limit: 2G
+    oom_score_adj: -500
     networks:
       - app_network
     healthcheck:
@@ -163,6 +181,15 @@ services:
     shm_size: "1gb"
     sysctls:
       - net.ipv4.ip_local_port_range=54000 54100
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+    cpu_shares: 2048
+    mem_swappiness: 10
+    mem_limit: 1G
+    memswap_limit: 2G
+    oom_score_adj: -500
     networks:
       - app_network
     healthcheck:
@@ -201,6 +228,15 @@ services:
     shm_size: "1gb"
     sysctls:
       - net.ipv4.ip_local_port_range=55000 55100
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+    cpu_shares: 2048
+    mem_swappiness: 10
+    mem_limit: 1G
+    memswap_limit: 2G
+    oom_score_adj: -500
     networks:
       - app_network
     healthcheck:
@@ -223,6 +259,9 @@ services:
     ports:
       - "0.0.0.0:3000:3000/tcp"
       - "[::]:3000:3000/tcp"
+    mem_swappiness: 60
+    mem_limit: 500M
+    memswap_limit: 1G
     networks:
       - app_network
     user: node
@@ -237,6 +276,9 @@ services:
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
     networks:
       - app_network
     user: node
@@ -251,6 +293,9 @@ services:
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
     networks:
       - app_network
     user: node
@@ -265,6 +310,9 @@ services:
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
     networks:
       - app_network
     user: node
@@ -279,6 +327,9 @@ services:
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 60
+    mem_limit: 500M
+    memswap_limit: 1G
     networks:
       - app_network
     user: node
@@ -293,6 +344,9 @@ services:
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
     networks:
       - app_network
     user: node
@@ -311,6 +365,9 @@ services:
       resources:
         limits:
           cpus: '0.1'
+          memory: 500M
+    memswap_limit: 1G
+    mem_swappiness: 90
     networks:
       - app_network
     user: node
@@ -329,6 +386,9 @@ services:
       resources:
         limits:
           cpus: '0.1'
+          memory: 500M
+    memswap_limit: 1G
+    mem_swappiness: 90
     networks:
       - app_network
     user: node
@@ -347,6 +407,9 @@ services:
       resources:
         limits:
           cpus: '0.1'
+          memory: 500M
+    memswap_limit: 1G
+    mem_swappiness: 90
     networks:
       - app_network
     user: node
@@ -360,6 +423,9 @@ services:
     environment:
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
     networks:
       - app_network
     user: node

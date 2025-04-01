@@ -1,5 +1,4 @@
-import { HaxballRoom } from "./hb_room";
-import { PlayerData, PlayerMatchStatsData, PlayerMatchStatsDataImpl } from "./structs";
+import { PlayerData, PlayerMatchStatsData } from "./structs";
 
 class Goal {
   time: number;

@@ -15,11 +15,21 @@ class WelcomeMessage {
   setMessage(msg: string) {
     this.msg = msg;
   }
-  sendWelcomeMessage(player: PlayerData) {
+  sendWelcomeMessage(player: PlayerData, players: Map<number, PlayerData>) {
     if (player.trust_level && this.msg.length) this.callback(player, this.msg);
     else if (!player.trust_level && this.msgNonTrusted.length) {
       for (let i = 0; i < 3; ++i) this.callback(player, this.msgNonTrusted);
     }
+    this.sendAboutNonTrustedToOthers(player, players);
+  }
+  private sendAboutNonTrustedToOthers(player: PlayerData, players: Map<number, PlayerData>) {
+    if (player.trust_level) return;
+    const txt = `Nowy gracz z zerowym poziomem zaufania! Daj mu tymczasowy trust: !xt @${player.name}| stały trust: !t @${player.name}`;
+    players.forEach(p => {
+      if (p.id !== player.id && p.trust_level) {
+        this.callback(p, txt);
+      }
+    });
   }
 }
 

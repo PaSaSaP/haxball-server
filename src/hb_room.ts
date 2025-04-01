@@ -120,6 +120,7 @@ export class HaxballRoom {
   pl_logger: PlayerJoinLogger;
   discord_account: DiscordAccountManager;
   ghost_players: GhostPlayers;
+  no_x_for_all: boolean;
   bot_stopping_enabled = false;
   temporarily_trusted: Set<number>;
 
@@ -188,7 +189,7 @@ export class HaxballRoom {
     this.vip_options = new VipOptionsHandler(this);
     this.rejoice_prices = new Map();
     this.vip_option_prices = new Map();
-    this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.OrangeTangelo) });
+    this.welcome_message = new WelcomeMessage((player: PlayerData, msg: string) => { this.sendMsgToPlayer(player, msg, Colors.LightYellow, 'bold', 2) });
     this.pinger = new Pinger(this.getSselector(), () => [this.players_ext.size, this.getAfkCount()]);
     this.god_commander = new GodCommander(this.god_player, (player: PlayerObject, command: string) => this.handlePlayerChat(player, command),
       roomConfig.selector, roomConfig.subselector);
@@ -197,6 +198,7 @@ export class HaxballRoom {
     this.pl_logger = new PlayerJoinLogger(this);
     this.discord_account = new DiscordAccountManager(this);
     this.ghost_players = new GhostPlayers(this);
+    this.no_x_for_all = false;
     this.temporarily_trusted = new Set();
 
     this.game_tick_array = [];
@@ -1057,7 +1059,8 @@ export class HaxballRoom {
       if (this.gatekeeper.handlePlayerJoin(playerExt)) return;
       if (this.auto_mode) this.delay_joiner.handlePlayerJoin(playerExt);
       this.rejoice_maker.handlePlayerJoin(playerExt);
-      this.welcome_message.sendWelcomeMessage(playerExt);
+      this.welcome_message.sendWelcomeMessage(playerExt, this.players_ext);
+      if (this.no_x_for_all) this.room.setPlayerNoX(playerExt.id, true);
       const initialMute = playerExt.trust_level < 2;
       this.anti_spam.addPlayer(playerExt, initialMute);
       if (this.anti_spam.enabled && initialMute) {

@@ -52,7 +52,7 @@ async function fetchPlayerNames(cache: Cache) {
       console.log(`Got ${results.length} new names, now there is ${cache.playerNamesByAuth.size} names, lastId=${cache.lastPlayerGlobalId}, newId=${newLastPlayerGlobalId}`);
     } catch (e) { console.error(`Error for player names: ${e}`) };
   }
-  cache.lastPlayerGlobalId = newLastPlayerGlobalId;
+  if (newLastPlayerGlobalId !== -1) cache.lastPlayerGlobalId = newLastPlayerGlobalId;
   let cacheAllMap: Map<string, [number, string]> = new Map();
   for (let [authId, p] of cache.playerEntryByAuth) {
     cacheAllMap.set(authId, [p.id, p.name]);

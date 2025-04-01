@@ -70,6 +70,10 @@ declare class RoomObject {
 
     setPlayerNoX(playerId: number, state: boolean): void;
 
+    setGhostPlayer(playerId: number, ghostedPlayerId: number | null): void;
+
+    clearGhostPlayers(): void;
+
     setDiscProperties(discIndex: number, properties: Partial<DiscPropertiesObject>): void;
 
     getDiscProperties(discIndex: number): DiscPropertiesObject;

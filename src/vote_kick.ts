@@ -42,10 +42,11 @@ export class VoteKicker implements AutoVoter {
   }
 
   handle(votedPlayer: PlayerData|null, byPlayer: PlayerData) {
-    if (this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
+    const limit = this.autobot.getCurrentLimit();
+    if (limit > 1 && this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
     if (this.team == 0) {
       if (!votedPlayer || !votedPlayer.team) return;
-      if (byPlayer.team && votedPlayer.team == byPlayer.team) {
+      if (limit === 1 || (byPlayer.team && votedPlayer.team == byPlayer.team)) {
         this.at = Date.now();
         this.team = byPlayer.team as 0|1|2;
         this.voted = votedPlayer;
@@ -333,6 +334,11 @@ export class AutoVoteHandler implements AutoVoter {
     this.voteBotKicker = new VoteBotKicker(this.hbRoom);
     this.voteV4 = new VoteV4(autoBot.hb_room);
     this.activeVoter = null;
+    if (autoBot.getCurrentLimit() === 1) {
+      this.voteKicker.RequiredVotes = 2;
+      this.voteMuter.RequiredVotes = 2;
+      this.voteBotKicker.RequiredVotes = 2;
+    }
   }
 
   resetOnMatchStarted() {

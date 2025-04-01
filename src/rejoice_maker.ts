@@ -379,6 +379,118 @@ class SmileRejoice {
   }
 }
 
+type HSL = [number, number, number];
+class RandomDiscColorsRejoice {
+  name: string = 'disc_colors';
+  inProgress: boolean;
+  duration: number;
+  startTime: number;
+  discs: HSL[];
+  properties: DiscPropertiesHandler;
+  constructor(properties: DiscPropertiesHandler) {
+    this.name = 'smile';
+    this.inProgress = false;
+    this.properties = properties;
+    this.duration = 2250;
+    this.startTime = 0;
+    this.discs = [];
+  }
+
+  isInProgress() {
+    return this.inProgress;
+  }
+
+  handleGameTick() {
+    if (!this.isInProgress()) return;
+    if (Date.now() - this.startTime > this.duration) {
+      this.reset();
+      return;
+    }
+
+    for (let i = 0; i < this.discs.length; ++i) {
+      this.discs[i] = this.nextColor(this.discs[i]);
+      const rgb = this.hslToRgb(this.discs[i]);
+      this.properties.setDiscProperties(i, {color: rgb});
+    }
+  }
+
+  // RGB → HSL
+  rgbToHsl(color: number): HSL {
+    let r = (color >> 16) & 0xff;
+    let g = (color >> 8) & 0xff;
+    let b = color & 0xff;
+
+    let max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2 / 255; // Normalizacja do zakresu 0-1
+
+    if (max !== min) {
+      let d = max - min;
+      s = d / (1 - Math.abs(2 * l - 1)); // Poprawiona formuła
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h = Math.round(h * 60);
+    }
+
+    return [h, s, l];
+  }
+
+  // Zmiana koloru w HSL (przesunięcie odcienia)
+  nextColor(hsl: HSL): HSL {
+    let step = Math.floor(Math.random() * 3) + 1; // Losowa wartość [1,4]
+    return [(hsl[0] + step) % 360, hsl[1], hsl[2]];
+  }
+
+  // HSL → RGB
+  hslToRgb(hsl: HSL): number {
+    let [h, s, l] = hsl;
+
+    let c = (1 - Math.abs(2 * l - 1)) * s;
+    let x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    let m = l - c / 2;
+
+    let r1 = 0, g1 = 0, b1 = 0;
+    if (h < 60) [r1, g1, b1] = [c, x, 0];
+    else if (h < 120) [r1, g1, b1] = [x, c, 0];
+    else if (h < 180) [r1, g1, b1] = [0, c, x];
+    else if (h < 240) [r1, g1, b1] = [0, x, c];
+    else if (h < 300) [r1, g1, b1] = [x, 0, c];
+    else[r1, g1, b1] = [c, 0, x];
+
+    let r = Math.round((r1 + m) * 255)&0xFF;
+    let g = Math.round((g1 + m) * 255)&0xFF;
+    let b = Math.round((b1 + m) * 255)&0xFF;
+
+    return (r << 16) | (g << 8) | b;
+  }
+  handlePositionsReset() {
+    this.reset();
+  }
+
+  handleTeamGoal() {
+    for (let i = 0; i < 10; ++i) {
+      const props = this.properties.getDiscProperties(i);
+      if (!props) break;
+      const color = props.color;
+      if (!color) break;
+      this.discs.push(this.rgbToHsl(color));
+    }
+    this.startTime = Date.now();
+    this.inProgress = true;
+  }
+
+  handleGameStop() {
+    this.discs.length = 0;
+    this.reset();
+  }
+
+  reset() {
+    this.inProgress = false;
+  }
+}
+
 class BigBallRejoice {
   name: string = 'big_ball';
   playerId: number;
@@ -559,6 +671,7 @@ export class RejoiceMaker {
     if (this.playerRejoices.has(assisterPlayerId)) this.playingRejoices.push(this.playerRejoices.get(assisterPlayerId)!.get());
     if (this.playingRejoices.length == 2) this.checkPriorityOfRejoices();
     if (ownGoalPlayerId !== -1) this.playingRejoices.push(this.getOwnGoalRejoice(ownGoalPlayerId));
+    this.playingRejoices.push(this.getDiscColorsRejoice());
     this.playingRejoices.forEach(rejoice => {
       rejoice.handleTeamGoal();
     });
@@ -623,6 +736,9 @@ export class RejoiceMaker {
   }
   private getOwnGoalRejoice(playerId: number) {
     return new GettingSmallerRejoice(playerId, this.dpHandler);
+  }
+  private getDiscColorsRejoice() {
+    return new RandomDiscColorsRejoice(this.dpHandler);
   }
 }
 

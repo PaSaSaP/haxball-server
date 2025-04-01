@@ -87,7 +87,7 @@ async function fetchMatches(cache: Cache) {
       }
     }
   } catch (e) { console.error(`Error for matches: ${e}`) };
-  cache.lastMatchId = newLastMatchId;
+  if (newLastMatchId !== -1) cache.lastMatchId = newLastMatchId;
   let data: typeof cache.cache = [];
   for (let m of cache.matches) {
     data.push(matchToArray(m));

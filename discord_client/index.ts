@@ -28,19 +28,18 @@ let logFile = `./logs/${roomConfig.chatLogDbFile}`;
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 async function monitorLogs(channel: TextChannel) {
+  const sendToChannel = (log: any) => {
+    if (!log.for_discord) return;
+    if (log.action == 'chat') channel.send(`**\`${log.user_name}\`** ${log.text}`);
+    else if (log.action == 'server') channel.send(`*${log.text}*`);
+  };
   let fileSize = fs.statSync(logFile).size;
 
   let receivingStream = new UnpackrStream();
   receivingStream.on('data', (data) => {
     // console.log(`R SOME DATA: ${data}`)
-
     try {
       let logs = decode(data);
-      const sendToChannel = (log: any) => {
-        if (!log.for_discord) return;
-        if (log.action == 'chat') channel.send(`**\`${log.user_name}\`** ${log.text}`);
-        else if (log.action == 'server') channel.send(`*${log.text}*`);
-      };
       if (Array.isArray(logs)) {
         // console.log(`Sending ${logs.length} msgs`);
         for (const log of logs) {
@@ -56,6 +55,18 @@ async function monitorLogs(channel: TextChannel) {
       console.error("Błąd dekodowania logów:", error);
     }
   });
+
+  // watch seems to not get changes when file is updated
+  // fs.watch(logFile, (eventType) => {
+  //   if (eventType === 'change') {
+  //     let newFileSize = fs.statSync(logFile).size;
+  //     if (newFileSize > fileSize) {
+  //       let stream = fs.createReadStream(logFile, { start: fileSize, end: newFileSize - 1 });
+  //       stream.pipe(receivingStream);
+  //       fileSize = newFileSize;
+  //     }
+  //   }
+  // });
 
   fs.watchFile(logFile, { interval: 200 }, () => {
     const newFileSize = fs.statSync(logFile).size;

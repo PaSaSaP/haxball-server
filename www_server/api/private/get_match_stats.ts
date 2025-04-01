@@ -95,8 +95,7 @@ async function fetchMatchStats(cache: Cache) {
       }
     }
   } catch (e) { console.error(`Error for match stats: ${e}`) };
-  if (newRowId != -1)
-    cache.lastRowId = newRowId;
+  if (newRowId !== -1) cache.lastRowId = newRowId;
   let data: typeof cache.cache = [];
   for (let m of cache.matchStats) {
     data.push(matchToArray(m));

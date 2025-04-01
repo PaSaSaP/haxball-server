@@ -41,7 +41,14 @@ const onHBLoaded = function(cb) {
 (function(va) {
 
   const AvatarMaxLength = 2; // Argh, no effect :(
+  global.CurrentTime = 0;
   global.PlayerNoX = new Set();
+  global.PlayerAvatarOneTime = new Set();
+  global.PlayerIsSpec = new Set();
+  // global.PlayerGhost = new Map();
+  // global.PlayerGhostInput = new Map();
+  global.PlayerInput = new Map();
+  global.TimeoutForX = 500;
   function ActionLog(txt) {
     console.log(`#ACTION# ${txt}`);
   }
@@ -279,6 +286,7 @@ const onHBLoaded = function(cb) {
       this.a = new Point2D(0, 0)
     }
     G(a) {
+      // ActionLog(`PhysicsObject rf=${this.rf} c=${this.c} T=${this.T} ga=${this.ga} L=${this.L} M=${this.M}`);
       var b = this.a;
       a.g(b.x);
       a.g(b.y);
@@ -709,6 +717,18 @@ const onHBLoaded = function(cb) {
       return va[a]
     }
   }
+
+  class InputData {
+    constructor() {
+      this.no_x = false;
+      this.x = false;
+      this.since = 0;
+      this.x_once = false;
+      this.x_counter = 0;
+      this.keys = 0;
+    }
+  }
+
   const q = HaxballTypeHelper;
   class HaxballPlayerData {
     constructor() {
@@ -724,9 +744,12 @@ const onHBLoaded = function(cb) {
       this.Db = this.Vf = null;
       this.Eb = 0;
       this.Ub = !1;
+      this.input = new InputData();
       // this.NoX = false;
     }
     P(a) {
+      // sent on player join
+
       a.f(this.Ub ? 1 : 0);
       a.w(this.Eb);
       a.Ca(this.Db);
@@ -1043,8 +1066,11 @@ const onHBLoaded = function(cb) {
       }
     }
     Ba(a) {
+      // ActionLog("Ba(a)");
+      global.CurrentTime = Date.now();
       if (0 < this.Xa) 120 > this.Xa && this.Xa--;
       else {
+        // ActionLog("Ba(a) else");
         var b = this.ha.Og;
         null != b && b();
         b = this.ha.ba;
@@ -1052,10 +1078,12 @@ const onHBLoaded = function(cb) {
           var d = b[c];
           ++c;
           if (null != d.N) {
+            // ActionLog(`Ba(a) else if ${c}/${b.length} Jb=${d.Jb} Cb=${d.Cb}`);
             0 == (d.Jb & 16) && (d.Cb = !1);
             var e = this.ea.Mb;
             0 < d.uc && d.uc--;
             d.Wb < this.ha.Pd && d.Wb++;
+            // ActionLog(`Ba(a) else if uc=${d.uc} Wb=${d.Wb} klen=${k.length}`);
             if (d.Cb && 0 >= d.uc && 0 <= d.Wb) {
               for (var f = !1, g = 0, k = this.ia.A; g < k.length;) {
                 var l = k[g];
@@ -1085,6 +1113,7 @@ const onHBLoaded = function(cb) {
                   }
                 }
               }
+              // ActionLog(`D uc: ${d.uc} -> ${this.ha.Xc} , Wb: ${d.Wb} -> ${this.ha.fc}`);
               f && (null != this.ha.vf && this.ha.vf(d), d.Cb = !1, d.uc = this.ha.Xc, d.Wb -= this.ha.fc)
             }
             f = d.Jb;
@@ -3027,10 +3056,27 @@ const onHBLoaded = function(cb) {
             // console.log(`setPlayerNoX ${h} = ${n}`);
             if (h) {
               // h.noX = n;
-              if (n) global.PlayerNoX.add(h);
-              else global.PlayerNoX.delete(h);
-              console.log(`setPlayerNoX ${h} = ${n} Done`);
+              if (n) {
+                global.PlayerNoX.add(h);
+                global.PlayerInput.get(h).no_x = true;
+              } else {
+                global.PlayerNoX.delete(h);
+                global.PlayerInput.get(h).no_x = false;
+              }
+              ActionLog(`setPlayerNoX ${h} = ${n}`);
             }
+          },
+          setGhostPlayer: function (h, n) {
+            if (h) {
+              // TODO
+              // if (n) global.PlayerGhost.set(h, n);
+              // else global.PlayerGhost.delete(h);
+              // ActionLog(`PlayerGhost ${h} = ${n}`);
+            }
+          },
+          clearGhostPlayers: function () {
+            // global.PlayerGhost.clear();
+            // ActionLog(`clearGhostPlayers`);
           },
           kickPlayer: function(h, n, v) {
             null == n && (n = "");
@@ -3239,12 +3285,23 @@ const onHBLoaded = function(cb) {
           v = null,
           G = null,
           real_ip = null,
-          country = null;
-        null != n && (v = n.Ig, G = n.jc.hb, real_ip = n.real_ip, country = h.country);
+          country = null,
+          input = null;
+        null != n && (v = n.Ig, G = n.jc.hb, real_ip = n.real_ip, country = h.country, input = h.input);
         // ActionLog(`real ip = ${real_ip} country = ${h.country}`);
         n = v;
         v = J.onPlayerJoin;
-        null != v && (h = f(h), h.auth = n, h.conn = G, h.real_ip = real_ip, h.country = country, v(h))
+        if (null != v) {
+          h = f(h);
+          h.auth = n;
+          h.conn = G;
+          h.real_ip = real_ip;
+          h.country = country;
+          global.PlayerIsSpec.add(h.id);
+          global.PlayerInput.set(h.id, input);
+          v(h);
+        // (h = f(h), h.auth = n, h.conn = G, h.real_ip = real_ip, h.country = country, v(h))
+        }
       };
       y.Mf = function() {
         {
@@ -3272,10 +3329,16 @@ const onHBLoaded = function(cb) {
         let n = J.onGameStop;
         null != n && n(f(h))
       };
-      y.Gh = function(h, n) {
+      y.Gh = function (h, n) {
         let v =
           J.onPlayerTeamChange;
-        null != v && v(f(n), f(h))
+        if (null != v) {
+          let c = f(n);
+          // ActionLog(`onPlayerTeamChange n: ${n} id: ${c.id} t: ${c.team}`);
+          if (!c.team) global.PlayerIsSpec.add(c.id);
+          else global.PlayerIsSpec.delete(c.id);
+          v(c, f(h))
+      }
       };
       y.sf = function(h, n) {
         let v = J.onPlayerAdminChange;
@@ -3651,6 +3714,7 @@ const onHBLoaded = function(cb) {
       this.a = new Point2D(0, 0)
     }
     G(a) {
+      // ActionLog(`HaxballPhysicalEntity m=${this.m} c=${this.c} T=${this.T} ga=${this.ga} L=${this.L} M=${this.M}`);
       var b = this.a;
       a.g(b.x);
       a.g(b.y);
@@ -4331,9 +4395,15 @@ const onHBLoaded = function(cb) {
       null != a && (a.Db = this.Ea)
     }
     P(a) {
+      if (global.PlayerAvatarOneTime.has(this.B)) this.Ea = null;
+      else {
+        global.PlayerAvatarOneTime.add(this.B);
+        ActionLog(`AvatarUpdaterActionHandler one time set for ${this.B} A: ${this.Ea}`);
+      }
       a.Ca(this.Ea)
     }
     W(a) {
+      // if (global.PlayerAvatarOneTime.has(this.B)) return;
       this.Ea = a.Ya();
       null != this.Ea && (this.Ea = HaxballStringUtils.truncate(this.Ea, AvatarMaxLength))
     }
@@ -4564,32 +4634,75 @@ const onHBLoaded = function(cb) {
     }
     apply(a) {
       let b = a.R(this.B);
-      if (null != b) {
-        // changing here gives only desync!!!
-        // console.log(`a=${a} b=${b} aN=${a.noX} bN=${b.noX} auf=${a.uf} bn=${b.N} eg=${this.eg} fg=${this.fg}`);
-        // if (global.PlayerNoX.has(this.B)) {
-        //   this.input = this.input & 15;
-        // }
-        var c = this.input;
-        0 == (b.Jb & 16) && 0 != (c & 16) &&
-          (b.Cb = !0);
-        b.Jb = c;
-        // ActionLog(`PlayerInputHandler ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
-        null != a.uf && null != b.N && a.uf(b, this.input, this.eg, this.fg)
-
-        // if (b.ne) { // if desynchronised, kick!
-        //   StringHelper2.remove(a.ba, b);
-        //   HaxballCallbackExecutor.executeCallback(a.Fh,
-        //     b, 'desync', false, null);
-        // }
+      if (null === b) return;
+      if (this.spec) {
+        b.Cb = !1;
+        b.Jb = 0;
+        null !== a.uf && null !== b.N && a.uf(b, this.input, this.eg, this.fg);
+        return;
       }
+
+      // changing here gives only desync!!!
+      // console.log(`a=${a} b=${b} aN=${a.noX} bN=${b.noX} auf=${a.uf} bn=${b.N} eg=${this.eg} fg=${this.fg}`);
+      // if (global.PlayerNoX.has(this.B)) {
+      //   this.input = this.input & 15;
+      // }
+      var c = this.input;
+      // var c = data.keys;
+      0 === (b.Jb & 16) && 0 !== (c & 16) &&
+        (b.Cb = !0);
+      b.Jb = c;
+
+      let data = b.input;
+      if (data.no_x) {
+        if (data.x) {
+          if (!data.x_once) {
+            data.x_once = global.CurrentTime - data.x_since > global.TimeoutForX;
+          } else {
+            data.x_counter++;
+            data.x_once = false;
+          }
+        }
+        // ActionLog(`PlayerInputHandler id=${this.B} keys=${data.keys} input=${this.input} x=${data.x} X=${b.Cb}`);
+      }
+
+      // ActionLog(`PlayerInputHandler ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
+      null != a.uf && null != b.N && a.uf(b, this.input, this.eg, this.fg)
+      // ActionLog(`PlayerInputHandler I am ${this.B}, eg=${this.eg} fg=${this.fg}`);
+
+      // if (b.ne) { // if desynchronised, kick!
+      //   StringHelper2.remove(a.ba, b);
+      //   HaxballCallbackExecutor.executeCallback(a.Fh,
+      //     b, 'desync', false, null);
+      // }
     }
     P(a) {
-      if (global.PlayerNoX.has(this.B)) this.input = this.input & 15;
+      // executed only on new user input
+      this.spec = global.PlayerIsSpec.has(this.B);
+      if (!this.spec) {
+        let data = global.PlayerInput.get(this.B);
+        if (data.no_x) {
+          data.keys = this.input|0;
+          if (this.input & 16) {
+            if (!data.x) data.x_since = global.CurrentTime;
+            data.x = true;
+            // ActionLog(`no_x=${data.no_x} x_once=${data.x_once} if(${data.no_x && !data.x_once})`);
+            if (data.no_x && !data.x_once) this.input = this.input & 15;
+          } else {
+            data.x_counter = 0;
+            data.x_once = false;
+            data.x = false;
+          }
+        }
+      } else if (this.spec) {
+        this.input = 0;
+      } else if (global.PlayerNoX.has(this.B)) this.input = this.input & 15;
+      // ActionLog(`PlayerInputHandler ${this.B} => ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
       a.xa(this.input)
     }
     W(a) {
-      this.input = a.Ob()
+      this.input = a.Ob();
+      // ActionLog(`PlayerInputHandler W(a) I am ${this.B}, input: ${this.input},`);
     }
   }
   const Ca = PlayerInputHandler;

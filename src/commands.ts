@@ -317,6 +317,8 @@ class Commander extends BaseCommander {
       botradius: this.commandBotSetRadius,
       botstop: this.commandSwitchBotStoppingFlag,
       ip: this.commandPrintPlayerIp,
+      all_no_x: this.commandNoXEnableForAll,
+      all_no_xd: this.commandNoXDisableForAll,
       no_x: this.commandNoXEnable,
       no_xd: this.commandNoXDisable,
       ipv6: this.commandWhoHasIpv6,
@@ -1546,7 +1548,7 @@ class Commander extends BaseCommander {
   }
 
   commandTrustUntilDisconnected(playerExt: PlayerData, cmds: string[]) {
-    if (playerExt.trust_level < 2) return;
+    if (playerExt.trust_level < 2 || this.hb_room.temporarily_trusted.has(playerExt.id)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Uzycie: !xt <@nick>");
       return;
@@ -1566,7 +1568,7 @@ class Commander extends BaseCommander {
   }
 
   commandUnTrustTemporary(playerExt: PlayerData, cmds: string[]) {
-    if (playerExt.trust_level < 2) return;
+    if (playerExt.trust_level < 2 || this.hb_room.temporarily_trusted.has(playerExt.id)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Uzycie: !xt- <@nick>");
       return;
@@ -1587,7 +1589,7 @@ class Commander extends BaseCommander {
   }
 
   commandShowTrustTemporary(playerExt: PlayerData, cmds: string[]) {
-    if (playerExt.trust_level < 2) return;
+    if (playerExt.trust_level < 2 || this.hb_room.temporarily_trusted.has(playerExt.id)) return;
     let txt = '';
     this.hb_room.players_ext.forEach(player => {
       if (this.hb_room.temporarily_trusted.has(player.id) && player.trust_level === 1)
@@ -1897,11 +1899,23 @@ class Commander extends BaseCommander {
     this.hb_room.acceleration_tasks.slide(playerExt.id);
   }
 
+  commandNoXEnableForAll(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'all_no_x')) return;
+    this.hb_room.no_x_for_all = true;
+    this.sendMsgToPlayer(playerExt, `Włączyłeś no_x dla wszystkich!`);
+  }
+
+  commandNoXDisableForAll(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'all_no_xd')) return;
+    this.hb_room.no_x_for_all = false;
+    this.sendMsgToPlayer(playerExt, `Wyłączyłeś no_x dla wszystkich!`);
+  }
+
   commandNoXEnable(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'no_x')) return;
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (cmdPlayer.id === playerExt.id) return;
+    // if (cmdPlayer.id === playerExt.id) return;
     this.r().setPlayerNoX(cmdPlayer.id, true);
     this.sendMsgToPlayer(playerExt, `Włączyłeś no_x dla ${cmdPlayer.name}`);
   }
@@ -1910,7 +1924,7 @@ class Commander extends BaseCommander {
     if (this.warnIfPlayerIsNotHost(playerExt, 'no_x')) return;
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
     if (!cmdPlayer) return;
-    if (cmdPlayer.id === playerExt.id) return;
+    // if (cmdPlayer.id === playerExt.id) return;
     this.r().setPlayerNoX(cmdPlayer.id, false);
     this.sendMsgToPlayer(playerExt, `Wyłączyłeś no_x dla ${cmdPlayer.name}`);
   }
@@ -1920,7 +1934,7 @@ class Commander extends BaseCommander {
     let txt = '';
     this.hb_room.players_ext.forEach(p => {
       if (p.id !== playerExt.id && p.real_ip.includes(':')) {
-        txt += playerExt.name + ' ';
+        txt += p.name + ' ';
       }
     })
     this.sendMsgToPlayer(playerExt, `Gracze z ipv6: ${txt}`);
