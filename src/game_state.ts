@@ -48,7 +48,7 @@ interface DBHandlerOtherType {
 }
 
 export class DBHandler {
-  static GameModes: GameModeType[] = ['freestyle', '1vs1', '2vs2', '3vs3', '4vs4'];
+  static GameModes: GameModeType[] = ['freestyle', '1vs1', '2vs2', '3vs3', '4vs4', 'volleyball'];
   mainMode: GameModeType;
   playersDb: sqlite3.Database;
   otherDb: {
@@ -57,6 +57,7 @@ export class DBHandler {
     '2vs2': DBHandlerOtherType | null,
     '3vs3': DBHandlerOtherType | null,
     '4vs4': DBHandlerOtherType | null,
+    'volleyball': DBHandlerOtherType | null,
   };
   vipDb: sqlite3.Database;
   players: PlayersDB;
@@ -102,7 +103,7 @@ export class DBHandler {
     this.discordAuthLinks = new DiscordAuthLinksDB(this.playersDb);
     this.discordUsers = new DiscordUsersDB(this.playersDb);
     // and second table
-    this.otherDb = { 'freestyle': null, '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null };
+    this.otherDb = { 'freestyle': null, '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null, 'volleyball': null };
     for (let selector of DBHandler.GameModes) {
       if (!otherDbFiles[selector] || !otherDbFiles[selector].length) continue;
       this.otherDb[selector] = this.createOtherDb(otherDbFiles[selector]);

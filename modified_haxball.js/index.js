@@ -4395,11 +4395,11 @@ const onHBLoaded = function(cb) {
       null != a && (a.Db = this.Ea)
     }
     P(a) {
-      if (global.PlayerAvatarOneTime.has(this.B)) this.Ea = null;
-      else {
-        global.PlayerAvatarOneTime.add(this.B);
-        ActionLog(`AvatarUpdaterActionHandler one time set for ${this.B} A: ${this.Ea}`);
-      }
+      // if (global.PlayerAvatarOneTime.has(this.B)) this.Ea = null;
+      // else {
+      //   global.PlayerAvatarOneTime.add(this.B);
+      //   ActionLog(`AvatarUpdaterActionHandler one time set for ${this.B} A: ${this.Ea}`);
+      // }
       a.Ca(this.Ea)
     }
     W(a) {

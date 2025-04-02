@@ -29,7 +29,7 @@ services:
       resources:
         reservations:
           memory: 512M
-    cpu_shares: 2048
+    cpu_shares: 4096
     mem_swappiness: 10
     mem_limit: 1G
     memswap_limit: 2G
@@ -112,49 +112,6 @@ services:
   #     start_period: 60s
   #   command: ["futsal_3vs3_3"]
 ############
-  freestyle:
-    image: hx-puppeteer:1.0
-    container_name: haxball-server-freestyle
-    restart: unless-stopped
-    ports:
-      - "0.0.0.0:53000-53100:53000-53100/udp"
-      - "[::]:53000-53100:53000-53100/udp"
-    environment:
-      - MONITORING=monitoring
-      - HTTP_PROXY=http://ssh-proxy:3132
-      - HTTPS_PROXY=http://ssh-proxy:3132
-      - NODE_TLS_REJECT_UNAUTHORIZED=0
-      - HX_ROOM_CONFIG_SELECTOR=freestyle
-      - HX_ROOM_CONFIG_SUBSELECTOR=1
-      - TZ=Europe/Warsaw
-      - NODE_TZ=Europe/Warsaw
-    volumes:
-      - .:/src
-      - /mnt/sqlite_ram/db:/src/db
-    cap_add:
-      - SYS_ADMIN
-      - CAP_NET_ADMIN
-    shm_size: "1gb"
-    sysctls:
-      - net.ipv4.ip_local_port_range=53000 53100
-    deploy:
-      resources:
-        reservations:
-          memory: 512M
-    cpu_shares: 2048
-    mem_swappiness: 10
-    mem_limit: 1G
-    memswap_limit: 2G
-    oom_score_adj: -500
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    command: ["futsal_freestyle"]
 ######
   futsal-1vs1:
     image: hx-puppeteer:1.0
@@ -200,22 +157,19 @@ services:
       start_period: 60s
     command: ["futsal_1vs1"]
 ######
-  futsal-4vs4-1:
+  freestyle:
     image: hx-puppeteer:1.0
-    container_name: haxball-server-futsal-4vs4-1
+    container_name: haxball-server-freestyle
     restart: unless-stopped
     ports:
-      - "0.0.0.0:55000-55100:55000-55100/udp"
-      - "[::]:55000-55100:55000-55100/udp"
+      - "0.0.0.0:53000-53100:53000-53100/udp"
+      - "[::]:53000-53100:53000-53100/udp"
     environment:
       - MONITORING=monitoring
-      - HTTP_PROXY=http://proxy-freestyle:8080
-      - HTTPS_PROXY=http://proxy-freestyle:8080
-      - HTTP_PROXY_IPV6=true
-      # - HTTP_PROXY=http://ssh-proxy:3133
-      # - HTTPS_PROXY=http://ssh-proxy:3133
+      - HTTP_PROXY=http://ssh-proxy:3132
+      - HTTPS_PROXY=http://ssh-proxy:3132
       - NODE_TLS_REJECT_UNAUTHORIZED=0
-      - HX_ROOM_CONFIG_SELECTOR=4vs4
+      - HX_ROOM_CONFIG_SELECTOR=freestyle
       - HX_ROOM_CONFIG_SUBSELECTOR=1
       - TZ=Europe/Warsaw
       - NODE_TZ=Europe/Warsaw
@@ -227,7 +181,7 @@ services:
       - CAP_NET_ADMIN
     shm_size: "1gb"
     sysctls:
-      - net.ipv4.ip_local_port_range=55000 55100
+      - net.ipv4.ip_local_port_range=53000 53100
     deploy:
       resources:
         reservations:
@@ -245,7 +199,98 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    command: ["futsal_4vs4_1"]
+    command: ["futsal_freestyle"]
+######
+  volleyball:
+    image: hx-puppeteer:1.0
+    container_name: haxball-server-volleyball
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:56000-56100:56000-56100/udp"
+      - "[::]:56000-56100:56000-56100/udp"
+    environment:
+      - MONITORING=monitoring
+      - HTTP_PROXY=http://ssh-proxy:3133
+      - HTTPS_PROXY=http://ssh-proxy:3133
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - HX_ROOM_CONFIG_SELECTOR=volleyball
+      - HX_ROOM_CONFIG_SUBSELECTOR=1
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    cap_add:
+      - SYS_ADMIN
+      - CAP_NET_ADMIN
+    shm_size: "1gb"
+    sysctls:
+      - net.ipv4.ip_local_port_range=56000 56100
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+    cpu_shares: 2048
+    mem_swappiness: 10
+    mem_limit: 1G
+    memswap_limit: 2G
+    oom_score_adj: -500
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: ["futsal_volleyball"]
+######
+  # futsal-4vs4-1:
+  #   image: hx-puppeteer:1.0
+  #   container_name: haxball-server-futsal-4vs4-1
+  #   restart: unless-stopped
+  #   ports:
+  #     - "0.0.0.0:55000-55100:55000-55100/udp"
+  #     - "[::]:55000-55100:55000-55100/udp"
+  #   environment:
+  #     - MONITORING=monitoring
+  #     - HTTP_PROXY=http://proxy-freestyle:8080
+  #     - HTTPS_PROXY=http://proxy-freestyle:8080
+  #     - HTTP_PROXY_IPV6=true
+  #     # - HTTP_PROXY=http://ssh-proxy:3133
+  #     # - HTTPS_PROXY=http://ssh-proxy:3133
+  #     - NODE_TLS_REJECT_UNAUTHORIZED=0
+  #     - HX_ROOM_CONFIG_SELECTOR=4vs4
+  #     - HX_ROOM_CONFIG_SUBSELECTOR=1
+  #     - TZ=Europe/Warsaw
+  #     - NODE_TZ=Europe/Warsaw
+  #   volumes:
+  #     - .:/src
+  #     - /mnt/sqlite_ram/db:/src/db
+  #   cap_add:
+  #     - SYS_ADMIN
+  #     - CAP_NET_ADMIN
+  #   shm_size: "1gb"
+  #   sysctls:
+  #     - net.ipv4.ip_local_port_range=55000 55100
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         memory: 512M
+  #   cpu_shares: 2048
+  #   mem_swappiness: 10
+  #   mem_limit: 1G
+  #   memswap_limit: 2G
+  #   oom_score_adj: -500
+  #   networks:
+  #     - app_network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 60s
+  #   command: ["futsal_4vs4_1"]
 ### rest services
   www-server:
     image: ghcr.io/puppeteer/puppeteer
@@ -301,6 +346,23 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run discord_freestyle
+  discord-volleyball:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run discord_volleyball
   discord-accounts:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped

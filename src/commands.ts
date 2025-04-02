@@ -325,6 +325,7 @@ class Commander extends BaseCommander {
       disc_info: this.commandDiscInfo,
       auto_afk_on: this.commandAutoAfkOn,
       auto_afk_off: this.commandAutoAfkOff,
+      z: this.commandVolleyballService,
 
       god: this.commandGodTest,
 
@@ -1955,6 +1956,13 @@ class Commander extends BaseCommander {
     const filteredB = this.filterOutXY(b);
     this.sendMsgToPlayer(playerExt, `player: ${JSON.stringify(filteredD)}`);
     this.sendMsgToPlayer(playerExt, `ball  : ${JSON.stringify(filteredB)}`);
+  }
+
+  commandVolleyballService(playerExt: PlayerData, cmds: string[]) {
+    // ball  : {"radius":7.25,"bCoeff":0.5,"invMass":1,"damping":0.99,"color":13421772,"cMask":32,"cGroup":193}
+    if (!this.hb_room.volleyball.isEnabled()) return;
+    if (playerExt.team === 0) return;
+    this.hb_room.volleyball.handleServeBy(playerExt);
   }
 
   commandAutoAfkOn(playerExt: PlayerData, cmds: string[]) {

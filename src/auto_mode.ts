@@ -5,7 +5,6 @@ import { getTimestampHMS, sleep } from "./utils";
 import { Colors } from "./colors";
 import { AutoVoteHandler } from "./vote_kick";
 import { randomInt } from "crypto";
-import { threadId } from 'worker_threads';
 import { MapPhysicsType } from './maps';
 
 
@@ -14,6 +13,7 @@ enum MatchState {
   started,
   ballInGame,
   afterGoal,
+  afterReset,
   afterVictory,
 }
 
@@ -176,6 +176,10 @@ export class AutoBot {
     return this.currentMatch.isEnded() || this.matchState === MatchState.lobby || this.matchState === MatchState.afterVictory;
   }
 
+  isGameInProgress(): boolean {
+    return this.matchState === MatchState.ballInGame;
+  }
+
   handlePlayerJoin(playerExt: PlayerData) {
     // AMLog(`${playerExt.name} joined`);
     this.addPlayerToSpec(playerExt);
@@ -204,6 +208,7 @@ export class AutoBot {
         } // they still should play at futsal map
       } // for now here handle only limit===3
     } // else player not added, do nothing
+    this.switchVolleyballTrainingMode(rl + bl);
   }
 
   handlePlayerLeave(playerExt: PlayerData) {
@@ -227,6 +232,19 @@ export class AutoBot {
 
   setPlayerLeftStatusTo(playerExt: PlayerData, dueTo: PlayerLeavedDueTo) {
     this.currentMatch.setPlayerLeftStatusTo(playerExt, this.currentScores?.time ?? 0, dueTo);
+  }
+
+  switchVolleyballTrainingMode(nonAfk: number) {
+    if (this.hb_room.volleyball.isEnabled()) {
+      // const nonAfk = this.getNonAfkAllCount();
+      if (nonAfk === 1) { // enable training mode
+        // this.hb_room.volleyball.setTraining(true);
+        this.justStopGame();
+      } else if (nonAfk > 1 && this.hb_room.volleyball.isTrainingMode()) {
+        // this.hb_room.volleyball.setTraining(false);
+        this.justStopGame();
+      }
+    }
   }
 
   handlePlayerTeamChange(changedPlayer: PlayerData) {
@@ -256,7 +274,11 @@ export class AutoBot {
     if (limit === 1) {
       this.onPlayerLeaveEndMatch1vs1();
     } else {
-      this.fillMissingGapsInTeams(redLeft);
+      if (this.hb_room.volleyball.isEnabled()) {
+        this.onPlayerLeaveVolleyball();
+      } else {
+        this.fillMissingGapsInTeams(redLeft);
+      }
     }
   }
 
@@ -266,7 +288,7 @@ export class AutoBot {
     const limit = this.limit();
     let rl = this.redTeam.length;
     let bl = this.blueTeam.length;
-    if (limit === 3 || limit === 4) {
+    if (limit === 2 || limit === 3 || limit === 4) {
       if (rl === bl && bl === limit) return;
       if (rl === bl && rl < limit || rl < bl) {
         this.movePlayerToRed(playerExt, this.specTeam);
@@ -279,6 +301,7 @@ export class AutoBot {
       if (limit === 3 && rl === 3 && bl === 3 && this.hb_room.last_selected_map_name !== 'futsal_big') {
         this.justStopGame();
       }
+      this.switchVolleyballTrainingMode(rl + bl);
     } else if (limit === 1) {
       if (rl === 0) {
         this.movePlayerToRed(playerExt, this.specTeam);
@@ -297,7 +320,7 @@ export class AutoBot {
 
   private fillMissingGapsInTeams(redLeft: boolean) {
     const limit = this.limit();
-    if (limit === 3 || limit === 4) {
+    if (limit === 2 || limit === 3 || limit === 4) {
       // try to add
       let spec = this.bottomNonAfkSpec();
       if (spec) {
@@ -307,10 +330,6 @@ export class AutoBot {
       }
       this.tryToRebalance3V3or4V4();
     }
-  }
-
-  private tryToRebalance1v1() {
-    // just check
   }
 
   private onPlayerLeaveEndMatch1vs1() {
@@ -329,6 +348,24 @@ export class AutoBot {
     }
     this.hb_room.sendMsgToAll("Przeciwnik sobie poszedł, gramy następny mecz!", Colors.GameState, "italic");
     this.justStopGame(); // 2v2, 3v1, 2v1...
+  }
+
+  private onPlayerLeaveVolleyball() {
+    const limit = this.limit();
+    const rl = this.redTeam.length;
+    const bl = this.blueTeam.length;
+    if (rl === bl && bl === limit) return; // just in case
+    if (rl > 0 && bl > 0) return;
+    if (!this.currentMatch.isEnded()) {
+      if (!this.currentMatch.winnerTeam && this.currentScores) {
+        if (rl > 0) this.setLastWinner(1);
+        else this.setLastWinner(2);
+      }
+      this.currentMatch.setScore(this.currentScores);
+      this.currentMatch.setEnd(this.currentScores?.time ?? 0, this.ranked);
+    }
+    this.hb_room.sendMsgToAll("Przeciwnicy uciekli, gramy następny mecz!", Colors.GameState, "italic");
+    this.justStopGame();
   }
 
   private tryToRebalance3V3or4V4() {
@@ -399,9 +436,12 @@ export class AutoBot {
     this.autoVoter.resetOnMatchStarted();
     let matchType: MatchType = 'none';
     if (this.ranked) {
-      if (this.limit() === 1) matchType = '1vs1';
-      else if (this.limit() === 3) matchType = '3vs3';
-      else if (this.limit() === 4) matchType = '4vs4';
+      const limit = this.limit();
+      if (this.hb_room.volleyball.isEnabled()) matchType = 'volleyball';
+      else if (limit === 1) matchType = '1vs1';
+      else if (limit === 2) matchType = '2vs2';
+      else if (limit === 3) matchType = '3vs3';
+      else if (limit === 4) matchType = '4vs4';
     }
     this.currentMatch = new Match(matchType);
     this.currentMatch.redTeam = [...this.redTeam.map(e=>e.id)];
@@ -426,7 +466,7 @@ export class AutoBot {
     // AMLog("handling game paused");
     if (this.matchState == MatchState.started) {
       this.clearMatchStartedTimer();
-    } else if (this.matchState == MatchState.afterGoal) {
+    } else if (this.matchState == MatchState.afterReset) {
       this.clearAfterPositionsResetTimer();
     }
   }
@@ -435,7 +475,7 @@ export class AutoBot {
     // AMLog("handling game unpaused");
     if (this.matchState == MatchState.started) {
       this.startMatchStartedTimer();
-    } else if (this.matchState == MatchState.afterGoal) {
+    } else if (this.matchState == MatchState.afterReset) {
       this.startAfterPositionsResetTimer();
     }
   }
@@ -443,8 +483,10 @@ export class AutoBot {
   handleGameTick(scores: ScoresObject) {
     this.currentScores = scores;
     if (scores.time > this.currentMatchGameTime) {
-      this.matchState = MatchState.ballInGame;
-      this.currentMatchGameTime = scores.time;
+      if (this.matchState !== MatchState.afterGoal && this.matchState !== MatchState.afterVictory) {
+        this.matchState = MatchState.ballInGame;
+        this.currentMatchGameTime = scores.time;
+      }
     }
 
     this.showMinuteLeftReminder(scores);
@@ -516,12 +558,14 @@ export class AutoBot {
   handlePositionsReset() {
     // AMLog("handling positions reset");
     this.clearAfterPositionsResetTimer();
-    this.matchState = MatchState.afterGoal;
+    this.matchState = MatchState.afterReset;
     this.startAfterPositionsResetTimer();
   }
 
   handleTeamGoal(team: 0|1|2) {
     // AMLog("handling team goal");
+    this.clearAfterPositionsResetTimer();
+    this.matchState = MatchState.afterGoal;
     this.currentMatchLastGoalScorer = team;
     if (team) this.currentMatch.goals.push([this.currentScores?.time || 0, team]);
     let rl = this.redTeam.length;
@@ -537,7 +581,7 @@ export class AutoBot {
     this.matchHistory.push(this.currentMatch);
     this.matchState = MatchState.afterVictory;
     let lastWinner: 1|2 = scores.red > scores.blue ? 1 : 2;
-    this.hb_room.sendMsgToAll(`${lastWinner == 1 ? '🔴Red' : '🔵Blue'} wygrywa mecz! Mecz kończy się wynikiem Red🔴 ${scores.red}:${scores.blue} 🔵Blue, Gratulacje!`, Colors.GameState, 'italic');
+    this.hb_room.sendMsgToAll(`${lastWinner === 1 ? '🔴Red' : '🔵Blue'} wygrywa mecz! Mecz kończy się wynikiem Red🔴 ${scores.red}:${scores.blue} 🔵Blue, Gratulacje!`, Colors.GameState, 'italic');
     this.setLastWinner(lastWinner);
     this.lobbyAction = () => {
       this.moveSomeTeamToSpec();
@@ -620,17 +664,29 @@ export class AutoBot {
 
   private startMatchStartedTimer() {
     // AMLog("Start match started timer");
+    if (this.hb_room.volleyball.isEnabled() && this.hb_room.volleyball.isTrainingMode()) return; // no timer here
     this.matchStartedTimer = setTimeout(() => {
       if (this.matchState == MatchState.started) {
-        // AMLog(`Red don't play, why?`);
-        this.hb_room.sendMsgToAll(`Druzyna Red nie rozpoczęła meczu w przeciągu ${AutoBot.MatchStartedTimeout / 1000} sekund...`, Colors.GameState, 'italic');
-        this.currentMatch.setScore(this.currentScores);
-        this.currentMatch.setEnd(this.currentScores?.time ?? 0, false); // if they don't want to play then... just let them
-        this.setLastWinner(2);
-        this.lobbyAction = () => {
-          this.moveLoserRedToSpec();
-          this.moveWinnerBlueToRedIfRanked();
-          return true;
+        if (this.hb_room.volleyball.isEnabled()) {
+          this.hb_room.sendMsgToAll(`Druzyna Blue nie rozpoczęła meczu w przeciągu ${AutoBot.MatchStartedTimeout / 1000} sekund...`, Colors.GameState, 'italic');
+          this.currentMatch.setScore(this.currentScores);
+          this.currentMatch.setEnd(this.currentScores?.time ?? 0, false);
+          this.setLastWinner(1);
+          this.lobbyAction = () => {
+            this.moveLoserBlueToSpec();
+            return true;
+          }
+        } else {
+          // AMLog(`Red don't play, why?`);
+          this.hb_room.sendMsgToAll(`Druzyna Red nie rozpoczęła meczu w przeciągu ${AutoBot.MatchStartedTimeout / 1000} sekund...`, Colors.GameState, 'italic');
+          this.currentMatch.setScore(this.currentScores);
+          this.currentMatch.setEnd(this.currentScores?.time ?? 0, false); // if they don't want to play then... just let them
+          this.setLastWinner(2);
+          this.lobbyAction = () => {
+            this.moveLoserRedToSpec();
+            this.moveWinnerBlueToRedIfRanked();
+            return true;
+          }
         }
         this.justStopGame();
       }
@@ -678,7 +734,7 @@ export class AutoBot {
   private startAfterPositionsResetTimer() {
     // AMLog("Start after positions reset timer");
     this.afterPositionsResetTimer = setTimeout(() => {
-      if (this.matchState == MatchState.afterGoal) {
+      if (this.matchState == MatchState.afterReset) {
         // AMLog('Why dont you play after goal');
         if (this.currentMatchLastGoalScorer == 1) {
           this.hb_room.sendMsgToAll(`Druzyna Blue nie kontynuuje meczu po zdobyciu bramki w ciągu ${AutoBot.AfterPositionsResetTimeout / 1000} sekund...`,
@@ -791,7 +847,7 @@ export class AutoBot {
       }
 
       // if no more players then go below
-      if ([1, 3, 4].includes(limit)) {
+      if ([1, 2, 3, 4].includes(limit)) {
         // AMLog("NO I ZACZYNAMY GRE");
         AMLog(`ZACZYNAMY: r:${pNames(this.redTeam)} b:${pNames(this.blueTeam)} s:${pNames(this.specTeam)}`);
         this.clearMatchStartedTimer();
@@ -811,7 +867,13 @@ export class AutoBot {
           this.room.startGame();
         } else {
           this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(2));
-          this.hb_room.setMapByName(this.getMapNameByLimit(2), 0, 0, this.getBallPhysics());
+          if (rl + bl === 1 && this.hb_room.volleyball.isEnabled()) {
+            this.hb_room.volleyball.setTraining(true);
+            this.hb_room.setMapByName("volleyball_training", 0, 0, this.getBallPhysics());
+          } else {
+            this.hb_room.volleyball.setTraining(false);
+            this.hb_room.setMapByName(this.getMapNameByLimit(2), 0, 0, this.getBallPhysics());
+          }
           await sleep(500);
           this.matchState = MatchState.started;
           this.ranked = false;
@@ -829,12 +891,14 @@ export class AutoBot {
   }
 
   private getMapNameByLimit(limit: number) {
+    if (this.hb_room.volleyball.isEnabled()) return "volleyball";
     if (limit === 3) return "futsal_big";
     if (limit === 4) return "futsal_huge";
     return "futsal";
   }
 
   private getScoreTimeLimitMode(limit: number) {
+    if (this.hb_room.volleyball.isEnabled()) return "volleyball";
     if (limit === 3) return "3vs3";
     if (limit === 4) return "4vs4";
     if (limit === 2) return "2vs2";
@@ -1054,7 +1118,7 @@ export class AutoBot {
     // AMLog("Blue przegrało, idą do spec");
     let [choserIdx, inFavor] = this.shiftChoserToBottom(this.currentMatch.getLoserTeamIds(), this.blueTeam);
     // blue plays always first match so keep them in favor
-    if (!this.ranked) inFavor = [];
+    if (!this.ranked || this.hb_room.volleyball.isEnabled()) inFavor = [];
     if (inFavor.length) this.lastOneMatchLoserTeamIds = [choserIdx, ...inFavor];
     this.moveAllBlueToSpec(inFavor);
   }

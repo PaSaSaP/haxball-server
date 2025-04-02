@@ -17,6 +17,10 @@ if (selector == 'freestyle') {
   if (subselector === '1') {
     channelId = '1345442311684751491';
   } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
+} else if (selector == 'volleyball') {
+  if (subselector === '1') {
+    channelId = '1356948942583107694';
+  } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
 } else if (selector == '3vs3') {
   if (subselector === '1') {
     channelId = '1345435928625156177';

@@ -14,6 +14,7 @@ export class Colors {
   static TrustTwo = 0xE6E6E6;
   static TrustClaimed = 0xE6E6C5;
   static DarkRed = 0xD3212D;
+  static LightRed = 0xFF2836;
   static BrightGreen = 0x95FA02;
   static DarkGreen = 0x66AB01;
   static BrightBlue = 0x4DA6FF;

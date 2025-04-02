@@ -38,6 +38,7 @@ import { VipOptionsHandler } from './vip_options';
 import { getBotKickMessage } from './spam_data';
 import { DiscordAccountManager } from './discord_account';
 import { GhostPlayers } from './ghost_players';
+import { Volleyball } from './volleyball';
 
 
 declare global {
@@ -120,6 +121,7 @@ export class HaxballRoom {
   pl_logger: PlayerJoinLogger;
   discord_account: DiscordAccountManager;
   ghost_players: GhostPlayers;
+  volleyball: Volleyball;
   no_x_for_all: boolean;
   bot_stopping_enabled = false;
   temporarily_trusted: Set<number>;
@@ -198,6 +200,7 @@ export class HaxballRoom {
     this.pl_logger = new PlayerJoinLogger(this);
     this.discord_account = new DiscordAccountManager(this);
     this.ghost_players = new GhostPlayers(this);
+    this.volleyball = new Volleyball(this, this.room_config.selector === 'volleyball');
     this.no_x_for_all = false;
     this.temporarily_trusted = new Set();
 
@@ -233,6 +236,7 @@ export class HaxballRoom {
 
     this.commander = new Commander(this);
     this.default_map_name = 'futsal';
+    if (this.room_config.selector === 'volleyball') this.default_map_name = 'volleyball';
     this.last_selected_map_name = null;
     this.last_selected_ball = 'vehax';
     this.time_limit_reached = false;
@@ -348,8 +352,10 @@ export class HaxballRoom {
       if (this.players_ext.size <= OnDelayJoinMinPlayers) { // no players, allow to play all bots and players :D
         if (!player.trust_level) return 10; // 10 seconds delay for non trusted
         return 5; // 5 seconds delay for trusted
-      } else if (!player.trust_level) return 60; // 60 seconds delay for non trusted when more players
-      else return 5; // 5 seconds delay for trusted
+      } else if (!player.trust_level) {
+        if (this.volleyball.isEnabled()) return 10;
+        return 60; // 60 seconds delay for non trusted when more players
+      } else return 5; // 5 seconds delay for trusted
     };
     const shouldKickOnGameStopCallback = () => {
       return this.players_ext.size > OnDelayJoinMinPlayers;
@@ -552,6 +558,7 @@ export class HaxballRoom {
     this.acceleration_tasks.update();
     this.ball_possesion_tracker.trackPossession(currentMatchTime, ball_position, players);
     if (this.auto_mode) this.auto_bot.handleGameTick(scores);
+    this.volleyball.handleGameTick(currentTime, ball_position);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(players);
     this.match_stats.handleGameTick(scores, ball_position, this.players_ext_all, redTeam, blueTeam);
     this.ghost_players.handleGameTick(scores, redTeam, blueTeam);
@@ -563,6 +570,7 @@ export class HaxballRoom {
 
   setPlayerAvatarTo(playerExt: PlayerData, avatar: string) {
     if (playerExt.avatar === avatar) return;
+    if (playerExt.avatar_until !== null) return;
     playerExt.avatar = avatar;
     this.room.setPlayerAvatar(playerExt.id, avatar.length? avatar: null);
   }
@@ -626,10 +634,11 @@ export class HaxballRoom {
     if (['1', '2', 'f'].includes(map_name)) map_name = 'futsal';
     else if (['3', 'fb'].includes(map_name)) map_name = 'futsal_big';
     else if (['4', 'fh'].includes(map_name)) map_name = 'futsal_huge';
+    else if (['v', 'volley'].includes(map_name)) map_name = 'volleyball';
     if (this.last_selected_map_name !== map_name || this.last_selected_ball !== ballPhysics) {
       let next_map = getMap(map_name, bg_color, ball_color);
-      if (this.last_selected_ball !== ballPhysics) {
-        updateMapPhysics(next_map, ballPhysics);
+      if (!this.volleyball.isEnabled() && this.last_selected_ball !== ballPhysics) {
+        updateMapPhysics(map_name, next_map, ballPhysics);
         this.last_selected_ball = ballPhysics;
       }
       if (next_map) {
@@ -678,6 +687,7 @@ export class HaxballRoom {
     this.gameStopTimerReset();
     this.ball_possesion_tracker.resetPossession();
     if (this.auto_mode) this.auto_bot.handleGameStart(null);
+    this.volleyball.handleGameStart();
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
     this.matchStatsTimer = setTimeout(() => {
       this.matchStatsTimer = null;
@@ -1430,16 +1440,22 @@ export class HaxballRoom {
     const ballPosition = this.getBallPosition();
     this.ball_possesion_tracker.registerBallKick(player);
     this.match_stats.handlePlayerBallKick(this.P(player), ballPosition);
+    if (this.volleyball.isEnabled()) {
+      let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
+      this.volleyball.handlePlayerBallKick(this.current_time, this.Pid(player.id), redTeam, blueTeam);
+    }
   }
 
   async handleTeamGoal(team: TeamID) {
     this.ball_possesion_tracker.onTeamGoal(team);
     if (this.auto_mode) this.auto_bot.handleTeamGoal(team);
+    this.volleyball.handleTeamGoal(team);
     const ballProperties = this.getBallProperties();
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
     if (team) {
       let [txt, scorer, assister, ownGoal] = this.match_stats.handleTeamGoal(team, ballProperties, this.players_ext_all, redTeam, blueTeam);
       this.rejoice_maker.handleTeamGoal(scorer, assister, ownGoal);
+      if (this.volleyball.isEnabled()) txt = this.volleyball.getTeamGoalText(scorer, assister, ownGoal, this.players_ext_all);
       this.sendMsgToAll(txt, Colors.Goal, 'italic');
     }
   }
@@ -1598,6 +1614,7 @@ export class HaxballRoom {
 
   async handlePositionsReset() {
     if (this.auto_mode) this.auto_bot.handlePositionsReset();
+    this.volleyball.handlePositionsReset();
     this.match_stats.handlePositionsReset();
     this.rejoice_maker.handlePositionsReset();
     this.players_ext.forEach(p => {
@@ -1626,6 +1643,8 @@ export class HaxballRoom {
       this.captcha.checkAnswer(playerExt, message);
       return userLogMessage(false); // wait till captcha passed at first
     }
+    // only for volley
+    if (message === 'z') message = '!z';
     // then handle commands
     if (message[0] == '!') {
       // Handle last command
@@ -1673,9 +1692,9 @@ export class HaxballRoom {
         this.sendMessageToSameTeam(playerExt, message.slice(2));
         return userLogMessage(false);
       }
-      userLogMessage(true);
+      userLogMessage(message.length > 2);
       if (playerExt.discord_user && playerExt.discord_user.state) {
-        this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${Emoji.UserVerified}${playerExt.name}: ${message}`, playerExt.discord_user.chat_color, 1);
+        this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${Emoji.UserVerified}${playerExt.name}: ${message}`, message, playerExt.discord_user.chat_color, 1);
         return;
       }
       if (playerExt.trust_level < 3) {
@@ -1686,15 +1705,33 @@ export class HaxballRoom {
           color = Colors.TrustTwo;
           bell = 1;
         }
-        this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${playerExt.name}: ${message}`, color, bell);
+        this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${playerExt.name}: ${message}`, message, color, bell);
         return;
       };
       // show as normal for trusted players
-      this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${playerExt.name}: ${message}`, 0xFFFFFF, 1);
+      this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${playerExt.name}: ${message}`, message, 0xFFFFFF, 1);
     }
   }
 
-  sendMessageToAllWithIgnoreList(byPlayer: PlayerData, msg: string, color: number, sound: number) {
+  setAvatarForOneSecond(player: PlayerData, avatar: string) {
+    const prevAvatar = player.avatar;
+    if (player.avatar_until !== null) {
+      clearTimeout(player.avatar_until);
+      player.avatar_until = null;
+    }
+    this.setPlayerAvatarTo(player, avatar);
+    player.avatar_until = setTimeout(() => {
+      player.avatar_until = null;
+      this.setPlayerAvatarTo(player, prevAvatar);
+    }, 1000);
+  }
+
+  sendMessageToAllWithIgnoreList(byPlayer: PlayerData, msg: string, origMsg: string, color: number, sound: number) {
+    if (origMsg.length < 3) {
+      this.sendMsgToPlayer(byPlayer, msg, color, undefined, sound);
+      this.setAvatarForOneSecond(byPlayer, origMsg);
+      return;
+    }
     if (!byPlayer.ignored_by.size) {
       this.sendMsgToAll(msg, color, undefined, sound);
       return;

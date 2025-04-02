@@ -385,6 +385,7 @@ class RandomDiscColorsRejoice {
   inProgress: boolean;
   duration: number;
   startTime: number;
+  tick: number;
   discs: HSL[];
   properties: DiscPropertiesHandler;
   constructor(properties: DiscPropertiesHandler) {
@@ -393,6 +394,7 @@ class RandomDiscColorsRejoice {
     this.properties = properties;
     this.duration = 2250;
     this.startTime = 0;
+    this.tick = 0;
     this.discs = [];
   }
 
@@ -406,6 +408,7 @@ class RandomDiscColorsRejoice {
       this.reset();
       return;
     }
+    if (++this.tick % 3 !== 0) return; // just be nice, don't spam!
 
     for (let i = 0; i < this.discs.length; ++i) {
       this.discs[i] = this.nextColor(this.discs[i]);
@@ -470,7 +473,8 @@ class RandomDiscColorsRejoice {
   }
 
   handleTeamGoal() {
-    for (let i = 0; i < 10; ++i) {
+    // volleyball ball has 18, do not change it
+    for (let i = 0; i < 17; ++i) {
       const props = this.properties.getDiscProperties(i);
       if (!props) break;
       const color = props.color;

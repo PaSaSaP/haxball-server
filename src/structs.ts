@@ -129,9 +129,10 @@ export class PlayerData {
   admin_level: number;
   penalty_counter: number;
   join_time: number;
-  timer_give_back_admin: any;
+  timer_give_back_admin: any | null;
   verify_link_requested: boolean;
   avatar: string;
+  avatar_until: any;
   afk_switch_time: number;
   chosen_player_names: string[];
   pendingRejoiceTransaction: TransactionByPlayerInfo | null;
@@ -174,6 +175,7 @@ export class PlayerData {
     this.timer_give_back_admin = null;
     this.verify_link_requested = false;
     this.avatar = '';
+    this.avatar_until = null;
     this.afk_switch_time = Date.now();
     this.chosen_player_names = [];
     this.pendingRejoiceTransaction = null;
