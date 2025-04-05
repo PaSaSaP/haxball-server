@@ -12,6 +12,7 @@ const express = require('express');
 import { tokenDatabase, setupTokenDatabase } from '../src/db/token_database';
 import * as secrets from "../src/secrets";
 import { getTimestampHMS } from "../src/utils";
+import { getIpInfo } from '../src/ip_info';
 
 interface PlayersCount {
   all: number;
@@ -313,6 +314,21 @@ class ServerMonitor {
         this.updatePlayerCounts(fullSelector, -2, undefined);
       } else {
         res.send(`Serwer ${fullSelector} działa`);
+      }
+    });
+
+    app.get('/ip_info/:ip', async (req: any, res: any) => {
+      const ip = req.params.ip;
+      try {
+        const ipInfo = await getIpInfo(ip);
+        if (!ipInfo) {
+          res.status(404).send("['', '', '', []]");
+        } else {
+          res.send(`["${ipInfo.country}", "${ipInfo.city}", "${ipInfo.isp}", ${JSON.stringify(ipInfo.hostname)}]`);
+        }
+      } catch (e) {
+        res.status(404).send("['', '', '']");
+        MLog(`ip_info error: ${e}`);
       }
     });
 

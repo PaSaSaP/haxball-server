@@ -9,6 +9,7 @@ import * as config from './config';
 import { hb_log } from "./log";
 import { Emoji } from "./emoji";
 import { AutoBot } from "./auto_mode";
+import { getIpInfoFromMonitoring } from "./ip_info";
 
 class BaseCommander {
   hb_room: HaxballRoom;
@@ -266,6 +267,13 @@ class Commander extends BaseCommander {
       after: this.commandAfter,
       ball: this.commandSetBallPhysics,
 
+      serve: this.commandVolleyballServiceZ,
+      serve_z: this.commandVolleyballServiceZ,
+      serve_a: this.commandVolleyballServiceA,
+      serve_q: this.commandVolleyballServiceQ,
+      serve_e: this.commandVolleyballServiceE,
+      ball_g: this.commandVolleyballBallXGravity,
+
       check_transaction: this.commandCheckPlayerTransaction,
       check_tr: this.commandCheckPlayerTransaction,
       update_rejoice: this.commandUpdateRejoiceForPlayer,
@@ -308,6 +316,8 @@ class Commander extends BaseCommander {
       bots: this.commandCheckBots,
       bot: this.commandMarkBot,
       "bot-": this.commandUnmarkBot,
+      mon: this.commandStartMonitoring,
+      "mon-": this.commandStopMonitoring,
       kick_bots: this.commandKickBots,
       tkick_bots: this.commandTKickBots,
       nkick_bots: this.commandNKickBots,
@@ -317,15 +327,16 @@ class Commander extends BaseCommander {
       botradius: this.commandBotSetRadius,
       botstop: this.commandSwitchBotStoppingFlag,
       ip: this.commandPrintPlayerIp,
+      ipi: this.commandPrintPlayerIpInfo,
       all_no_x: this.commandNoXEnableForAll,
       all_no_xd: this.commandNoXDisableForAll,
       no_x: this.commandNoXEnable,
       no_xd: this.commandNoXDisable,
       ipv6: this.commandWhoHasIpv6,
+      console_players: this.commandConsoleDumpPlayers,
       disc_info: this.commandDiscInfo,
       auto_afk_on: this.commandAutoAfkOn,
       auto_afk_off: this.commandAutoAfkOff,
-      z: this.commandVolleyballService,
 
       god: this.commandGodTest,
 
@@ -1888,6 +1899,39 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `IP ${txt}`);
   }
 
+  async commandPrintPlayerIpInfo(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'ipi')) return;
+    let txt = '';
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) continue;
+      if (cmdPlayer.id == playerExt.id) continue;
+      let ip = cmdPlayer.real_ip.split(',').at(-1);
+      txt += `${cmdPlayer.name}: ${cmdPlayer.real_ip} `;
+      if (ip) {
+        let ipInfo = await getIpInfoFromMonitoring(ip);
+        if (ipInfo) {
+          txt += `${ipInfo.country}, ${ipInfo.city}, ${ipInfo.isp}, ${ipInfo.hostname} `;
+        }
+      }
+    }
+    this.sendMsgToPlayer(playerExt, `IP ${txt}`);
+  }
+
+  commandConsoleDumpPlayers(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'console_players')) return;
+    let txt = '';
+    this.hb_room.players_ext.forEach(p => {
+      if (p.id !== playerExt.id) {
+        let ip = p.real_ip.split(',').at(-1);
+        txt += `${p.real_ip} `;
+        const t = this.hb_room.temporarily_trusted.has(p.id) ? 't' : 'T';
+        hb_log(`#DUMP# ${p.flag}${p.name} [${p.id}] ${t}:${p.trust_level} auth: ${p.auth_id} conn: ${p.conn_id} ip: ${p.real_ip}`);
+      }
+    });
+    hb_log(`#DUMP# IPv4: ${txt}`);
+  }
+
   keyboardLShiftDown(playerExt: PlayerData) {
     this.hb_room.acceleration_tasks.startSprint(playerExt.id);
   }
@@ -1930,6 +1974,22 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Wyłączyłeś no_x dla ${cmdPlayer.name}`);
   }
 
+  commandStartMonitoring(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'mon')) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
+    if (!cmdPlayer) return;
+    this.hb_room.pl_logger.startMonitoring(cmdPlayer);
+    this.sendMsgToPlayer(playerExt, `Włączyłeś Monitoring dla ${cmdPlayer.name}`);
+  }
+
+  commandStopMonitoring(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'mon-')) return;
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
+    if (!cmdPlayer) return;
+    this.hb_room.pl_logger.stopMonitoring(cmdPlayer);
+    this.sendMsgToPlayer(playerExt, `Wyłączyłeś Monitoring dla ${cmdPlayer.name}`);
+  }
+
   commandWhoHasIpv6(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'no_x')) return;
     let txt = '';
@@ -1958,11 +2018,35 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `ball  : ${JSON.stringify(filteredB)}`);
   }
 
-  commandVolleyballService(playerExt: PlayerData, cmds: string[]) {
+  commandVolleyballServiceZ(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandVolleyballService(playerExt, 'z');
+  }
+  commandVolleyballServiceA(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandVolleyballService(playerExt, 'a');
+  }
+  commandVolleyballServiceQ(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandVolleyballService(playerExt, 'q');
+  }
+  commandVolleyballServiceE(playerExt: PlayerData, cmds: string[]) {
+    return this.execCommandVolleyballService(playerExt, 'e');
+  }
+
+  execCommandVolleyballService(playerExt: PlayerData, serveType: string) {
     // ball  : {"radius":7.25,"bCoeff":0.5,"invMass":1,"damping":0.99,"color":13421772,"cMask":32,"cGroup":193}
     if (!this.hb_room.volleyball.isEnabled()) return;
     if (playerExt.team === 0) return;
-    this.hb_room.volleyball.handleServeBy(playerExt);
+    serveType = serveType.toLowerCase();
+    if (serveType !== 'z' && serveType !== 'a' && serveType !== 'q' && serveType != 'e') return;
+    this.hb_room.volleyball.handleServeBy(playerExt, serveType);
+  }
+
+  commandVolleyballBallXGravity(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'disc_info')) return;
+    const xgravity = Number.parseFloat(cmds[0]);
+    if (xgravity > 0 && xgravity < 10) {
+      this.hb_room.volleyball.ballXGravity = xgravity;
+    }
+    this.sendMsgToPlayer(playerExt, `ustawiam volley xgravity na: ${xgravity}`);
   }
 
   commandAutoAfkOn(playerExt: PlayerData, cmds: string[]) {

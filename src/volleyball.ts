@@ -1,7 +1,14 @@
-import { timeStamp } from "console";
 import { Colors } from "./colors";
 import { HaxballRoom } from "./hb_room";
 import { PlayerData } from "./structs";
+
+enum ServeType {
+  none,
+  z,
+  a,
+  q,
+  e
+}
 
 export class Volleyball {
   private static yAtNet = 70;
@@ -14,11 +21,16 @@ export class Volleyball {
   private totalTouches: number;
   private twoTouchesOn1vs1: boolean;
   private ballIdx: number;
+  // private ballIdx2: number;
   private servingTeam: number;
   private served: boolean;
-  private justServed: boolean;
+  // private justServed: boolean;
+  private serveType: ServeType;
+  private gravityEnabled: boolean;
   private enabled: boolean;
   private training: boolean;
+  ballXGravity: number = 0.012;
+  ballYDownLevel: number = 200;
   constructor(hbRoom: HaxballRoom, enabled: boolean = false) {
     this.hbRoom = hbRoom;
     this.lastTouchBy = null;
@@ -30,10 +42,17 @@ export class Volleyball {
     this.totalTouches = 0;
     this.twoTouchesOn1vs1 = false;
     this.ballIdx = -1;
+    // this.ballIdx2 = -1;
     this.servingTeam = 0;
     this.served = false;
-    this.justServed = false;
+    this.serveType = ServeType.none;
+    this.gravityEnabled = false;
+    // this.justServed = false;
     this.training = false;
+  }
+
+  justServed() {
+    return this.serveType !== ServeType.none;
   }
 
   isEnabled() {
@@ -52,27 +71,33 @@ export class Volleyball {
     this.training = enabled;
   }
 
-  handleServeBy(player: PlayerData) {
+  handleServeBy(player: PlayerData, serveType: string) {
     if (!this.enabled) return;
     if (this.training) return;
     if (this.served) return;
-    if (player.team != this.servingTeam) return;
+    if (player.team !== this.servingTeam) return;
+
+    if (serveType === 'z') this.serveType = ServeType.z;
+    else if (serveType === 'a') this.serveType = ServeType.a;
+    else if (serveType === 'q') this.serveType = ServeType.q;
+    else if (serveType === 'e') this.serveType = ServeType.e;
+    else this.serveType = ServeType.z;
 
     const m = player.team === 1 ? 1 : -1;
     const x = -420 * m;
-    const y = 200;
+    const y = this.ballYDownLevel;
     const xspeed = 1 * m;
-    const yspeed = -14;
+    const yspeed = this.serveType === ServeType.a? -8: -14;
     const ballIdx = this.getBallIndex();
     this.hbRoom.room.setDiscProperties(ballIdx, { x, y, xspeed, yspeed });
     this.lastTouchBy = player;
-    this.justServed = true;
     this.served = true;
   }
 
   handleGameStart() {
     if (!this.isEnabled()) return;
     this.lastTouchBy = null;
+    this.lastPlayerTouchedTime = 0;
     this.lastBallPosition = this.getZeroedBallPosition();
     this.abusingTimeStamp = 0;
     this.blocked = false;
@@ -80,7 +105,8 @@ export class Volleyball {
     this.totalTouches = 0;
     this.ballIdx = -1;
     this.servingTeam = 2;
-    this.justServed = false;
+    this.serveType = ServeType.none;
+    this.gravityEnabled = false;
     this.served = false;
   }
 
@@ -91,6 +117,17 @@ export class Volleyball {
     if (!this.isEnabled()) return;
     if (!this.isGameInProgress()) return;
     if (this.training) return;
+    if (!this.gravityEnabled && (this.serveType === ServeType.q || this.serveType === ServeType.e)) {
+      const ballIdx = this.getBallIndex();
+      // VBLog(`serve in progress, ballIdx: ${ballIdx}    ${ballPosition.y} > ${this.lastBallPosition.y}`);
+      if (ballIdx !== -1 && ballPosition.y > this.lastBallPosition.y && ballPosition.y < this.ballYDownLevel) {
+        const m = this.servingTeam === 1 ? 1 : -1;
+        const xgravity = this.serveType === ServeType.q ? -this.ballXGravity*m : this.ballXGravity*m;
+        this.hbRoom.room.setDiscProperties(ballIdx, { xgravity });
+        this.gravityEnabled = true;
+        // VBLog(`curved type ${this.serveType}, xgravity: ${xgravity}`);
+      }
+    }
     if (ballPosition.x * this.lastBallPosition.x < 0 && this.lastTouchBy) {
       let slope = (ballPosition.x - this.lastBallPosition.x) != 0 ?
         (ballPosition.y - this.lastBallPosition.y) / (ballPosition.x - this.lastBallPosition.x) :
@@ -105,6 +142,16 @@ export class Volleyball {
       }
     }
     this.lastBallPosition = ballPosition;
+  }
+
+  private zeroBallGravity() {
+    if (this.serveType === ServeType.q || this.serveType === ServeType.e) {
+      const ballIdx = this.getBallIndex();
+      if (ballIdx !== -1) {
+        this.hbRoom.room.setDiscProperties(ballIdx, { xgravity: 0 });
+      }
+    }
+    this.gravityEnabled = false;
   }
 
   private static TrainingMessages: string[] = [
@@ -137,17 +184,20 @@ export class Volleyball {
   handlePlayerBallKick(currentTime: number, player: PlayerData, redTeam: number[], blueTeam: number[]) {
     if (!this.isEnabled()) return;
     if (this.training) {
-      this.hbRoom.sendMsgToAll(this.getTrainingMessage(), Colors.LightYellow, 'bold');
+      if (currentTime - this.abusingTimeStamp > 5000) {
+        this.hbRoom.sendMsgToAll(this.getTrainingMessage(), Colors.LightYellow, 'bold');
+        this.abusingTimeStamp = currentTime;
+      }
       return;
     }
     if (!this.isGameInProgress()) return;
-    let justServed = this.justServed;
+    const justServed = this.justServed();
     let teamCount = 0;
     if (redTeam.includes(player.id)) teamCount = redTeam.length;
     else if (blueTeam.includes(player.id)) teamCount = blueTeam.length;
     else return;
     let lastTouchBy = this.lastTouchBy;
-    if (this.justServed) {
+    if (justServed) {
       if (lastTouchBy && lastTouchBy.id === player.id && this.totalTouches > 0) {
         this.hbRoom.sendMsgToAll("❌ Kara! " + lastTouchBy.name + " nie potrafi serwować!",
           Colors.LightRed, 'bold');
@@ -157,7 +207,10 @@ export class Volleyball {
           Colors.LightRed, 'bold');
         this.givePenalty(player.team);
       }
-      if (lastTouchBy && player.team !== lastTouchBy.team) this.justServed = false;
+      if (lastTouchBy && player.team !== lastTouchBy.team) {
+        this.zeroBallGravity();
+        this.serveType = ServeType.none;
+      }
     } else if (lastTouchBy && lastTouchBy.id === player.id && teamCount > 1 && !this.blocked) {
       this.hbRoom.sendMsgToAll("❌ Kara! " + lastTouchBy.name + " dotknął piłki dwukrotnie!",
         Colors.LightRed, 'bold');
@@ -180,7 +233,8 @@ export class Volleyball {
     } else {
       // TODO should blocking be allowed on serve?
       // if (lastTouchBy && player.position.x >= -30 && player.position.x <= 30 && player.position.y <= 10) {
-      if (lastTouchBy && player.position.x >= -30 && player.position.x <= 30) {
+      const maxX = justServed ? 50 : 30;
+      if (lastTouchBy && player.position.x >= -maxX && player.position.x <= maxX && player.position.y <= 50) {
         this.totalTouches = 0;
         this.blocked = true;
         if (justServed) {
@@ -196,6 +250,7 @@ export class Volleyball {
       }
     }
     this.lastTouchBy = player;
+    this.lastPlayerTouchedTime = currentTime;
     const color = this.getColorByTotalTouches();
     this.hbRoom.room.setDiscProperties(this.ballIdx, { color });
   }
@@ -231,7 +286,9 @@ export class Volleyball {
     this.lastPlayerTouchedTime = 0;
     this.totalTouches = 0;
     this.served = false;
-    this.justServed = false;
+    this.serveType = ServeType.none;
+    this.gravityEnabled = false;
+    this.ballIdx = -1;
   }
 
   isGameInProgress() {
@@ -248,10 +305,17 @@ export class Volleyball {
   getBallIndex() {
     if (this.ballIdx !== -1) return this.ballIdx;
     let room = this.hbRoom.room;
+    // this.ballIdx2 = -1;
     for (let i = 0; i < room.getDiscCount(); ++i) {
-      if ((room.getDiscProperties(i).cGroup & room.CollisionFlags.ball) != 0) {
-        this.ballIdx = i;
-        break;
+      const props = room.getDiscProperties(i);
+      if (!props) continue;
+      if ((props.cGroup & room.CollisionFlags.ball) != 0) {
+        if (this.ballIdx === -1) {
+          this.ballIdx = i;
+        // } else {
+          // this.ballIdx2 = i;
+          break;
+        }
       }
     }
     return this.ballIdx;

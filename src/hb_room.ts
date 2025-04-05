@@ -24,7 +24,7 @@ import { AutoBot } from './auto_mode';
 import { Ratings } from './rating';
 import Glicko2 from 'glicko2';
 import { PlayersGameStateManager } from './pg_manager';
-import { hb_log, hb_log_to_console } from './log';
+import { hb_log } from './log';
 import { MatchStats } from './stats';
 import { RejoiceMaker } from './rejoice_maker';
 import WelcomeMessage from './welcome_message';
@@ -464,7 +464,7 @@ export class HaxballRoom {
     let deltaTime = currentMatchTime - this.last_match_time;
     this.last_match_time = currentMatchTime;
     const ball_position = this.room.getDiscProperties(0);
-    this.pl_logger.handleGameTick(players);
+    this.pl_logger.handleGameTick(currentTime, players);
 
     if (this.feature_pressure) {
       if (deltaTime > 0 && ball_position) {
@@ -1013,7 +1013,7 @@ export class HaxballRoom {
   async handlePlayerJoin(player: PlayerObject) {
     this.players_num += 1;
     this.filterOutHostInfo(player);
-    hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}] auth: ${player.auth} conn: ${player.conn} ip: ${player.real_ip}`);
+    hb_log(`# (n:${this.players_num}) joined to server: ${player.name} [${player.id}] auth: ${player.auth} conn: ${player.conn} ip: ${player.real_ip}`, true);
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
     let playerExt = this.Pid(player.id);
@@ -1070,6 +1070,7 @@ export class HaxballRoom {
       if (this.auto_mode) this.delay_joiner.handlePlayerJoin(playerExt);
       this.rejoice_maker.handlePlayerJoin(playerExt);
       this.welcome_message.sendWelcomeMessage(playerExt, this.players_ext);
+      this.pl_logger.handlePlayerJoinWithIp(playerExt, this.players_ext);
       if (this.no_x_for_all) this.room.setPlayerNoX(playerExt.id, true);
       const initialMute = playerExt.trust_level < 2;
       this.anti_spam.addPlayer(playerExt, initialMute);
@@ -1253,7 +1254,7 @@ export class HaxballRoom {
 
   async handlePlayerLeave(player: PlayerObject) {
     this.players_num -= 1;
-    hb_log(`# (n:${this.players_num}) left server: ${player.name} []`);
+    hb_log(`# (n:${this.players_num}) left server: ${player.name} [${player.id}]`, true);
     this.updateAdmins(player);
     this.handleEmptyRoom(player);
     this.last_command.delete(player.id);
@@ -1261,6 +1262,7 @@ export class HaxballRoom {
     let playerExt = this.Pid(player.id);
     this.match_stats.handlePlayerLeave(playerExt);
     this.delay_joiner.handlePlayerLeave(playerExt);
+    this.pl_logger.handlePlayerLeave(playerExt);
     if (this.auto_mode) this.auto_bot.handlePlayerLeave(playerExt);
     playerExt.ignored_by.forEach(playerId => {
       this.Pid(playerId).ignores.delete(playerExt.id);
@@ -1635,7 +1637,7 @@ export class HaxballRoom {
     if (!message) return; // not interested in empty messages
     const userLogMessage = (for_discord: boolean) => { this.game_state.logMessage(playerExt.name, "chat", message, for_discord); }
     if (!message.startsWith('!kb_')) { // to not spam
-      hb_log_to_console(playerExt, message)
+      hb_log(`#CHAT# ${playerExt.name} [${playerExt.id}]: ${message}`, true);
     }
     playerExt.activity.updateChat(this.current_time);
     // at first check captcha
@@ -1644,11 +1646,17 @@ export class HaxballRoom {
       return userLogMessage(false); // wait till captcha passed at first
     }
     // only for volley
-    if (message === 'z') message = '!z';
+    if (this.volleyball.isEnabled() && message.length === 1) {
+      const serveType = message.toLowerCase();
+      if (serveType === 'z') message = '!serve_z';
+      else if (serveType === 'a') message = '!serve_a';
+      else if (serveType === 'q') message = '!serve_q';
+      else if (serveType === 'e') message = '!serve_e';
+    }
     // then handle commands
-    if (message[0] == '!') {
+    if (message[0] === '!') {
       // Handle last command
-      if (message == "!!") {
+      if (message === "!!") {
         let last_command_str = this.last_command.get(playerExt.id);
         if (last_command_str == null) {
           this.sendMsgToPlayer(playerExt, "Brak ostatniej komendy");

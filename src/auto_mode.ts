@@ -177,7 +177,7 @@ export class AutoBot {
   }
 
   isGameInProgress(): boolean {
-    return this.matchState === MatchState.ballInGame;
+    return this.matchState === MatchState.ballInGame || this.matchState === MatchState.afterReset || this.matchState === MatchState.started;
   }
 
   handlePlayerJoin(playerExt: PlayerData) {
@@ -407,6 +407,7 @@ export class AutoBot {
 
   handleGameStart(byPlayer: PlayerData | null) {
     // AMLog("handling game started");
+    this.matchState = MatchState.started;
     if (this.ranked) {
       const limit = this.limit();
       if (this.redTeam.length < limit || this.blueTeam.length < limit) {
@@ -483,7 +484,7 @@ export class AutoBot {
   handleGameTick(scores: ScoresObject) {
     this.currentScores = scores;
     if (scores.time > this.currentMatchGameTime) {
-      if (this.matchState !== MatchState.afterGoal && this.matchState !== MatchState.afterVictory) {
+      if (this.matchState === MatchState.ballInGame || this.matchState === MatchState.afterReset || this.matchState === MatchState.started) {
         this.matchState = MatchState.ballInGame;
         this.currentMatchGameTime = scores.time;
       }
@@ -734,7 +735,7 @@ export class AutoBot {
   private startAfterPositionsResetTimer() {
     // AMLog("Start after positions reset timer");
     this.afterPositionsResetTimer = setTimeout(() => {
-      if (this.matchState == MatchState.afterReset) {
+      if (this.matchState === MatchState.afterReset) {
         // AMLog('Why dont you play after goal');
         if (this.currentMatchLastGoalScorer == 1) {
           this.hb_room.sendMsgToAll(`Druzyna Blue nie kontynuuje meczu po zdobyciu bramki w ciągu ${AutoBot.AfterPositionsResetTimeout / 1000} sekund...`,
@@ -858,7 +859,6 @@ export class AutoBot {
           this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(limit));
           this.hb_room.setMapByName(this.getMapNameByLimit(limit), 0, 0, this.getBallPhysics());
           await sleep(500);
-          this.matchState = MatchState.started;
           if (!this.ranked) {
             this.lastWinner = 0;
             this.winStreak = 0;
@@ -875,7 +875,6 @@ export class AutoBot {
             this.hb_room.setMapByName(this.getMapNameByLimit(2), 0, 0, this.getBallPhysics());
           }
           await sleep(500);
-          this.matchState = MatchState.started;
           this.ranked = false;
           if (this.hb_room.ratings_for_all_games) this.ranked = true;
           this.room.startGame();
@@ -910,6 +909,7 @@ export class AutoBot {
   private prepareShortMatchHelp() {
     AutoBot.ShortMatchHelp = 'Restart !r, Pauza !p, !votekick !votemute';
     if (this.hb_room.room_config.playersInTeamLimit === 4) AutoBot.ShortMatchHelp += ' !4';
+    else if (this.hb_room.room_config.selector === 'volleyball') AutoBot.ShortMatchHelp += '|Serves: Z,A,Q,E';
   }
 
   private checkForPreparedSelection(spec: PlayerData) {

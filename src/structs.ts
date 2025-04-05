@@ -143,6 +143,7 @@ export class PlayerData {
   discord_token: string;
   command_after_match_ends: string;
   selected_ball: MapPhysicsType;
+  monitor_enabled = false;
 
   bot = false;
 
