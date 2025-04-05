@@ -1905,14 +1905,20 @@ class Commander extends BaseCommander {
     for (let cmd of cmds) {
       let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
       if (!cmdPlayer) continue;
-      if (cmdPlayer.id == playerExt.id) continue;
+      if (cmdPlayer.id === playerExt.id) continue;
       let ip = cmdPlayer.real_ip.split(',').at(-1);
-      txt += `${cmdPlayer.name}: ${cmdPlayer.real_ip} `;
-      if (ip) {
-        let ipInfo = await getIpInfoFromMonitoring(ip);
-        if (ipInfo) {
-          txt += `${ipInfo.country}, ${ipInfo.city}, ${ipInfo.isp}, ${ipInfo.hostname} `;
+      if (!cmdPlayer.ip_info.city.length) {
+        if (ip) {
+          let ipInfo = await getIpInfoFromMonitoring(ip);
+          if (ipInfo) {
+            cmdPlayer.ip_info = ipInfo;
+          }
         }
+      }
+      txt += `${cmdPlayer.name}: ${ip} `;
+      if (cmdPlayer.ip_info.city.length) {
+        let ipInfo = cmdPlayer.ip_info;
+        txt += `${ipInfo.country}, ${ipInfo.city}, ${ipInfo.isp}, ${ipInfo.hostname} `;
       }
     }
     this.sendMsgToPlayer(playerExt, `IP ${txt}`);

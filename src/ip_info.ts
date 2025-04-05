@@ -1,6 +1,6 @@
 import { reverse } from 'dns/promises';
 
-interface IpInfo {
+export interface IpInfo {
   country: string;
   city: string;
   isp: string;

@@ -112,7 +112,7 @@ export class AccuStats {
       let playerNames = await this.getPlayerNames();
       await this.updateHistoryForDate(playerNames, day);
       await this.updateHallOfFame(playerNames);
-    } catch (e) { e && console.error(`makeHistoryForDate error: ${e}`) }; 
+    } catch (e) { e && console.error(`makeHistoryForDate error: ${e}`) };
   }
 
   createPlayerStat(id: number, glicko: Glicko2.Glicko2, rating: number = PlayerStat.DefaultRating,
@@ -280,7 +280,7 @@ export class AccuStats {
     let matches: MatchEntry[] = this.arrayToMatchEntryArray(data);
     return matches;
   }
-  
+
   private arrayToMatchEntryArray(data: MatchEntryAsArray[]): MatchEntry[] {
     return data.map(row => ({
       match_id: row[0],
@@ -500,13 +500,13 @@ export class AccuStats {
       }
       await this.calculateRollingRating(playerNames, day, rr, matchIds, matchesByMatchId, playerAuthIdNotToUpdate, true);
       if (day === todayDate) {
-        await this.updateTopRanking(playerNames, day, settings.min_full_games_daily, settings.players_limit, this.topRatingsDaily);
+        await this.updateTopRanking(playerNames, day, '', settings.min_full_games_daily, settings.players_limit, this.topRatingsDaily);
       }
       if (day === weekAgoDate) {
-        await this.updateTopRanking(playerNames, day, settings.min_full_games_weekly, settings.players_limit, this.topRatingsWeekly);
+        await this.updateTopRanking(playerNames, day, '', settings.min_full_games_weekly, settings.players_limit, this.topRatingsWeekly);
       }
       if (day === oldestDate) {
-        await this.updateTopRanking(playerNames, day, settings.min_full_games, settings.players_limit, this.topRatingsTotal);
+        await this.updateTopRanking(playerNames, day, weekAgoDate, settings.min_full_games, settings.players_limit, this.topRatingsTotal);
       }
     }
   }
@@ -742,10 +742,15 @@ export class AccuStats {
         } catch (e) { hb_log(`!!recalcTopRanking error: ${e}`) };
     }
 
-  async updateTopRanking(playerNames: Map<string, string>, day: string, minGames: number, playersLimit: number,
+  async updateTopRanking(playerNames: Map<string, string>, day: string, dayFrom: string, minGames: number, playersLimit: number,
     ratingsDb: TopRatingsDailyDB | TopRatingsWeeklyDB | TopRatingsDB | TopRatingsHistoryDB) {
     try {
-      let allRatings = await this.rollingRatings.getRollingRatingsByDate(day, minGames, playersLimit);
+      let allRatings: RollingRatingsData[] = [];
+      if (dayFrom.length) {
+        allRatings = await this.rollingRatings.getRollingRatingsByDateFromDate(day, dayFrom, minGames, playersLimit);
+      } else {
+        allRatings = await this.rollingRatings.getRollingRatingsByDate(day, minGames, playersLimit);
+      }
       await this.updateTopRankingWith(playerNames, day, minGames, playersLimit, allRatings, ratingsDb);
     } catch (e) { hb_log(`!!recalcTopRanking error: ${e}`) };
   }

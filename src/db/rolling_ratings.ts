@@ -79,7 +79,7 @@ export class RollingRatingsDB extends BaseDB {
           left_votekick = excluded.left_votekick,
           left_server = excluded.left_server;
       `;
-  
+
       this.db.run(query, [
         rating.auth_id,
         rating.date,
@@ -154,6 +154,26 @@ export class RollingRatingsDB extends BaseDB {
     });
   }
 
+  async getRollingRatingsByDateFromDate(date: string, from_date: string, min_games: number, limit_players: number): Promise<RollingRatingsData[]> {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT rr.auth_id, rr.date, rr.match_id, rr.mu, rr.rd, rr.vol, rr.games, rr.wins, rr.goals, rr.assists,
+               rr.own_goals, rr.clean_sheets, rr.playtime, rr.left_afk, rr.left_votekick, rr.left_server
+        FROM rolling_ratings rr
+        INNER JOIN matches m ON rr.match_id = m.match_id
+        WHERE rr.date = ?
+          AND rr.games > ?
+          AND m.date >= ?
+        ORDER BY rr.mu DESC
+        LIMIT ?;
+      `;
+      this.db.all(query, [date, min_games - 1, from_date, limit_players], (err: any, rows: RollingRatingsData[]) => {
+        if (err) return reject(`Error fetching from rolling_ratings with match filter: ${err.message}`);
+        resolve(rows ?? []);
+      });
+    });
+  }
+
   async getRollingRatingsBetweenMatchIds(start_match_id: number, end_match_id: number): Promise<RollingRatingsData[]> {
     return new Promise((resolve, reject) => {
       const query = `
@@ -173,7 +193,7 @@ export class RollingRatingsDB extends BaseDB {
   async getRollingRatingsMaxMatchId(): Promise<number> {
     return new Promise((resolve, reject) => {
       const query = `SELECT MAX(match_id) AS max_match_id FROM rolling_ratings;`;
-  
+
       this.db.get(query, [], (err, row: {max_match_id: number}|null) => {
         if (err) {
           reject('Error fetching max match_id: ' + err.message);

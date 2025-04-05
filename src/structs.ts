@@ -1,15 +1,9 @@
-import { NONAME } from "dns";
-import { AntiSpam } from "./anti_spam";
-import { ScoreCaptcha } from "./captcha";
 import * as config from "./config";
-import { Emoji } from "./emoji";
-import { GameState } from "./game_state";
-import { PlayerAccelerator } from "./player_accelerator";
-import { BallPossessionTracker } from "./possesion_tracker";
 import { getTimestampHM, normalizeNameString } from "./utils";
 import Glicko2 from 'glicko2';
 import { DiscordUserEntry } from "./db/discord_users";
 import { MapPhysicsType } from "./maps";
+import { IpInfo } from "./ip_info";
 
 export class PlayerActivity {
   chat: number; // if is writing or is moving players from team to team
@@ -141,6 +135,7 @@ export class PlayerData {
 
   discord_user: DiscordUserEntry | null;
   discord_token: string;
+  ip_info: IpInfo;
   command_after_match_ends: string;
   selected_ball: MapPhysicsType;
   monitor_enabled = false;
@@ -184,6 +179,7 @@ export class PlayerData {
     this.vip_data = new PlayerVipData();
     this.discord_user = null;
     this.discord_token = '';
+    this.ip_info = {city: '', country: '', isp: '', hostname: []};
     this.command_after_match_ends = '';
     this.selected_ball = 'vehax';
   }

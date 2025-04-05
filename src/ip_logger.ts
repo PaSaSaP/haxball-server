@@ -62,13 +62,14 @@ export class PlayerJoinLogger {
         const ip = playerExt.real_ip.split(',').at(-1)?.trim() ?? '';
         let ipInfo = await getIpInfoFromMonitoring(ip);
         if (!ipInfo) return;
+        playerExt.ip_info = ipInfo;
         MONLog(`IP ${playerExt.name} => ${ip} => ${ipInfo.country}, ${ipInfo.city}, ${ipInfo.isp}, ${ipInfo.hostname}`);
         if (ipInfo.hostname.length === 0) return;
         for (let hostname of ipInfo.hostname) {
           if (PlayerJoinLogger.MobileInternetHostnames.some(e => hostname.includes(e))) {
             const txt = `Do pokoju dołączył ${playerExt.name} [${playerExt.id}] prawdopodobnie z mobilnego internetu.`;
             players.forEach(player => {
-              if (player.id !== playerExt.id && player.discord_user && player.discord_user.state) {
+              if (player.id !== playerExt.id && ((player.discord_user && player.discord_user.state && player.trust_level > 1) || (player.admin_level))) {
                 this.hbRoom.sendMsgToPlayer(player,txt, Colors.BrightGreen, 'bold', 2);
               }
             })
