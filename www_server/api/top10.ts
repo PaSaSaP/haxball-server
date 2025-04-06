@@ -55,7 +55,7 @@ class Top10Cache {
     cache.cache = result;
     cache.lastFetchTime = Date.now();
   }
-  
+
   async getRankCached(cache: Cache) {
     if (!cache.cache.length || Date.now() - cache.lastFetchTime > Top10Cache.CACHE_DURATION) {
       await this.fetchPlayers(cache);
@@ -76,74 +76,106 @@ class Top10Cache {
 let cache3vs3 = new Top10Cache('3vs3');
 let cache4vs4 = new Top10Cache('4vs4');
 
+export async function getGlobalPlayersRankCached(selector: GameModeType) {
+  if (selector === '3vs3') {
+    return await cache3vs3.getGlobalRankCached();
+  } else if (selector === '4vs4') {
+    return await cache4vs4.getGlobalRankCached();
+  } else {
+    throw new Error(`Invalid selector: ${selector}`);
+  }
+}
+
+export async function getWeeklyPlayersRankCached(selector: GameModeType) {
+  if (selector === '3vs3') {
+    return await cache3vs3.getWeeklyRankCached();
+  } else if (selector === '4vs4') {
+    return await cache4vs4.getWeeklyRankCached();
+  } else {
+    throw new Error(`Invalid selector: ${selector}`);
+  }
+}
+
+export async function getDailyPlayersRankCached(selector: GameModeType) {
+  if (selector === '3vs3') {
+    return await cache3vs3.getDailyRankCached();
+  } else if (selector === '4vs4') {
+    return await cache4vs4.getDailyRankCached();
+  } else {
+    throw new Error(`Invalid selector: ${selector}`);
+  }
+}
 
 // 3vs3
-router.get("/3vs3", async (req, res) => {
-  let cached = await cache3vs3.getGlobalRankCached();
-  res.json(cached.cache.slice(0, 10));
+router.get("/:selector", async (req, res) => {
+  try {
+    const selector = String(req.params.selector);
+    let cached = await getGlobalPlayersRankCached(selector as GameModeType);
+    res.json(cached.cache.slice(0, 10));
+  } catch (err) {
+    console.error("Error fetching global rank:", err);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
 
-router.get("/3vs3/:num", async (req: any, res: any) => {
-  const { num } = req.params;
-  let cached = await cache3vs3.getGlobalRankCached();
-  res.json(cached.cache.slice(0, num));
+router.get("/:selector/:num", async (req: any, res: any) => {
+  try {
+    const selector = String(req.params.selector);
+    const num = Number(req.params.num);
+    let cached = await getGlobalPlayersRankCached(selector as GameModeType);
+    res.json(cached.cache.slice(0, num));
+  } catch (err) {
+    console.error("Error fetching global rank:", err);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
 
-router.get("/3vs3/weekly", async (req, res) => {
-  let cached = await cache3vs3.getWeeklyRankCached();
-  res.json(cached.cache.slice(0, 10));
+router.get("/:selector/weekly", async (req, res) => {
+  try {
+    const selector = String(req.params.selector);
+    let cached = await getWeeklyPlayersRankCached(selector as GameModeType);
+    res.json(cached.cache.slice(0, 10));
+  } catch (err) {
+    console.error("Error fetching weekly rank:", err);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
 
-router.get("/3vs3/weekly/:num", async (req: any, res: any) => {
-  const { num } = req.params;
-  let cached = await cache3vs3.getWeeklyRankCached();
-  res.json(cached.cache.slice(0, num));
+router.get("/:selector/weekly/:num", async (req: any, res: any) => {
+  try {
+    const selector = String(req.params.selector);
+    const num = Number(req.params.num);
+    let cached = await getWeeklyPlayersRankCached(selector as GameModeType);
+    res.json(cached.cache.slice(0, num));
+  } catch (err) {
+    console.error("Error fetching weekly rank:", err);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
 
-router.get("/3vs3/daily", async (req, res) => {
+router.get("/:selector/daily", async (req, res) => {
+  try {
+    const selector = String(req.params.selector);
+    let cached = await getDailyPlayersRankCached(selector as GameModeType);
+    res.json(cached.cache.slice(0, 10));
+  } catch (err) {
+    console.error("Error fetching daily rank:", err);
+    res.status(500).json({ error: "An error occurred" });
+  }
   let cached = await cache3vs3.getDailyRankCached();
   res.json(cached.cache.slice(0, 10));
 });
 
-router.get("/3vs3/daily/:num", async (req: any, res: any) => {
-  const { num } = req.params;
-  let cached = await cache3vs3.getDailyRankCached();
-  res.json(cached.cache.slice(0, num));
-});
-
-// 4vs4
-
-router.get("/4vs4", async (req, res) => {
-  let cached = await cache4vs4.getGlobalRankCached();
-  res.json(cached.cache.slice(0, 10));
-});
-
-router.get("/4vs4/:num", async (req: any, res: any) => {
-  const { num } = req.params;
-  let cached = await cache4vs4.getGlobalRankCached();
-  res.json(cached.cache.slice(0, num));
-});
-
-router.get("/4vs4/weekly", async (req, res) => {
-  let cached = await cache4vs4.getWeeklyRankCached();
-  res.json(cached.cache.slice(0, 10));
-});
-
-router.get("/4vs4/weekly/:num", async (req: any, res: any) => {
-  const { num } = req.params;
-  let cached = await cache4vs4.getWeeklyRankCached();
-  res.json(cached.cache.slice(0, num));
-});
-
-router.get("/4vs4/daily", async (req, res) => {
-  let cached = await cache4vs4.getDailyRankCached();
-  res.json(cached.cache.slice(0, 10));
-});
-
-router.get("/4vs4/daily/:num", async (req: any, res: any) => {
-  const { num } = req.params;
-  let cached = await cache4vs4.getDailyRankCached();
-  res.json(cached.cache.slice(0, num));
+router.get("/:selector/daily/:num", async (req: any, res: any) => {
+  try {
+    const selector = String(req.params.selector);
+    const num = Number(req.params.num);
+    let cached = await getDailyPlayersRankCached(selector as GameModeType);
+    res.json(cached.cache.slice(0, num));
+  } catch (err) {
+    console.error("Error fetching daily rank:", err);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
 
 export default router;

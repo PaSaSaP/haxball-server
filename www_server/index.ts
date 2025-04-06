@@ -3,6 +3,7 @@ import path from 'path';
 import verifyRouter from './api/verify_page';
 import apiGetServers from './api/get_servers';
 import apiTop10 from './api/top10';
+import apiGetHomeData from './api/get_home_data';
 import apiStripeTransaction from './api/stripe_transaction';
 import apiPrivateGetPlayers from './api/private/get_player_names';
 import apiPrivateGetMatches from './api/private/get_matches';
@@ -23,9 +24,9 @@ app.use('/verify', verifyRouter);
 
 // API zwracające listę serwerów
 app.use("/api/servers", apiGetServers);
-
 app.use("/api/top10", apiTop10);
 app.use("/api/top", apiTop10);
+app.use("/api/home_data", apiGetHomeData);
 
 app.use("/api/stripe", apiStripeTransaction);
 app.use("/stripe", stripeRedirect);
