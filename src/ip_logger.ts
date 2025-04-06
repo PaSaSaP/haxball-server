@@ -84,7 +84,16 @@ export class PlayerJoinLogger {
   handleGameTick(currentTime: number, ballPosition: {x: number, y: number}, players: PlayerData[]) {
     if (!this.positionsEnabled && !this.hbRoom.bot_stopping_enabled) return;
     if (ballPosition) {
-      this.ballPositions.push([currentTime, ballPosition.x, ballPosition.y]);
+      if (!this.ballPositions.length) {
+        this.ballPositions.push([currentTime, ballPosition.x, ballPosition.y]);
+      } else {
+        const last_pos = this.ballPositions.at(-1)!;
+        const dx = last_pos[1] - ballPosition.x;
+        const dy = last_pos[2] - ballPosition.y;
+        if (dx * dx + dy * dy > 0.0001) {
+          this.ballPositions.push([currentTime, ballPosition.x, ballPosition.y]);
+        }
+      }
     }
     for (let player of players) {
       const pos = player.position;

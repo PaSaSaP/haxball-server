@@ -39,6 +39,7 @@ import { getBotKickMessage } from './spam_data';
 import { DiscordAccountManager } from './discord_account';
 import { GhostPlayers } from './ghost_players';
 import { Volleyball } from './volleyball';
+import { pid } from 'process';
 
 
 declare global {
@@ -56,6 +57,7 @@ export class HaxballRoom {
   pressure_total: number;
   last_match_time: number;
   game_tick_counter: number;
+  count_ticks_per_second_enabled: boolean;
   pressure_bar_length: number;
   feature_pressure: boolean;
   feature_pressure_stadium: boolean;
@@ -140,6 +142,7 @@ export class HaxballRoom {
     this.pressure_total = 0.0;
     this.last_match_time = 0.0;
     this.game_tick_counter = 0;
+    this.count_ticks_per_second_enabled = false;
     this.pressure_bar_length = 300;
     this.feature_pressure = true;
     this.feature_pressure_stadium = false;
@@ -211,7 +214,12 @@ export class HaxballRoom {
       return playerExt.trust_level === 0 || (playerExt.trust_level > 0 && playerExt.penalty_counter >= 3);
     };
     this.welcome_message.setMessage('Sprawdź ranking globalny: !ttop, sprawdź również ranking tygodnia: !wtop, wesprzyj twórcę: !sklep');
-    this.welcome_message.setMessageNonTrusted(`By móc grać musisz zyskać pierwszy stopień zaufania, sprawdź Discord! 💬 ${config.discordLink} 💬`);
+    this.welcome_message.setMessageNonTrusted([
+      `By grać musisz zyskać pierwszy stopień zaufania, sprawdź Discord! 💬 ${config.discordLink} 💬`,
+      `Necesitas nivel 1 de confianza. ¡Únete a Discord! 💬 ${config.discordLink} 💬`,
+      `Для игры нужен 1 уровень доверия. Заходи в Discord! 💬 ${config.discordLink} 💬`,
+      `To play, you need to gain the first level of trust. Check out our Discord! 💬 ${config.discordLink} 💬`,
+    ]);
 
     this.room.onRoomLink = this.handleRoomLink.bind(this);
     this.room.onGameTick = this.handleGameTick.bind(this);
@@ -404,8 +412,9 @@ export class HaxballRoom {
     const playersMax = this.room_config.maxPlayersOverride;
     const ps = this.players_ext.size;
     let playersCur = ps > playersMax ? playersMax : ps;
+    const selector = this.getSselector();
     const serverData: ServerRow = {
-      selector: this.getSselector(),
+      selector: selector,
       token: this.room_config.token,
       link: this.room_link,
       room_name: this.room_config.roomName,
@@ -415,6 +424,25 @@ export class HaxballRoom {
       active: true,
     }
     tokenDatabase!.saveServer(serverData);
+    let players = Array.from(this.players_ext).map(p => ({
+      name: p[1].name_normalized,
+      trust_level: p[1].trust_level,
+      team: p[1].team,
+      afk: p[1].afk || p[1].afk_maybe,
+    }));
+    let selectorSting = '';
+    if (selector === '4vs4_1') selectorSting = '4vs4';
+    else if (selector === '3vs3_1') selectorSting = '3vs3';
+    else if (selector === '1vs1_1') selectorSting = '1vs1';
+    else if (selector === 'volleyball_1') selectorSting = 'volleyball';
+    else if (selector === 'freestyle_1') selectorSting = 'freestyle';
+    else return;
+    this.game_state.logMessage('God', 'players', JSON.stringify({
+      selector: selectorSting,
+      description: `${this.room_config.roomName} (${playersCur}/${playersMax})`,
+      link: this.room_link,
+      players: players,
+    }), true);
   }
 
   P(player: PlayerObject): PlayerData {
@@ -441,6 +469,7 @@ export class HaxballRoom {
   }
 
   private countTicksPerSecond(currentTime: number) {
+    if (!this.count_ticks_per_second_enabled) return;
     if (this.game_tick_counter % 60 === 0) this.game_tick_array.push(currentTime); // TODO debug, need to verify
     if (this.game_tick_array.length === 60) {
       for (let i = 0; i < this.game_tick_array.length-1; ++i) {
@@ -455,7 +484,7 @@ export class HaxballRoom {
     const currentTime = Date.now(); // [ms]
     this.current_time = currentTime;
     ++this.game_tick_counter;
-    // this.countTicksPerSecond(currentTime);
+    this.countTicksPerSecond(currentTime);
     this.pinger.sendKeepAlive(currentTime);
     let scores = this.room.getScores();
     this.scores = scores;

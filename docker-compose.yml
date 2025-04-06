@@ -329,6 +329,23 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run discord_3vs3
+  discord-1vs1:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run discord_1vs1
   discord-freestyle:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped

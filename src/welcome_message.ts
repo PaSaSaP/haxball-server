@@ -1,16 +1,16 @@
 import { PlayerData } from "./structs";
 
 class WelcomeMessage {
-  private msgNonTrusted: string;
+  private msgNonTrusted: string[];
   private msg: string;
   callback: (player: PlayerData, msg: string) => void;
   constructor(callback: (player: PlayerData, msg: string) => void) {
-    this.msgNonTrusted = '';
+    this.msgNonTrusted = [];
     this.msg = '';
     this.callback = callback;
   }
-  setMessageNonTrusted(msg: string) {
-    this.msgNonTrusted = msg;
+  setMessageNonTrusted(msgs: string[]) {
+    this.msgNonTrusted = msgs;
   }
   setMessage(msg: string) {
     this.msg = msg;
@@ -18,7 +18,9 @@ class WelcomeMessage {
   sendWelcomeMessage(player: PlayerData, players: Map<number, PlayerData>) {
     if (player.trust_level && this.msg.length) this.callback(player, this.msg);
     else if (!player.trust_level && this.msgNonTrusted.length) {
-      for (let i = 0; i < 3; ++i) this.callback(player, this.msgNonTrusted);
+      for (const msg of this.msgNonTrusted) {
+        this.callback(player, msg);
+      }
     }
     this.sendAboutNonTrustedToOthers(player, players);
   }

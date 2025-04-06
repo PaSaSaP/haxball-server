@@ -337,6 +337,7 @@ class Commander extends BaseCommander {
       disc_info: this.commandDiscInfo,
       auto_afk_on: this.commandAutoAfkOn,
       auto_afk_off: this.commandAutoAfkOff,
+      count_ticks: this.commandCountTicks,
 
       god: this.commandGodTest,
 
@@ -1620,13 +1621,13 @@ class Commander extends BaseCommander {
   commandSetBallPhysics(playerExt: PlayerData, cmds: string[]) {
     if (!this.hb_room.auto_mode) return; // only in auto mode
     if (!cmds.length) {
-      this.sendMsgToPlayer(playerExt, `Jako wybierający w Red mozesz wybrać piłkę meczową z dostępnych: vehax, winky, bff. `
+      this.sendMsgToPlayer(playerExt, `Jako wybierający w Red mozesz wybrać piłkę meczową z dostępnych: vehax, winky, bff, efc. `
         + `Obecna to ${this.hb_room.last_selected_ball}`, Colors.DarkGreen, 'italic');
       return;
     }
     let physics = cmds[0].toLowerCase();
-    if (!['winky', 'vehax', 'bff'].includes(physics)) {
-      this.sendMsgToPlayer(playerExt, `Piłka ${physics} nie jest dostępna! Dostępne piłki: vehax, winky, bff`, Colors.DarkGreen, 'italic');
+    if (!['winky', 'vehax', 'bff', 'efc'].includes(physics)) {
+      this.sendMsgToPlayer(playerExt, `Piłka ${physics} nie jest dostępna! Dostępne piłki: vehax, winky, bff, efc`, Colors.DarkGreen, 'italic');
       return;
     }
     playerExt.selected_ball = physics as MapPhysicsType;
@@ -2063,6 +2064,13 @@ class Commander extends BaseCommander {
     if (this.warnIfPlayerIsNotHost(playerExt, 'auto_afk_off')) return;
     this.hb_room.auto_afk = false;
   }
+  commandCountTicks(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'count_ticks')) return;
+    let newState = true;
+    if (cmds.length) newState = toBoolean(cmds[0]);
+    this.hb_room.count_ticks_per_second_enabled = newState;
+    this.sendMsgToPlayer(playerExt, `count_ticks = ${newState}`);
+  }
 }
 
 class DiscordCommander extends BaseCommander {
@@ -2082,7 +2090,7 @@ class DiscordCommander extends BaseCommander {
 
   commandLinkDiscordAccount(playerExt: PlayerData, cmds: string[]) {
     if (this.hb_room.temporarily_trusted.has(playerExt.id)) {
-      this.sendMsgToPlayer(playerExt, 'Masz tymczasowe zaufanie (!xt), musisz zdobyć stałe zaufanie (!t)', Colors.BrightGreen);
+      this.sendMsgToPlayer(playerExt, 'Masz tymczasowe zaufanie (!xt), musisz zdobyć stałe zaufanie (!t)', Colors.BrightGreen);
       return;
     }
     if (playerExt.trust_level) {

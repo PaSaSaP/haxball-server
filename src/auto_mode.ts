@@ -1087,7 +1087,7 @@ export class AutoBot {
   private shiftChoserToBottom(playerIds: number[], inTeam: PlayerData[]): [number, number[]] {
     let choserIdx = -1;
     if (playerIds.length && inTeam.length) {
-      choserIdx = inTeam.findIndex(e => e.id == playerIds[0]);
+      choserIdx = inTeam.findIndex(e => e.id === playerIds[0]);
       if (choserIdx !== -1) {
         const [item] = inTeam.splice(choserIdx, 1);
         inTeam.push(item);
@@ -1116,28 +1116,33 @@ export class AutoBot {
   }
   private moveLoserBlueToSpec() {
     // AMLog("Blue przegrało, idą do spec");
-    let [choserIdx, inFavor] = this.shiftChoserToBottom(this.currentMatch.getLoserTeamIds(), this.blueTeam);
+    let loserTeamIds = this.currentMatch.getLoserTeamIds();
+    let [choserIdx, inFavor] = this.shiftChoserToBottom(loserTeamIds, this.blueTeam);
     // blue plays always first match so keep them in favor
     if (!this.ranked || this.hb_room.volleyball.isEnabled()) inFavor = [];
-    if (inFavor.length) this.lastOneMatchLoserTeamIds = [choserIdx, ...inFavor];
-    this.moveAllBlueToSpec(inFavor);
+    if (inFavor.length) this.lastOneMatchLoserTeamIds = loserTeamIds.slice(0, 3);
+    this.moveAllBlueToSpec(inFavor, loserTeamIds.slice(3));
   }
   private moveWinnerBlueToSpec() {
     // AMLog("Blue wygrało, ale! idą do spec");
     this.shiftChoserToBottom(this.currentMatch.getWinnerTeamIds(), this.blueTeam);
     this.moveAllBlueToSpec([]);
   }
-  private moveAllBlueToSpec(inFavor: number[]) {
-    this.moveAllTeamToSpec(this.blueTeam, inFavor);
+  private moveAllBlueToSpec(inFavor: number[], addedWhileMatch: number[] = []) {
+    this.moveAllTeamToSpec(this.blueTeam, inFavor, addedWhileMatch);
     this.blueTeam = [];
   }
 
-  private moveAllTeamToSpec(inTeam: PlayerData[], inFavor: number[]) {
+  private moveAllTeamToSpec(inTeam: PlayerData[], inFavor: number[], addedWhileMatch: number[] = []) {
     // move AFK to the end of spec list!
     const afkFilter = (e: PlayerData) => { return !e.vip_data.afk_mode && (e.afk || e.afk_maybe) };
     let specAfk = this.specTeam.filter(e => afkFilter(e));
     let specNonAfk = this.specTeam.filter(e => !afkFilter(e));
     this.specTeam = [...specNonAfk, ...specAfk];
+    let firstAfkPlayerId = -1;
+    if (specAfk.length) {
+      firstAfkPlayerId = specAfk[0].id;
+    }
 
     // anyway make that check to get insert idx
     let insertIdx = 0;
@@ -1151,6 +1156,11 @@ export class AutoBot {
       if (inFavor.includes(p.id)) {
         this.specTeam.splice(insertIdx, 0, p); // insert after first or other in favor
         insertIdx++;
+      } else if (firstAfkPlayerId !== -1 && addedWhileMatch.includes(p.id)) { // insert before first afk
+        const firstAfkIdx = this.specTeam.findIndex(e => e.id === firstAfkPlayerId);
+        if (firstAfkIdx !== -1) {
+          this.specTeam.splice(firstAfkIdx, 0, p);
+        }
       } else {
         this.specTeam.push(p);
       }

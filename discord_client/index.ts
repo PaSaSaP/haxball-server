@@ -13,6 +13,7 @@ const selector = process.env.HX_SELECTOR as config.RoomConfigSelectorType;
 const subselector = process.env.HX_SUBSELECTOR;
 const roomConfig = config.getRoomConfig(selector, subselector);
 let channelId = '';
+const roomLinksChannelId = '1345415730337939456';
 if (selector == 'freestyle') {
   if (subselector === '1') {
     channelId = '1345442311684751491';
@@ -25,18 +26,54 @@ if (selector == 'freestyle') {
   if (subselector === '1') {
     channelId = '1345435928625156177';
   } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
+} else if (selector == '1vs1') {
+  if (subselector === '1') {
+    channelId = '1358397917853126817';
+  } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
 } else throw new Error(`Invalid HX_SELECTOR: ${selector}`);
 let logFile = `./logs/${roomConfig.chatLogDbFile}`;
 
 // Inicjalizacja klienta Discord
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-async function monitorLogs(channel: TextChannel) {
+async function monitorLogs(channel: TextChannel, roomLinksChannel: TextChannel) {
   const sendToChannel = (log: any) => {
     if (!log.for_discord) return;
     log.text = log.text.replace(/[@#]/g, '');
-    if (log.action == 'chat') channel.send(`**\`${log.user_name}\`** ${log.text}`);
-    else if (log.action == 'server') channel.send(`*${log.text}*`);
+    try {
+      if (log.action === 'chat') channel.send(`**\`${log.user_name}\`** ${log.text}`);
+      else if (log.action === 'server') channel.send(`*${log.text}*`);
+      else if (log.action === 'players') {
+        let data = JSON.parse(log.text);
+        let selector = data.selector;
+        let description = data.description;
+        let link = data.link;
+        // format of players: { name: string, trust_level: number, team: 0|1|2, afk: boolean }
+        let players = data.players;
+        // find previous (if any) message with selector
+        let selectorText = `Serwer: ${selector}`;
+        // should contain formatted data so if team == 1 then name red, if team == 2 then name blue, if team == 0 then name white
+        // if afk then nick yellow, next to nick should be trust level info in format T:{trust_level}
+        let redTeam = players.filter((p: any) => p.team === 1).map((p: any) => ` - **${p.name}** (T:${p.trust_level})`);
+        let blueTeam = players.filter((p: any) => p.team === 2).map((p: any) => ` - **${p.name}** (T:${p.trust_level})`);
+        let whiteTeam = players.filter((p: any) => p.team === 0).map((p: any) => ` - **${p.name}** (${p.afk? 'AFK, ':''}T:${p.trust_level})`);
+        let redTeamText = redTeam.length > 0 ? `🔴 **Red Team**:\n${redTeam.join('\n')}\n` : '';
+        let blueTeamText = blueTeam.length > 0 ? `🔵 **Blue Team**:\n${blueTeam.join('\n')}\n` : '';
+        let whiteTeamText = whiteTeam.length > 0 ? `⚪ **Spectators**:\n${whiteTeam.join('\n')}\n` : '';
+        const newContent = `${selectorText}\n${description}\n${link}\n\n${redTeamText}\n${blueTeamText}\n${whiteTeamText}`;
+        let previousMessage = roomLinksChannel.messages.cache.find(msg => msg.content.startsWith(selectorText));
+        if (previousMessage) {
+          // update existing message
+          previousMessage.edit(newContent);
+        }
+        else {
+          // send new message
+          roomLinksChannel.send(newContent);
+        }
+      }
+    } catch (error) {
+      console.error("Błąd wysyłania wiadomości:", error);
+    }
   };
   let fileSize = fs.statSync(logFile).size;
 
@@ -95,13 +132,14 @@ client.once("ready", async () => {
 
   // Pobieramy kanał, na który bot będzie wysyłał logi
   const channel = client.channels.cache.get(channelId) as TextChannel;
-  if (!channel) {
+  const roomLinksChannel = client.channels.cache.get(roomLinksChannelId) as TextChannel;
+  if (!channel || !roomLinksChannel) {
     console.error("Nie znaleziono kanału Discord!");
     return;
   }
 
   // Rozpoczynamy monitorowanie logów
-  await monitorLogs(channel);
+  await monitorLogs(channel, roomLinksChannel);
 });
 
 client.login(secrets.DiscordToken);

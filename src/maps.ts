@@ -104,7 +104,7 @@ interface GamePhysics {
     ball_bCoef: number;
     ball_invMass: number;
 }
-export type MapPhysicsType = "winky" | "vehax" | "bff";
+export type MapPhysicsType = "winky" | "vehax" | "bff" | "efc";
 let physics: Map<MapPhysicsType, GamePhysics> = new Map();
 physics.set("winky", {
     player_bCoef: json_stadium_futsal_winkys_v1_v2_bar["playerPhysics"]["bCoef"],
@@ -142,6 +142,22 @@ physics.set("bff", {
     ball_bCoef:  0.412,
     ball_invMass: 1.55,
 });
+physics.set("efc", {
+    player_bCoef: 0,
+    player_invMass: 0.5,
+    player_damping: 0.96,
+    player_acceleration: 0.11,
+    player_kickingAcceleration: 0.083,
+    player_kickingDamping: 0.96,
+    player_kickStrength: 4.2,
+    ball_radius: 6.5,
+    ball_bCoef:  0.412,
+    ball_invMass: 1.5,
+});
+
+
+// player: {"radius":15,"bCoeff":0.5,"invMass":0.5,"damping":0.96,"color":0,"cMask":47,"cGroup":2}
+// ball  : {"radius":8,"bCoeff":0.5,"invMass":1,"damping":0.99,"color":15400704,"cMask":63,"cGroup":193}
 
 function isVolleyball(mapName: string) {
     return ["v", "volley", "volleyball", "volleyball_training"].includes(mapName);
