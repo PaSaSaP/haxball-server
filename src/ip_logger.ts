@@ -4,11 +4,13 @@ import { HaxballRoom } from './hb_room';
 import { getIpInfoFromMonitoring } from './ip_info';
 import { Colors } from './colors';
 
+type DiscPositions = [number, number, number];
+
 export class PlayerJoinLogger {
   hbRoom: HaxballRoom;
   filename: string;
-  positions: Map<number, [number, number, number][]>;
-  ballPositions: [number, number, number][];
+  positions: Map<number, DiscPositions[]>;
+  ballPositions: DiscPositions[];
   positionsEnabled = false;
   monitoredPlayers: PlayerData[];
   constructor(hbRoom: HaxballRoom) {
@@ -36,10 +38,6 @@ export class PlayerJoinLogger {
     MONLog(`CMD stop for ${player.name}`);
   }
 
-  pos(player: PlayerData) {
-    return this.r().getPlayerDiscProperties(player.id);
-  }
-
   handlePlayerJoin(playerExt: PlayerData) {
     // there is still zero trust level, is not set
     const now = new Date().toISOString();
@@ -51,13 +49,11 @@ export class PlayerJoinLogger {
         MONLog(`BOT AT ${now} WITH NAME: ${playerExt.name} AUTH: ${playerExt.auth_id} CONN: ${playerExt.conn_id} IP: ${playerExt.real_ip}`);
       }
     }).catch((e) => MONLog(`!! probableBotExists error ${e}`));
-    if (playerExt.trust_level < 2) {
-      this.startMonitoring(playerExt);
-    }
   }
 
   async handlePlayerJoinWithIp(playerExt: PlayerData, players: Map<number, PlayerData>) {
     if (playerExt.trust_level < 2) {
+      this.startMonitoring(playerExt);
       try {
         const ip = playerExt.real_ip.split(',').at(-1)?.trim() ?? '';
         let ipInfo = await getIpInfoFromMonitoring(ip);
@@ -85,33 +81,33 @@ export class PlayerJoinLogger {
     this.monitoredPlayers = this.monitoredPlayers.filter(e => e.id != playerExt.id);
   }
 
-  handleGameTick(currentTime: number, players: PlayerData[]) {
+  handleGameTick(currentTime: number, ballPosition: {x: number, y: number}, players: PlayerData[]) {
     if (!this.positionsEnabled && !this.hbRoom.bot_stopping_enabled) return;
-    const ball = this.r().getBallPosition();
-    if (ball) {
-      this.ballPositions.push([currentTime, ball.x, ball.y]);
+    if (ballPosition) {
+      this.ballPositions.push([currentTime, ballPosition.x, ballPosition.y]);
     }
     for (let player of players) {
-      // if (!player.monitor_enabled) continue;
-      // if (player.trust_level) continue; // person
-      // if (player.bot) continue; // currently discovered
-      // save for all players so we can compare players vs bots
-      const pos = this.pos(player);
-      if (!pos) continue;
-      if (this.positionsEnabled && player.monitor_enabled) {
-        if (!this.positions.has(player.id)) this.positions.set(player.id, [[currentTime, -180, 0]]);
+      const pos = player.position;
+      if (!player.team || !pos) continue;
+      if (player.monitor_enabled && this.positionsEnabled) {
+        if (!this.positions.has(player.id)) {
+          this.positions.set(player.id, [[currentTime, player.team === 1 ? -180 : 180, 0]]);
+          continue;
+        }
         let positions = this.positions.get(player.id)!;
         const last_pos = positions.at(-1)!;
-        const new_pos: [number, number, number] = [currentTime, pos.x, pos.y];
-        const dx = last_pos[0] - new_pos[0];
-        const dy = last_pos[1] - new_pos[1];
+        const dx = last_pos[1] - pos.x;
+        const dy = last_pos[2] - pos.y;
         if (dx * dx + dy * dy > 0.0001) {
-          positions.push(new_pos);
+          positions.push([currentTime, pos.x, pos.y]);
         }
       }
 
-      if (this.hbRoom.bot_stopping_enabled && player.bot  && Math.random() < 0.005) {
-        this.hbRoom.room.setPlayerDiscProperties(player.id, { "xspeed": -pos.xspeed*2, "yspeed": -pos.yspeed*2 });
+      if (this.hbRoom.bot_stopping_enabled && player.bot && Math.random() < 0.005) {
+        let r = this.r();
+        const props = r.getPlayerDiscProperties(player.id);
+        if (!props) continue;
+        r.setPlayerDiscProperties(player.id, { "xspeed": -props.xspeed*2, "yspeed": -props.yspeed*2 });
       }
     }
   }

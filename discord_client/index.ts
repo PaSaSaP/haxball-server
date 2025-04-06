@@ -34,6 +34,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 async function monitorLogs(channel: TextChannel) {
   const sendToChannel = (log: any) => {
     if (!log.for_discord) return;
+    log.text = log.text.replace(/[@#]/g, '');
     if (log.action == 'chat') channel.send(`**\`${log.user_name}\`** ${log.text}`);
     else if (log.action == 'server') channel.send(`*${log.text}*`);
   };

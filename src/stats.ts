@@ -514,31 +514,25 @@ export class MatchStats {
     if (this.playSituation !== Situation.play) return;
     let redGK: PlayerData | null = null;
     let blueGK: PlayerData | null = null;
-    for (let playerId of redTeam.concat(blueTeam)) {
+    for (let playerId of redTeam) {
       let player = players.get(playerId)!;
-      if (redTeam.includes(playerId)) {
-        if (redGK === null) {
-          redGK = player;
-          continue;
-        }
-        if (player.position.x < redGK.position.x) {
-          redGK = player;
-          continue;
-        }
-      } else if (blueTeam.includes(playerId)) {
-        if (blueGK === null) {
-          blueGK = player;
-          continue;
-        }
-        if (player.position.x > blueGK.position.x) {
-          blueGK = player;
-          continue;
-        }
+      if (redGK === null) {
+        redGK = player;
+      } else if (player.position.x < redGK.position.x) {
+        redGK = player;
+      }
+    }
+    for (let playerId of blueTeam) {
+      let player = players.get(playerId)!;
+      if (blueGK === null) {
+        blueGK = player;
+      } else if (player.position.x > blueGK.position.x) {
+        blueGK = player;
       }
     }
     // TODO optimize below...
-    if (redGK) this.game.redCompositions.filter(e => e.player.id == redGK.id).forEach(e => e.GKTicks++);
-    if (blueGK) this.game.blueCompositions.filter(e => e.player.id == blueGK.id).forEach(e => e.GKTicks++);
+    if (redGK) this.game.redCompositions.filter(e => e.player.id === redGK.id).forEach(e => e.GKTicks++);
+    if (blueGK) this.game.blueCompositions.filter(e => e.player.id === blueGK.id).forEach(e => e.GKTicks++);
   }
   private getGKRed() {
     return this.getGK(this.game.redCompositions);

@@ -197,6 +197,18 @@ export class Volleyball {
     else if (blueTeam.includes(player.id)) teamCount = blueTeam.length;
     else return;
     let lastTouchBy = this.lastTouchBy;
+    if (!lastTouchBy) {
+      // serve from center
+      const ballIdx = this.getBallIndex();
+      this.totalTouches = 1;
+      const color = this.getColorByTotalTouches();
+      this.hbRoom.room.setDiscProperties(ballIdx, { color });
+      this.served = true;
+      this.lastTouchBy = player;
+      this.lastPlayerTouchedTime = currentTime;
+      return;
+    }
+
     if (justServed) {
       if (lastTouchBy && lastTouchBy.id === player.id && this.totalTouches > 0) {
         this.hbRoom.sendMsgToAll("❌ Kara! " + lastTouchBy.name + " nie potrafi serwować!",
@@ -231,10 +243,8 @@ export class Volleyball {
         this.givePenalty(player.team);
       }
     } else {
-      // TODO should blocking be allowed on serve?
-      // if (lastTouchBy && player.position.x >= -30 && player.position.x <= 30 && player.position.y <= 10) {
       const maxX = justServed ? 50 : 30;
-      if (lastTouchBy && player.position.x >= -maxX && player.position.x <= maxX && player.position.y <= 50) {
+      if (lastTouchBy && player.position.x >= -maxX && player.position.x <= maxX && player.position.y <= 90) {
         this.totalTouches = 0;
         this.blocked = true;
         if (justServed) {

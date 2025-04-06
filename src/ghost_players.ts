@@ -1,6 +1,5 @@
 import { Colors } from "./colors";
 import { HaxballRoom } from "./hb_room";
-import { PlayerData } from "./structs";
 
 export class GhostPlayers {
   hbRoom: HaxballRoom;

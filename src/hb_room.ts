@@ -157,7 +157,7 @@ export class HaxballRoom {
     this.muted_players = new Set();
     this.game_state = gameState;
     this.acceleration_tasks = new PlayerAccelerator(this.room);
-    this.ball_possesion_tracker = new BallPossessionTracker(this.room);
+    this.ball_possesion_tracker = new BallPossessionTracker();
     this.game_stopped_timer = null;
     this.game_paused_timer = null;
     this.matchStatsTimer = null;
@@ -464,7 +464,7 @@ export class HaxballRoom {
     let deltaTime = currentMatchTime - this.last_match_time;
     this.last_match_time = currentMatchTime;
     const ball_position = this.room.getDiscProperties(0);
-    this.pl_logger.handleGameTick(currentTime, players);
+    this.pl_logger.handleGameTick(currentTime, ball_position, players);
 
     if (this.feature_pressure) {
       if (deltaTime > 0 && ball_position) {
@@ -706,7 +706,11 @@ export class HaxballRoom {
 
   getAnyPlayerDiscProperties() {
     for (let [id, player] of this.players_ext) {
-      if (player.team) return this.room.getPlayerDiscProperties(id);
+      if (player.team) {
+        let props = this.room.getPlayerDiscProperties(id);
+        if (!props) continue;
+        return props;
+      }
     }
     return null;
   }

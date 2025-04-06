@@ -1,7 +1,6 @@
 import { PlayerData } from "./structs";
 
 export class BallPossessionTracker {
-  room: RoomObject;
   lastPossession: number | null;
   possessionStartTime: number;
   // possessionTime: { "1": number, "2": number };
@@ -9,8 +8,7 @@ export class BallPossessionTracker {
   lastTouchTeam: number | null;
   ballRadius: number;
   playerRadius: number;
-  constructor(room: RoomObject) {
-    this.room = room;
+  constructor() {
     this.lastPossession = null; // 1 dla czerwonych, 2 dla niebieskich, null jeśli brak
     this.possessionStartTime = 0; // Czas, od którego liczymy posiadanie
     this.possessionTime = { 1: 0, 2: 0 }; // Czas posiadania dla każdej drużyny
