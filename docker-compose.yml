@@ -157,6 +157,50 @@ services:
       start_period: 60s
     command: ["futsal_1vs1"]
 ######
+  tennis:
+    image: hx-puppeteer:1.0
+    container_name: haxball-server-tennis
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:57000-57100:57000-57100/udp"
+      - "[::]:57000-57100:57000-57100/udp"
+    environment:
+      - MONITORING=monitoring
+      - HTTP_PROXY=http://proxy-futsal-1vs1:8080
+      - HTTPS_PROXY=http://proxy-futsal-1vs1:8080
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - HX_ROOM_CONFIG_SELECTOR=tennis
+      - HX_ROOM_CONFIG_SUBSELECTOR=1
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    cap_add:
+      - SYS_ADMIN
+      - CAP_NET_ADMIN
+    shm_size: "1gb"
+    sysctls:
+      - net.ipv4.ip_local_port_range=57000 57100
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+    cpu_shares: 2048
+    mem_swappiness: 10
+    mem_limit: 1G
+    memswap_limit: 2G
+    oom_score_adj: -500
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: ["futsal_tennis"]
+######
   freestyle:
     image: hx-puppeteer:1.0
     container_name: haxball-server-freestyle
@@ -346,6 +390,23 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run discord_1vs1
+  discord-tennis:
+    image: ghcr.io/puppeteer/puppeteer
+    restart: unless-stopped
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+    mem_swappiness: 90
+    mem_limit: 500M
+    memswap_limit: 1G
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run discord_tennis
   discord-freestyle:
     image: ghcr.io/puppeteer/puppeteer
     restart: unless-stopped

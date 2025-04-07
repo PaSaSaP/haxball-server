@@ -216,6 +216,7 @@ class Commander extends BaseCommander {
       spam_disable: this.commandSpamCheckDisable,
       sd: this.commandSpamCheckDisable,
       other_names: this.commandPlayerOtherNames,
+      set_time_score: this.commandSetTimeScore,
 
       votekick: this.commandVoteKick,
       votemute: this.commandVoteMute,
@@ -1015,6 +1016,26 @@ class Commander extends BaseCommander {
     if (!cmdPlayerExt) return;
     let lastPlayerNames = this.hb_room.game_state.getPlayerNames(cmdPlayerExt.auth_id);
     this.sendMsgToPlayer(playerExt, `Ostatnie 5 nazw: ${(await lastPlayerNames).join(', ')}`);
+  }
+
+  async commandSetTimeScore(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (cmds.length == 0) {
+      this.sendMsgToPlayer(playerExt, "Uzycie: !set_time_score <time> <score>");
+      return;
+    }
+    const time = Number.parseInt(cmds[0]);
+    const score = Number.parseInt(cmds[1]);
+    if (time < 0 || time > 99) {
+      this.sendMsgToPlayer(playerExt, `Nieprawidłowy czas: ${time}`);
+      return;
+    }
+    if (score < 0 || score > 99) {
+      this.sendMsgToPlayer(playerExt, `Nieprawidłowy wynik: ${score}`);
+      return;
+    }
+    this.hb_room.setScoreTimeLimit(score, time);
+    this.sendMsgToPlayer(playerExt, `Ustawiono wynik na ${score} i czas na ${time}`, Colors.GameState);
   }
 
   commandVoteKick(playerExt: PlayerData, cmds: string[]) {

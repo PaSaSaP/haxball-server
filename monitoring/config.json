@@ -1,5 +1,5 @@
 {
-  "maxServers": { "4vs4": 0, "3vs3": 1, "1vs1": 1, "freestyle": 1, "volleyball": 1 },
+  "maxServers": { "4vs4": 0, "3vs3": 1, "1vs1": 0, "freestyle": 1, "volleyball": 1, "tennis": 1 },
   "scaleUpThreshold": 9,
   "scaleDownThreshold": 4,
   "scaleCheckDuration": 180000,

@@ -1,5 +1,5 @@
 
-export type RoomConfigSelectorType = 'freestyle' | '1vs1' | '2vs2' | '3vs3' | '4vs4' | "volleyball";
+export type RoomConfigSelectorType = 'freestyle' | '1vs1' | '2vs2' | '3vs3' | '4vs4' | "volleyball" | "tennis";
 
 type LimitsEntry = {
   score: number,
@@ -12,6 +12,7 @@ interface RoomLimits {
   '3vs3': LimitsEntry;
   '4vs4': LimitsEntry;
   'volleyball': LimitsEntry;
+  'tennis': LimitsEntry;
 };
 
 const roomLimits: RoomLimits = {
@@ -21,6 +22,7 @@ const roomLimits: RoomLimits = {
   '3vs3': {score: 3, time: 3},
   '4vs4': {score: 3, time: 4},
   'volleyball': {score: 5, time: 0},
+  'tennis': {score: 5, time: 0},
 }
 
 export interface OtherDbFiles {
@@ -30,6 +32,7 @@ export interface OtherDbFiles {
   '3vs3': string;
   '4vs4': string;
   'volleyball': string;
+  'tennis': string;
 }
 
 export interface RoomServerConfig {
@@ -68,6 +71,7 @@ export const AllOtherDbFiles: OtherDbFiles = {
     '3vs3':  `${dbDir}/other_futsal_3vs3.db`,
     '4vs4':  `${dbDir}/other_futsal_4vs4.db`,
     'volleyball':  `${dbDir}/other_futsal_volleyball.db`,
+    'tennis':  `${dbDir}/other_futsal_tennis.db`,
 }
 
 const futsal_4vs4: RoomServerConfig = {
@@ -79,6 +83,7 @@ const futsal_4vs4: RoomServerConfig = {
     '3vs3':  AllOtherDbFiles['3vs3'],
     '4vs4':  AllOtherDbFiles['4vs4'],
     'volleyball':  ``,
+    'tennis':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_4vs4.mpk",
@@ -105,6 +110,7 @@ const futsal_3vs3: RoomServerConfig = {
     '3vs3':  AllOtherDbFiles['3vs3'],
     '4vs4':  ``,
     'volleyball':  ``,
+    'tennis':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat.mpk",
@@ -131,6 +137,7 @@ const futsal_1vs1: RoomServerConfig = {
     '3vs3':  ``,
     '4vs4':  ``,
     'volleyball':  ``,
+    'tennis':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_1vs1.mpk",
@@ -157,6 +164,7 @@ const futsal_freestyle: RoomServerConfig = {
     '3vs3':  ``,
     '4vs4':  ``,
     'volleyball':  ``,
+    'tennis':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_freestyle.mpk",
@@ -183,6 +191,7 @@ const futsal_volleyball: RoomServerConfig = {
     '3vs3':  ``,
     '4vs4':  ``,
     'volleyball':  AllOtherDbFiles["volleyball"],
+    'tennis':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_volleyball.mpk",
@@ -200,6 +209,33 @@ const futsal_volleyball: RoomServerConfig = {
   subselector: '1',
 };
 
+const futsal_tennis: RoomServerConfig = {
+  playersDbFile: mainDbFile,
+  otherDbFiles: {
+    'freestyle':  ``,
+    '2vs2':  ``,
+    '1vs1':  ``,
+    '3vs3':  ``,
+    '4vs4':  ``,
+    'volleyball':  ``,
+    'tennis':  AllOtherDbFiles["tennis"],
+  },
+  vipDbFile: vipDbFile,
+  chatLogDbFile: "./haxball_player_chat_tennis.mpk",
+  roomName: "🍓 TENNIS 1vs1 XxX StrawBeRRy League 🍓",
+  isPublic: true,
+  geo: { code: "it", lat: 40.0, lon: 14.0 },
+  limits: roomLimits,
+  playersInTeamLimit: 1,
+  maxPlayers: 16,
+  maxPlayersOverride: 9,
+  noPlayer: true,
+  autoModeEnabled: true,
+  token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
+  selector: 'tennis',
+  subselector: '1',
+};
+
 function getChatLogDbFile(selector: RoomConfigSelectorType, subselector: string) {
   return `./haxball_player_chat_${selector}_${subselector}.mpk`;
 }
@@ -211,6 +247,7 @@ export const getRoomConfig = (selector: RoomConfigSelectorType, subselector: str
   else if (selector === '1vs1') config = futsal_1vs1;
   else if (selector === 'freestyle') config = futsal_freestyle;
   else if (selector === 'volleyball') config = futsal_volleyball;
+  else if (selector === 'tennis') config = futsal_tennis;
   else throw new Error(`There is no config with name ${selector}`);
   config.chatLogDbFile = getChatLogDbFile(selector, subselector);
   config.subselector = subselector;

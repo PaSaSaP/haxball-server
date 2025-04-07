@@ -439,6 +439,7 @@ export class AutoBot {
     if (this.ranked) {
       const limit = this.limit();
       if (this.hb_room.volleyball.isEnabled()) matchType = 'volleyball';
+      else if (this.hb_room.tennis.isEnabled()) matchType = 'tennis';
       else if (limit === 1) matchType = '1vs1';
       else if (limit === 2) matchType = '2vs2';
       else if (limit === 3) matchType = '3vs3';
@@ -891,6 +892,7 @@ export class AutoBot {
 
   private getMapNameByLimit(limit: number) {
     if (this.hb_room.volleyball.isEnabled()) return "volleyball";
+    if (this.hb_room.tennis.isEnabled()) return "tennis";
     if (limit === 3) return "futsal_big";
     if (limit === 4) return "futsal_huge";
     return "futsal";
@@ -898,6 +900,7 @@ export class AutoBot {
 
   private getScoreTimeLimitMode(limit: number) {
     if (this.hb_room.volleyball.isEnabled()) return "volleyball";
+    if (this.hb_room.tennis.isEnabled()) return "tennis";
     if (limit === 3) return "3vs3";
     if (limit === 4) return "4vs4";
     if (limit === 2) return "2vs2";
@@ -1119,7 +1122,7 @@ export class AutoBot {
     let loserTeamIds = this.currentMatch.getLoserTeamIds();
     let [choserIdx, inFavor] = this.shiftChoserToBottom(loserTeamIds, this.blueTeam);
     // blue plays always first match so keep them in favor
-    if (!this.ranked || this.hb_room.volleyball.isEnabled()) inFavor = [];
+    if (!this.ranked || this.hb_room.volleyball.isEnabled() || this.hb_room.tennis.isEnabled()) inFavor = [];
     if (inFavor.length) this.lastOneMatchLoserTeamIds = loserTeamIds.slice(0, 3);
     this.moveAllBlueToSpec(inFavor, loserTeamIds.slice(3));
   }

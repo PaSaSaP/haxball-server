@@ -39,7 +39,7 @@ import { getBotKickMessage } from './spam_data';
 import { DiscordAccountManager } from './discord_account';
 import { GhostPlayers } from './ghost_players';
 import { Volleyball } from './volleyball';
-import { pid } from 'process';
+import { Tennis } from './tennis';
 
 
 declare global {
@@ -124,6 +124,7 @@ export class HaxballRoom {
   discord_account: DiscordAccountManager;
   ghost_players: GhostPlayers;
   volleyball: Volleyball;
+  tennis: Tennis;
   no_x_for_all: boolean;
   bot_stopping_enabled = false;
   temporarily_trusted: Set<number>;
@@ -204,6 +205,7 @@ export class HaxballRoom {
     this.discord_account = new DiscordAccountManager(this);
     this.ghost_players = new GhostPlayers(this);
     this.volleyball = new Volleyball(this, this.room_config.selector === 'volleyball');
+    this.tennis = new Tennis(this.room_config.selector === 'tennis');
     this.no_x_for_all = false;
     this.temporarily_trusted = new Set();
 
@@ -245,6 +247,7 @@ export class HaxballRoom {
     this.commander = new Commander(this);
     this.default_map_name = 'futsal';
     if (this.room_config.selector === 'volleyball') this.default_map_name = 'volleyball';
+    else if (this.room_config.selector === 'tennis') this.default_map_name = 'tennis';
     this.last_selected_map_name = null;
     this.last_selected_ball = 'vehax';
     this.time_limit_reached = false;
@@ -361,7 +364,7 @@ export class HaxballRoom {
         if (!player.trust_level) return 10; // 10 seconds delay for non trusted
         return 5; // 5 seconds delay for trusted
       } else if (!player.trust_level) {
-        if (this.volleyball.isEnabled()) return 10;
+        if (this.volleyball.isEnabled() || this.tennis.isEnabled()) return 15;
         return 60; // 60 seconds delay for non trusted when more players
       } else return 5; // 5 seconds delay for trusted
     };
@@ -435,6 +438,7 @@ export class HaxballRoom {
     else if (selector === '3vs3_1') selectorSting = '3vs3';
     else if (selector === '1vs1_1') selectorSting = '1vs1';
     else if (selector === 'volleyball_1') selectorSting = 'volleyball';
+    else if (selector === 'tennis_1') selectorSting = 'tennis';
     else if (selector === 'freestyle_1') selectorSting = 'freestyle';
     else return;
     this.game_state.logMessage('God', 'players', JSON.stringify({
@@ -664,9 +668,10 @@ export class HaxballRoom {
     else if (['3', 'fb'].includes(map_name)) map_name = 'futsal_big';
     else if (['4', 'fh'].includes(map_name)) map_name = 'futsal_huge';
     else if (['v', 'volley'].includes(map_name)) map_name = 'volleyball';
+    else if (['t', 'tenis'].includes(map_name)) map_name = 'tennis';
     if (this.last_selected_map_name !== map_name || this.last_selected_ball !== ballPhysics) {
       let next_map = getMap(map_name, bg_color, ball_color);
-      if (!this.volleyball.isEnabled() && this.last_selected_ball !== ballPhysics) {
+      if (!this.volleyball.isEnabled() && !this.tennis.isEnabled() && this.last_selected_ball !== ballPhysics) {
         updateMapPhysics(map_name, next_map, ballPhysics);
         this.last_selected_ball = ballPhysics;
       }

@@ -26,7 +26,7 @@ if (selector == 'freestyle') {
   if (subselector === '1') {
     channelId = '1345435928625156177';
   } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
-} else if (selector == '1vs1') {
+} else if (selector == '1vs1' || selector == 'tennis') {
   if (subselector === '1') {
     channelId = '1358397917853126817';
   } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);
