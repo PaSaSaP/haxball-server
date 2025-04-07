@@ -40,7 +40,7 @@ class HallOfFameCache {
     cache.cache = result;
     cache.lastFetchTime = Date.now();
   }
-  
+
   private async getHofCachedFrom(cache: Cache) {
     if (!cache.cache.length || Date.now() - cache.lastFetchTime > HallOfFameCache.CACHE_DURATION) {
       await this.fetchHallOfFame(cache);
@@ -55,11 +55,13 @@ class HallOfFameCache {
 let cache1vs1 = new HallOfFameCache('1vs1');
 let cache3vs3 = new HallOfFameCache('3vs3');
 let cache4vs4 = new HallOfFameCache('4vs4');
+let cacheTennis = new HallOfFameCache('tennis');
 
 function getCacheObject(selector: GameModeType) {
   if (selector === '1vs1') return cache1vs1.getHofCached();
   if (selector === '3vs3') return cache3vs3.getHofCached();
   if (selector === '4vs4') return cache4vs4.getHofCached();
+  if (selector === 'tennis') return cacheTennis.getHofCached();
   throw new Error(`invalid selector for hall of fame: ${selector}`);
 }
 

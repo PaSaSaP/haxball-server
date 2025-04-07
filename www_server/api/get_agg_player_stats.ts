@@ -1,7 +1,6 @@
 import express, { Request, Response } from "express";
 import sqlite3 from 'sqlite3';
 import * as config from "../../src/config";
-import * as secrets from "../../src/secrets";
 import { getTimestampHM, normalizeNameString } from "../../src/utils";
 import { getAllPlayerNamesCached } from "./private/get_player_names";
 import { PlayerMatchStatsDB } from "../../src/db/player_match_stats";
@@ -25,7 +24,7 @@ interface AggregatedPlayerStat {
 }
 
 interface Cache {
-  which: "1vs1"| "3vs3"|"4vs4";
+  which: "1vs1"| "3vs3"|"4vs4"|'tennis';
   dbFile: string;
   aggregated: Map<number, AggregatedPlayerStat>; // userId -> data
   lastFetchTime: Map<number, number>;
@@ -38,11 +37,13 @@ class AggregatedCache {
   playerStats1vs1Cache: Cache;
   playerStats3vs3Cache: Cache;
   playerStats4vs4Cache: Cache;
+  playerStatsTennisCache: Cache;
   constructor() {
     this.otherDbFiles = config.AllOtherDbFiles;
     this.playerStats1vs1Cache = { which: "1vs1", dbFile: this.otherDbFiles["1vs1"], aggregated: new Map(), lastFetchTime: new Map() };
     this.playerStats3vs3Cache = { which: "3vs3", dbFile: this.otherDbFiles["3vs3"], aggregated: new Map(), lastFetchTime: new Map() };
     this.playerStats4vs4Cache = { which: "4vs4", dbFile: this.otherDbFiles["4vs4"], aggregated: new Map(), lastFetchTime: new Map() };
+    this.playerStatsTennisCache = { which: "tennis", dbFile: this.otherDbFiles["tennis"], aggregated: new Map(), lastFetchTime: new Map() };
   }
 
   async fetchAggregated(cache: Cache, userId: number): Promise<AggregatedPlayerStat|null> {
@@ -51,7 +52,7 @@ class AggregatedCache {
       if (err) console.error('Error opening database:', err.message);
     });
     let playerNamesCache = await getAllPlayerNamesCached();
-    
+
 
     try {
       const playerNameEntry = playerNamesCache.playerEntryById.get(userId)!;
@@ -74,10 +75,10 @@ class AggregatedCache {
       });
       console.log(`(${cache.which}) Got update for player uid: ${userId}, matchId: ${userId}`);
     } catch (e) { console.error(`Error for get player uid ${userId}: ${e}`) };
-  
+
     return cache.aggregated.get(userId)!;
   }
-  
+
   async getAggStatsCached(cache: Cache, userId: number) {
     let agg = cache.aggregated.get(userId);
     if (agg) {
@@ -97,11 +98,16 @@ class AggregatedCache {
   async getAggStats4vs4Cached(userId: number) {
     return await this.getAggStatsCached(this.playerStats4vs4Cache, userId);
   }
+  async getAggStatsTennisCached(userId: number) {
+    return await this.getAggStatsCached(this.playerStatsTennisCache, userId);
+  }
 
   async getAggStatsCachedBySelector(selector: GameModeType, userId: number) {
     if (selector === '1vs1') return await this.getAggStats1vs1Cached(userId);
     if (selector === '3vs3') return await this.getAggStats3vs3Cached(userId);
     if (selector === '4vs4') return await this.getAggStats4vs4Cached(userId);
+    if (selector === 'tennis') return await this.getAggStatsTennisCached(userId);
+    throw new ErrorEvent(`getAggStatsCachedBySelector(), Invalid selector: ${selector}`);
   }
 }
 
@@ -117,9 +123,11 @@ router.get("/by_name/:name", async (req: any, res: any) => {
   try {
     let cachedV3 = await cache.getAggStatsCachedBySelector('3vs3', userId);
     let cachedV4 = await cache.getAggStatsCachedBySelector('4vs4', userId);
+    let cachedTennis = await cache.getAggStatsCachedBySelector('tennis', userId);
     res.json({
       '3vs3': cachedV3,
       '4vs4': cachedV4,
+      'tennis': cachedTennis,
     });
   } catch (e) {
     return res.status(400).send(`Error: ${e}`);
@@ -128,16 +136,17 @@ router.get("/by_name/:name", async (req: any, res: any) => {
 
 router.get("/by_id/:userId", async (req: any, res: any) => {
   const userId: number = Number.parseInt(req.params.userId);
-  let cached = await getAllPlayerNamesCached();
   if (userId === undefined) {
     return res.status(400).send('No data');
   }
   try {
     let cachedV3 = await cache.getAggStatsCachedBySelector('3vs3', userId);
     let cachedV4 = await cache.getAggStatsCachedBySelector('4vs4', userId);
+    let cachedTennis = await cache.getAggStatsCachedBySelector('tennis', userId);
     res.json({
       '3vs3': cachedV3,
       '4vs4': cachedV4,
+      'tennis': cachedTennis,
     });
   } catch (e) {
     return res.status(400).send(`Error: ${e}`);
@@ -163,7 +172,6 @@ router.get("/:selector/by_name/:name", async (req: any, res: any) => {
 router.get("/:selector/by_id/:userId", async (req: any, res: any) => {
   const selector: string = String(req.params.selector);
   const userId: number = Number.parseInt(req.params.userId);
-  let cached = await getAllPlayerNamesCached();
   if (userId === undefined) {
     return res.status(400).send('No data');
   }

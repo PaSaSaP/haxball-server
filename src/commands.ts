@@ -10,6 +10,7 @@ import { hb_log } from "./log";
 import { Emoji } from "./emoji";
 import { AutoBot } from "./auto_mode";
 import { getIpInfoFromMonitoring } from "./ip_info";
+import { Tennis } from "./tennis";
 
 class BaseCommander {
   hb_room: HaxballRoom;
@@ -274,6 +275,9 @@ class Commander extends BaseCommander {
       serve_q: this.commandVolleyballServiceQ,
       serve_e: this.commandVolleyballServiceE,
       ball_g: this.commandVolleyballBallXGravity,
+      tennis_hold: this.commandTennisHoldTime,
+      tennis_match: this.commandTennisMatchTime,
+      discord_logs: this.commandLogsForDiscord,
 
       check_transaction: this.commandCheckPlayerTransaction,
       check_tr: this.commandCheckPlayerTransaction,
@@ -2069,12 +2073,37 @@ class Commander extends BaseCommander {
   }
 
   commandVolleyballBallXGravity(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(playerExt, 'disc_info')) return;
+    if (this.warnIfPlayerIsNotHost(playerExt, 'ball_g')) return;
     const xgravity = Number.parseFloat(cmds[0]);
     if (xgravity > 0 && xgravity < 10) {
       this.hb_room.volleyball.ballXGravity = xgravity;
     }
     this.sendMsgToPlayer(playerExt, `ustawiam volley xgravity na: ${xgravity}`);
+  }
+
+  commandTennisHoldTime(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'tennis_hold')) return;
+    const holdTime = Number.parseInt(cmds[0]);
+    if (holdTime > 0 && holdTime < 60) {
+      this.hb_room.tennis.setMaxTimeHoldingBall(holdTime);
+    }
+    this.sendMsgToPlayer(playerExt, `ustawiam tenis hold time na: ${holdTime} sekund`);
+  }
+
+  commandTennisMatchTime(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'tennis_match')) return;
+    const holdTime = Number.parseInt(cmds[0]);
+    if (holdTime > 0 && holdTime < 60*60) {
+      this.hb_room.tennis.setMaxTimeForMatch(holdTime);
+    }
+    this.sendMsgToPlayer(playerExt, `ustawiam tenis match time na: ${holdTime} sekund`);
+  }
+
+  commandLogsForDiscord(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'discord_logs')) return;
+    const newState = toBoolean(cmds[0]);
+    this.hb_room.logs_to_discord = newState;
+    this.sendMsgToPlayer(playerExt, `ustawiam logs to discord na: ${newState}`);
   }
 
   commandAutoAfkOn(playerExt: PlayerData, cmds: string[]) {

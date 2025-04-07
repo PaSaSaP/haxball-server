@@ -4,13 +4,14 @@ import { MatchEntry, MatchesDB } from "../../../src/db/matches";
 import * as config from "../../../src/config";
 import * as secrets from "../../../src/secrets";
 import { getTimestampHM } from "../../../src/utils";
+import { GameModeType } from "../../../src/structs";
 
 const router = express.Router();
 
 //               matchId, date,   durati, full_ti, winner, red_sc, blu_sc, pressu, possession
 type CacheData = [number, string, number, boolean, number, number, number, number, number];
 interface Cache {
-  which: "1vs1"|"3vs3"|"4vs4";
+  which: "1vs1"|"3vs3"|"4vs4"|"tennis";
   dbFile: string;
   matches: MatchEntry[];
   matchByMatchId: Map<number, MatchEntry>;
@@ -28,6 +29,10 @@ let matches3vs3Cache: Cache = {
 };
 let matches4vs4Cache: Cache = {
   which: "4vs4", dbFile: config.AllOtherDbFiles["4vs4"], matches: [],
+  matchByMatchId: new Map<number, MatchEntry>(), cache: [], lastMatchId: -1, lastFetchTime: 0
+};
+let matchesTennisCache: Cache = {
+  which: "tennis", dbFile: config.AllOtherDbFiles["tennis"], matches: [],
   matchByMatchId: new Map<number, MatchEntry>(), cache: [], lastMatchId: -1, lastFetchTime: 0
 };
 
@@ -111,11 +116,15 @@ async function getMatches3vs3Cached() {
 async function getMatches4vs4Cached() {
   return await getMatchesCached(matches4vs4Cache);
 }
+async function getMatchesTennisCached() {
+  return await getMatchesCached(matchesTennisCache);
+}
 
 function getCacheBySelector(selector: string) {
   if (selector === '1vs1') return getMatches1vs1Cached();
   if (selector === '3vs3') return getMatches3vs3Cached();
   if (selector === '4vs4') return getMatches4vs4Cached();
+  if (selector === 'tennis') return getMatchesTennisCached();
   throw new Error(`getCacheBySelecor() matches invalid selector: ${selector}`);
 }
 
@@ -133,119 +142,83 @@ function verify(req: Request, res: Response) {
   return true;
 }
 
-router.get("/1vs1", async (req: any, res: any) => {
+async function getCacheObject(selector: GameModeType) {
+  return getCacheBySelector(selector);
+}
+
+router.get("/:selector", async (req: any, res: any) => {
   if (!verify(req, res)) return;
-  let cached = await getMatches1vs1Cached();
-  res.json(cached.cache);
+  try {
+    const selector = String(req.params.selector);
+    let cached = await getCacheObject(selector as GameModeType);
+    res.json(cached.cache);
+  } catch (e) {
+    console.error(`Error int get_matches by selector: ${e}`);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
-router.get("/3vs3", async (req: any, res: any) => {
+router.get("/:selector/id/:matchId", async (req: any, res: any) => {
   if (!verify(req, res)) return;
-  let cached = await getMatches3vs3Cached();
-  res.json(cached.cache);
+  try {
+    const selector = String(req.params.selector);
+    const matchId = Number(req.params.matchId);
+    let cached = await getCacheObject(selector as GameModeType);
+    let m = cached.matchByMatchId.get(matchId as number);
+    if (!m) return res.json([]);
+    res.json(matchToArray(m));
+  } catch (e) {
+    console.error(`Error int get_matches by selector/id/matchId: ${e}`);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
-router.get("/4vs4", async (req: any, res: any) => {
+router.get("/:selector/from/:matchId", async (req: any, res: any) => {
   if (!verify(req, res)) return;
-  let cached = await getMatches4vs4Cached();
-  res.json(cached.cache);
+  try {
+    const selector = String(req.params.selector);
+    const matchId = Number(req.params.matchId);
+    let cached = await getCacheObject(selector as GameModeType);
+    let selected = getCacheDataFromMatchId(cached, matchId);
+    res.json(selected);
+  } catch (e) {
+    console.error(`Error int get_matches by selector/from/matchId: ${e}`);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
-router.get("/1vs1/id/:matchId", async (req: any, res: any) => {
+router.get("/:selector/by/:day", async (req: any, res: any) => {
   if (!verify(req, res)) return;
-  const matchId = Number(req.params.matchId);
-  let cached = await getMatches1vs1Cached();
-  let m = cached.matchByMatchId.get(matchId as number);
-  if (!m) return res.json([]);
-  res.json(matchToArray(m));
+  try {
+    const selector = String(req.params.selector);
+    const day = String(req.params.day);
+    let cached = await getCacheObject(selector as GameModeType);
+    let selected = getCacheDataByDate(cached, day);
+    console.log(`matches 1vs1 by ${day} = ${selected.length}`)
+    res.json(selected);
+  } catch (e) {
+    console.error(`Error int get_matches by selector/by/day: ${e}`);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
-router.get("/3vs3/id/:matchId", async (req: any, res: any) => {
+router.get("/:selector/first_match_id", async (req: any, res: any) => {
   if (!verify(req, res)) return;
-  const matchId = Number(req.params.matchId);
-  let cached = await getMatches3vs3Cached();
-  let m = cached.matchByMatchId.get(matchId as number);
-  if (!m) return res.json([]);
-  res.json(matchToArray(m));
+  try {
+    const selector = String(req.params.selector);
+    let cached = await getCacheObject(selector as GameModeType);
+    res.json({ match_id: cached.matches.at(0)?.match_id ?? 0 });
+  } catch (e) {
+    console.error(`Error int get_matches first_match_id: ${e}`);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
-router.get("/4vs4/id/:matchId", async (req: any, res: any) => {
+router.get("/:selector/last_match_id", async (req: any, res: any) => {
   if (!verify(req, res)) return;
-  const matchId = Number(req.params.matchId);
-  let cached = await getMatches4vs4Cached();
-  let m = cached.matchByMatchId.get(matchId as number);
-  if (!m) return res.json([]);
-  res.json(matchToArray(m));
-});
-router.get("/1vs1/from/:matchId", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  const matchId = Number(req.params.matchId);
-  let cached = await getMatches1vs1Cached();
-  let selected = getCacheDataFromMatchId(cached, matchId);
-  res.json(selected);
-});
-router.get("/3vs3/from/:matchId", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  const matchId = Number(req.params.matchId);
-  let cached = await getMatches3vs3Cached();
-  let selected = getCacheDataFromMatchId(cached, matchId);
-  res.json(selected);
-});
-router.get("/4vs4/from/:matchId", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  const matchId = Number(req.params.matchId);
-  let cached = await getMatches4vs4Cached();
-  let selected = getCacheDataFromMatchId(cached, matchId);
-  res.json(selected);
-});
-router.get("/1vs1/by/:day", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  const day = String(req.params.day);
-  let cached = await getMatches1vs1Cached();
-  let selected = getCacheDataByDate(cached, day);
-  console.log(`matches 1vs1 by ${day} = ${selected.length}`)
-  res.json(selected);
-});
-router.get("/3vs3/by/:day", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  const day = String(req.params.day);
-  let cached = await getMatches3vs3Cached();
-  let selected = getCacheDataByDate(cached, day);
-  console.log(`matches 3vs3 by ${day} = ${selected.length}`)
-  res.json(selected);
-});
-router.get("/4vs4/by/:day", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  const day = String(req.params.day);
-  let cached = await getMatches4vs4Cached();
-  let selected = getCacheDataByDate(cached, day);
-  console.log(`matches 4vs4 by ${day} = ${selected.length}`)
-  res.json(selected);
-});
-router.get("/1vs1/first_match_id", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  let cached = await getMatches1vs1Cached();
-  res.json({match_id: cached.matches.at(0)?.match_id ?? 0});
-});
-router.get("/3vs3/first_match_id", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  let cached = await getMatches3vs3Cached();
-  res.json({match_id: cached.matches.at(0)?.match_id ?? 0});
-});
-router.get("/4vs4/first_match_id", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  let cached = await getMatches4vs4Cached();
-  res.json({match_id: cached.matches.at(0)?.match_id ?? 0});
-});
-router.get("/1vs1/last_match_id", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  let cached = await getMatches1vs1Cached();
-  res.json({match_id: cached.matches.at(cached.matches.length-1)?.match_id ?? -1});
-});
-router.get("/3vs3/last_match_id", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  let cached = await getMatches3vs3Cached();
-  res.json({match_id: cached.matches.at(cached.matches.length-1)?.match_id ?? -1});
-});
-router.get("/4vs4/last_match_id", async (req: any, res: any) => {
-  if (!verify(req, res)) return;
-  let cached = await getMatches4vs4Cached();
-  res.json({match_id: cached.matches.at(cached.matches.length-1)?.match_id ?? -1});
+  try {
+    const selector = String(req.params.selector);
+    let cached = await getCacheObject(selector as GameModeType);
+    res.json({ match_id: cached.matches.at(cached.matches.length - 1)?.match_id ?? -1 });
+  } catch (e) {
+    console.error(`Error int get_matches last_match_id: ${e}`);
+    res.status(500).json({ error: "An error occurred" });
+  }
 });
 
 export const getFirstMatchId1vs1 = () => {
@@ -256,5 +229,8 @@ export const getFirstMatchId3vs3 = () => {
 }
 export const getFirstMatchId4vs4 = () => {
   return matches4vs4Cache.matches.at(0)?.match_id ?? 0;
+}
+export const getFirstMatchIdTennis = () => {
+  return matchesTennisCache.matches.at(0)?.match_id ?? 0;
 }
 export default router;

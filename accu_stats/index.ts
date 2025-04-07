@@ -21,7 +21,7 @@ if (!process.env.HX_SELECTOR) throw new Error("HX_SELECTOR is not set");
 const selector = process.env.HX_SELECTOR;
 
 console.log('HX_SELECTOR:', process.env.HX_SELECTOR);
-if (!['1vs1', '3vs3', '4vs4'].includes(selector)) {
+if (!['1vs1', '3vs3', '4vs4', 'tennis'].includes(selector)) {
   throw new Error(`Invalid HX_SELECTOR: ${selector}`);
 }
 console.log(`${getTimestampHM()} Zaczynamy akumulowanie!`);

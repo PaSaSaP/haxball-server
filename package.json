@@ -31,6 +31,7 @@
     "monitoring_build": "taskset -c 1 npx tsc -p monitoring/tsconfig.json",
     "monitoring": "node dist/monitoring/monitoring/index.js",
     "accu_stats_build": "taskset -c 1 npx tsc -p accu_stats/tsconfig.json",
+    "accu_stats_tennis": "HX_SELECTOR=tennis nice -n 19 node dist/accu_stats/accu_stats/index.js",
     "accu_stats_1vs1": "HX_SELECTOR=1vs1 nice -n 19 node dist/accu_stats/accu_stats/index.js",
     "accu_stats_3vs3": "HX_SELECTOR=3vs3 nice -n 19 node dist/accu_stats/accu_stats/index.js",
     "accu_stats_4vs4": "HX_SELECTOR=4vs4 nice -n 19 node dist/accu_stats/accu_stats/index.js",

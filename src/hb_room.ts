@@ -128,8 +128,8 @@ export class HaxballRoom {
   no_x_for_all: boolean;
   bot_stopping_enabled = false;
   temporarily_trusted: Set<number>;
-
   game_tick_array: number[];
+  logs_to_discord: boolean;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -205,11 +205,11 @@ export class HaxballRoom {
     this.discord_account = new DiscordAccountManager(this);
     this.ghost_players = new GhostPlayers(this);
     this.volleyball = new Volleyball(this, this.room_config.selector === 'volleyball');
-    this.tennis = new Tennis(this.room_config.selector === 'tennis');
+    this.tennis = new Tennis(this, this.room_config.selector === 'tennis');
     this.no_x_for_all = false;
     this.temporarily_trusted = new Set();
-
     this.game_tick_array = [];
+    this.logs_to_discord = true;
 
     this.ratings.isEnabledPenaltyFor = (playerId: number) => {
       let playerExt = this.Pid(playerId);
@@ -590,9 +590,11 @@ export class HaxballRoom {
     }
     this.acceleration_tasks.update();
     this.ball_possesion_tracker.trackPossession(currentMatchTime, ball_position, players);
+    let distances = this.ball_possesion_tracker.getDistances();
     if (this.auto_mode) this.auto_bot.handleGameTick(scores);
     this.volleyball.handleGameTick(currentTime, ball_position);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(players);
+    this.tennis.handleGameTick(currentTime, scores, ball_position, redTeam, blueTeam, distances);
     this.match_stats.handleGameTick(scores, ball_position, this.players_ext_all, redTeam, blueTeam);
     this.ghost_players.handleGameTick(scores, redTeam, blueTeam);
     this.rejoice_maker.handleGameTick();
@@ -722,6 +724,7 @@ export class HaxballRoom {
     this.ball_possesion_tracker.resetPossession();
     if (this.auto_mode) this.auto_bot.handleGameStart(null);
     this.volleyball.handleGameStart();
+    this.tennis.handleGameStart();
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
     this.matchStatsTimer = setTimeout(() => {
       this.matchStatsTimer = null;
@@ -732,7 +735,7 @@ export class HaxballRoom {
           + `${anyPlayerProperties?.damping} ${ballProperties?.radius} ${ballProperties?.damping}`);
       }
       this.match_stats.handleGameStart(anyPlayerProperties, ballProperties, redTeam, blueTeam, this.players_ext);
-      this.ball_possesion_tracker.updateRadius(anyPlayerProperties, ballProperties);
+      this.ball_possesion_tracker.updateRadius(anyPlayerProperties, ballProperties, this.tennis.isEnabled()? 9: 6.5);
     }, 1000);
     this.ghost_players.handleGameStart();
     this.kickLongAfkingPlayers();
@@ -1483,6 +1486,9 @@ export class HaxballRoom {
     if (this.volleyball.isEnabled()) {
       let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
       this.volleyball.handlePlayerBallKick(this.current_time, this.Pid(player.id), redTeam, blueTeam);
+    } else if (this.tennis.isEnabled()) {
+      let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
+      this.tennis.handlePlayerBallKick(this.current_time, this.Pid(player.id), redTeam, blueTeam);
     }
   }
 
@@ -1490,6 +1496,7 @@ export class HaxballRoom {
     this.ball_possesion_tracker.onTeamGoal(team);
     if (this.auto_mode) this.auto_bot.handleTeamGoal(team);
     this.volleyball.handleTeamGoal(team);
+    this.tennis.handleTeamGoal(team);
     const ballProperties = this.getBallProperties();
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
     if (team) {
@@ -1655,6 +1662,7 @@ export class HaxballRoom {
   async handlePositionsReset() {
     if (this.auto_mode) this.auto_bot.handlePositionsReset();
     this.volleyball.handlePositionsReset();
+    this.tennis.handlePositionsReset();
     this.match_stats.handlePositionsReset();
     this.rejoice_maker.handlePositionsReset();
     this.players_ext.forEach(p => {
@@ -1706,7 +1714,7 @@ export class HaxballRoom {
 
       message = message.substring(1);
       let message_split = message.split(" ");
-      let command = message_split[0];
+      let command = message_split[0].toLowerCase();
       this.executeCommand(command, playerExt, message_split.slice(1).filter(e => e));
       return; // Returning false will prevent the message from being broadcasted
     }
@@ -1738,7 +1746,7 @@ export class HaxballRoom {
         this.sendMessageToSameTeam(playerExt, message.slice(2));
         return userLogMessage(false);
       }
-      userLogMessage(message.length > 2);
+      userLogMessage(this.logs_to_discord && message.length > 2);
       if (playerExt.discord_user && playerExt.discord_user.state) {
         this.sendMessageToAllWithIgnoreList(playerExt, `${playerExt.flag}${Emoji.UserVerified}${playerExt.name}: ${message}`, message, playerExt.discord_user.chat_color, 1);
         return;

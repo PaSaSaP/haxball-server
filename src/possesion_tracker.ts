@@ -1,26 +1,45 @@
 import { PlayerData } from "./structs";
 
-export class BallPossessionTracker {
-  lastPossession: number | null;
-  possessionStartTime: number;
-  // possessionTime: { "1": number, "2": number };
-  possessionTime: Record<number, number>;
-  lastTouchTeam: number | null;
+export interface Distances {
   ballRadius: number;
   playerRadius: number;
+  rangeSq: number;
+  touchingSq: number;
+  distances: [number, number][];
+}
+
+export class BallPossessionTracker {
+  private lastPossession: number | null;
+  private possessionStartTime: number;
+  private possessionTime: Record<number, number>;
+  private lastTouchTeam: number | null;
+  private distances: Distances;
   constructor() {
     this.lastPossession = null; // 1 dla czerwonych, 2 dla niebieskich, null jeśli brak
     this.possessionStartTime = 0; // Czas, od którego liczymy posiadanie
     this.possessionTime = { 1: 0, 2: 0 }; // Czas posiadania dla każdej drużyny
     this.lastTouchTeam = null; // Ostatnia drużyna, która kopnęła piłkę
 
-    this.ballRadius = 6.5;
-    this.playerRadius = 15;
+    this.distances = {
+      ballRadius: 6.5,
+      playerRadius: 15,
+      rangeSq: 0,
+      touchingSq: 0,
+      distances: [],
+    };
+    this.distances.rangeSq = (this.distances.playerRadius + this.distances.ballRadius) ** 2; // Kwadrat maksymalnego zasięgu
+    this.distances.touchingSq = ((this.distances.playerRadius + this.distances.ballRadius) / 2 + 0.1) ** 2; // Kwadrat minimalnego zasięgu
   }
 
-  updateRadius(anyPlayerProperties: DiscPropertiesObject | null, ballProperties: DiscPropertiesObject | null) {
-    this.ballRadius = ballProperties?.radius ?? 6.5;
-    this.playerRadius = anyPlayerProperties?.radius ?? 15;
+  getDistances() {
+    return this.distances;
+  }
+
+  updateRadius(anyPlayerProperties: DiscPropertiesObject | null, ballProperties: DiscPropertiesObject | null, ballDefault: number = 6.5) {
+    this.distances.ballRadius = ballProperties?.radius ?? ballDefault;
+    this.distances.playerRadius = anyPlayerProperties?.radius ?? 15;
+    this.distances.rangeSq = (this.distances.playerRadius + this.distances.ballRadius) ** 2;
+    this.distances.touchingSq = (this.distances.playerRadius + this.distances.ballRadius + 0.02) ** 2;
   }
 
   trackPossession(currentMatchTime: number, ballPos: {x: number, y: number}, players: PlayerData[]) {
@@ -32,8 +51,8 @@ export class BallPossessionTracker {
 
     // Zmienna do określenia, czy piłka jest wystarczająco blisko gracza, by ją przejął
     let playerPossessionChange = false;
-    const rangeSq = (this.playerRadius + this.ballRadius) ** 2; // Kwadrat maksymalnego zasięgu
 
+    this.distances.distances.length = 0;
     // Wyszukiwanie najbliższego gracza
     for (const player of players) {
       if (!player.team || !player.position) continue;
@@ -43,14 +62,16 @@ export class BallPossessionTracker {
       const distanceSq = dx * dx + dy * dy; // Kwadrat odległości
 
       // Sprawdzamy, czy gracz jest w zasięgu piłki (sumujemy promienie gracza i piłki)
-      if (distanceSq <= rangeSq) {
+      if (distanceSq <= this.distances.rangeSq) {
         playerPossessionChange = true; // Gracz może przejąć piłkę
         if (distanceSq < minDistance) {
           minDistance = distanceSq;
           closestPlayer = player;
         }
       }
+      this.distances.distances.push([player.id, distanceSq]); // Zapisujemy odległość gracza od piłki
     }
+    this.distances.distances.sort((a, b) => a[1] - b[1]); // Sortujemy odległości rosnąco
 
     // Jeżeli posiadanie jeszcze nie zostało przypisane, a mecz się dopiero zaczyna
     if (this.lastPossession === null && closestPlayer) {
@@ -77,6 +98,7 @@ export class BallPossessionTracker {
     this.lastPossession = null;
     this.possessionStartTime = 0; // Resetujemy czas początkowy
     this.lastTouchTeam = null; // Resetujemy ostatnią drużynę, która kopnęła piłkę
+    this.distances.distances = []; // Resetujemy odległości
   }
 
   // Funkcja zwracająca czas posiadania danej drużyny

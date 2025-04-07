@@ -555,6 +555,27 @@ services:
     user: node
     working_dir: /src
     entrypoint: npm run accu_stats_1vs1
+  accu-stats-tennis:
+    image: ghcr.io/puppeteer/puppeteer
+    volumes:
+      - .:/src
+      - /mnt/sqlite_ram/db:/src/db
+    environment:
+      - TZ=Europe/Warsaw
+      - NODE_TZ=Europe/Warsaw
+      - HX_ROOM_CONFIG_SELECTOR=tennis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 500M
+    memswap_limit: 1G
+    mem_swappiness: 90
+    networks:
+      - app_network
+    user: node
+    working_dir: /src
+    entrypoint: npm run accu_stats_tennis
   ssh-proxy:
     image: ghcr.io/puppeteer/puppeteer
     volumes:

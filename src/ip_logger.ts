@@ -19,7 +19,7 @@ export class PlayerJoinLogger {
     this.positions = new Map();
     this.monitoredPlayers = [];
     this.ballPositions = [];
-    if (this.hbRoom.room_config.selector === '3vs3') this.positionsEnabled = true;
+    if (this.hbRoom.room_config.selector === '3vs3' || this.hbRoom.room_config.selector === 'tennis') this.positionsEnabled = true;
   }
 
   r() {

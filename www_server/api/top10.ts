@@ -75,38 +75,32 @@ class Top10Cache {
 
 let cache3vs3 = new Top10Cache('3vs3');
 let cache4vs4 = new Top10Cache('4vs4');
+let cacheTennis = new Top10Cache('tennis');
 
-export async function getGlobalPlayersRankCached(selector: GameModeType) {
+function getCacheObject(selector: GameModeType) {
   if (selector === '3vs3') {
-    return await cache3vs3.getGlobalRankCached();
+    return cache3vs3;
   } else if (selector === '4vs4') {
-    return await cache4vs4.getGlobalRankCached();
+    return cache4vs4;
+  } else if (selector === 'tennis') {
+    return cacheTennis;
   } else {
     throw new Error(`Invalid selector: ${selector}`);
   }
+}
+
+export async function getGlobalPlayersRankCached(selector: GameModeType) {
+  return getCacheObject(selector).getGlobalRankCached();
 }
 
 export async function getWeeklyPlayersRankCached(selector: GameModeType) {
-  if (selector === '3vs3') {
-    return await cache3vs3.getWeeklyRankCached();
-  } else if (selector === '4vs4') {
-    return await cache4vs4.getWeeklyRankCached();
-  } else {
-    throw new Error(`Invalid selector: ${selector}`);
-  }
+  return getCacheObject(selector).getWeeklyRankCached();
 }
 
 export async function getDailyPlayersRankCached(selector: GameModeType) {
-  if (selector === '3vs3') {
-    return await cache3vs3.getDailyRankCached();
-  } else if (selector === '4vs4') {
-    return await cache4vs4.getDailyRankCached();
-  } else {
-    throw new Error(`Invalid selector: ${selector}`);
-  }
+  return getCacheObject(selector).getDailyRankCached();
 }
 
-// 3vs3
 router.get("/:selector", async (req, res) => {
   try {
     const selector = String(req.params.selector);
@@ -162,8 +156,6 @@ router.get("/:selector/daily", async (req, res) => {
     console.error("Error fetching daily rank:", err);
     res.status(500).json({ error: "An error occurred" });
   }
-  let cached = await cache3vs3.getDailyRankCached();
-  res.json(cached.cache.slice(0, 10));
 });
 
 router.get("/:selector/daily/:num", async (req: any, res: any) => {
