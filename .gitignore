@@ -140,6 +140,7 @@ dynamic/
 db/
 db_files/
 bots/merged/
+recordings/
 !src/db
 .remove_me_to_restart_container
 players.json

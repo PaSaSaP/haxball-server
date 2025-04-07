@@ -277,6 +277,7 @@ class Commander extends BaseCommander {
       ball_g: this.commandVolleyballBallXGravity,
       tennis_hold: this.commandTennisHoldTime,
       tennis_match: this.commandTennisMatchTime,
+      recording: this.commandForceRecording,
       discord_logs: this.commandLogsForDiscord,
 
       check_transaction: this.commandCheckPlayerTransaction,
@@ -2097,6 +2098,13 @@ class Commander extends BaseCommander {
       this.hb_room.tennis.setMaxTimeForMatch(holdTime);
     }
     this.sendMsgToPlayer(playerExt, `ustawiam tenis match time na: ${holdTime} sekund`);
+  }
+
+  commandForceRecording(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'recording')) return;
+    const newState = toBoolean(cmds[0]);
+    this.hb_room.force_recording_enabled = newState;
+    this.sendMsgToPlayer(playerExt, `ustawiam force recording na: ${newState}`);
   }
 
   commandLogsForDiscord(playerExt: PlayerData, cmds: string[]) {

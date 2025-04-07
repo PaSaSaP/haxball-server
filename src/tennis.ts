@@ -75,7 +75,7 @@ export class Tennis {
     }
 
     if (this.ballState === BallState.reset && this.lastBallPosition.x === 0 && ballPosition.x !== 0) {
-      // TNLog(`Ball position changed from ${this.lastBallPosition.x} to ${ballPosition.x}`);
+      TNLog(`Ball position changed from ${this.lastBallPosition.x} to ${ballPosition.x}`);
       this.ballInTeam = ballPosition.x < 0 ? 1 : 2;
       this.ballInTeamFromTime = scores.time;
       // this.lastTouchTime = scores.time;
@@ -84,6 +84,7 @@ export class Tennis {
     } else if (this.ballInTeamFromTime > 0 && scores.time - this.ballInTeamFromTime > Tennis.MaxTimeHoldingBall) {
       this.hbRoom.sendMsgToAll("❌ Kara! Zbyt długie przetrzymywanie piłki podczas gry!",
         Colors.LightRed, 'bold');
+      this.ballInTeam = ballPosition.x < 0 ? 1 : 2;
       TNLog(`Kara dla drużyny ${this.ballInTeam} za przetrzymywanie piłki!`);
       this.givePenalty(this.ballInTeam);
       this.ballInTeamFromTime = 0;
@@ -105,23 +106,23 @@ export class Tennis {
         if (this.ballState === BallState.kicked) {
           this.ballState = BallState.movingFromPlayer;
           this.lastTouchTime = scores.time;
-          // TNLog(`ballState kicked => movingFromPlayer(${closestPlayerId})`);
+          TNLog(`ballState kicked => movingFromPlayer(${closestPlayerId})`);
         } else if (this.ballState === BallState.movingFromPlayer) {
           if (closestDistanceSq > distances.touchingSq) {
             this.ballState = BallState.inGame;
-            // TNLog(`ballState movingFromPlayer => inGame(${closestPlayerId})`);
+            TNLog(`ballState movingFromPlayer => inGame(${closestPlayerId})`);
           } else if (closestDistanceSq < this.lastTouchingSq && scores.time - this.lastTouchTime > 0.2) {
             this.ballState = BallState.movingToPlayer;
-            // TNLog(`ballState movingFromPlayer => movingToPlayer(${closestPlayerId})`);
+            TNLog(`ballState movingFromPlayer => movingToPlayer(${closestPlayerId})`);
           }
         } else if (this.ballState === BallState.movingToPlayer) {
           if (this.lastTouchingSq < distances.touchingSq && closestDistanceSq > this.lastTouchingSq) {
             this.ballState = BallState.kicked;
-            // TNLog(`ballState movingToPlayer => kicked(${closestPlayerId}), ballInTeam(${this.ballInTeam}) totalTouches(${this.totalTouchesInTeam}) lastPlayer(${this.lastTouchByPlayerId})`);
+            TNLog(`ballState movingToPlayer => kicked(${closestPlayerId}), ballInTeam(${this.ballInTeam}) totalTouches(${this.totalTouchesInTeam}) lastPlayer(${this.lastTouchByPlayerId})`);
             const redPlayer = redTeam.includes(closestPlayerId);
             const bluePlayer = !redPlayer;
             if ((this.ballInTeam === 1 && bluePlayer) || (this.ballInTeam === 2 && redPlayer)) {
-              // TNLog(`Drużyna ${this.ballInTeam} (${this.lastTouchByPlayerId}) dotknęła piłkę, piłka po stronie przeciwnika!`);
+              TNLog(`Drużyna ${this.ballInTeam} (${this.lastTouchByPlayerId}) dotknęła piłkę, piłka po stronie przeciwnika!`);
               this.totalTouchesInTeam = 0;
               this.ballInTeam = redPlayer ? 1 : 2;
               this.ballInTeamFromTime = scores.time;
@@ -139,7 +140,7 @@ export class Tennis {
         } else if (this.ballState === BallState.inGame) {
           if (closestDistanceSq < distances.touchingSq) {
             this.ballState = BallState.movingToPlayer;
-            // TNLog(`ballState inGame => movingToPlayer(${closestPlayerId})`);
+            TNLog(`ballState inGame => movingToPlayer(${closestPlayerId})`);
           }
         }
 
@@ -181,11 +182,12 @@ export class Tennis {
 
   handlePlayerBallKick(currentTime: number, player: PlayerData, redTeam: number[], blueTeam: number[]) {
     if (!this.isEnabled()) return;
+    if (this.ballState === BallState.reset) return;
     TNLog(`Player ${player.name} kicked the ball!`);
     if (player.team === 0) return;
     if (this.lastTouchByPlayerId === player.id) {
       TNLog(`Player ${player.name} kicked the ball again!`);
-      this.hbRoom.sendMsgToAll("❌ Kara! Zbyt wiele dotknięć piłki w drużynie!",
+      this.hbRoom.sendMsgToAll(`❌ Kara! ${player.name} drugi raz próbuje przebić piłkę na połowę przeciwnika!`,
         Colors.LightRed, 'bold');
       this.givePenalty(player.team);
       this.totalTouchesInTeam = 0;

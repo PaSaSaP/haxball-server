@@ -40,6 +40,7 @@ import { DiscordAccountManager } from './discord_account';
 import { GhostPlayers } from './ghost_players';
 import { Volleyball } from './volleyball';
 import { Tennis } from './tennis';
+import { Recording } from './recording';
 
 
 declare global {
@@ -130,6 +131,8 @@ export class HaxballRoom {
   temporarily_trusted: Set<number>;
   game_tick_array: number[];
   logs_to_discord: boolean;
+  recording: Recording;
+  force_recording_enabled: boolean;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -210,6 +213,8 @@ export class HaxballRoom {
     this.temporarily_trusted = new Set();
     this.game_tick_array = [];
     this.logs_to_discord = true;
+    this.recording = new Recording(this, './recordings', true);
+    this.force_recording_enabled = false;
 
     this.ratings.isEnabledPenaltyFor = (playerId: number) => {
       let playerExt = this.Pid(playerId);
@@ -707,6 +712,7 @@ export class HaxballRoom {
     this.game_tick_array = [];
     this.pinger.stop();
     this.pl_logger.handleGameStart();
+    this.recording.handleGameStart(true);
     this.last_winner_team = 0;
     this.time_limit_reached = false;
     this.resetPressureStats();
@@ -795,6 +801,8 @@ export class HaxballRoom {
     this.rejoice_maker.handleGameStop();
     this.gatekeeper.handleGameStop();
     this.ghost_players.handleGameStop();
+    const recorded = this.recording.handleGameStop(this.auto_bot.isRanked() || this.force_recording_enabled);
+    const recFilename = recorded ? this.recording.getFilename() : '';
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
     }
@@ -817,7 +825,7 @@ export class HaxballRoom {
       let matchPlayerStats = this.match_stats.updatePlayerStats(this.players_ext_all, fullTimeMatchPlayed);
       if (matchPlayerStats.size) {
         if (this.auto_mode) this.updatePlayerLeftState(matchPlayerStats, currentMatch);
-        this.updateAccumulatedPlayerStats(matchPlayerStats, currentMatch, fullTimeMatchPlayed);
+        this.updateAccumulatedPlayerStats(matchPlayerStats, currentMatch, fullTimeMatchPlayed, recFilename);
         if (this.auto_mode) currentMatch.matchStatsState = MatchStatsProcessingState.updated;
       }
     }
@@ -878,7 +886,8 @@ export class HaxballRoom {
     return this.room_config.selector;
   }
 
-  async updateAccumulatedPlayerStats(matchPlayerStats: Map<number, PlayerMatchStatsData>, currentMatch: Match, fullTimeMatchPlayed: boolean) {
+  async updateAccumulatedPlayerStats(matchPlayerStats: Map<number, PlayerMatchStatsData>, currentMatch: Match,
+    fullTimeMatchPlayed: boolean, recFilename: string) {
     const selector = this.getSelectorFromMatch(currentMatch);
     hb_log(`Aktualizujemy accumulated match stats dla ${matchPlayerStats.size} selector: ${selector}`);
     let updatedAuthIds: Set<string> = new Set<string>();
@@ -903,7 +912,10 @@ export class HaxballRoom {
     if (this.auto_mode) {
       hb_log(`Aktualizujemy match player stats dla ${matchPlayerStats.size}`);
       this.game_state.insertNewMatch(selector, currentMatch, fullTimeMatchPlayed).then((matchId) => {
-        if (matchId >= -1) currentMatch.matchId = matchId;
+        if (matchId >= -1) {
+          currentMatch.matchId = matchId;
+          this.recording.linkMatch(recFilename, matchId);
+        }
         hb_log(`inserted new match with matchId=${matchId}/${currentMatch.matchId} for ${selector}`);
         for (let authId of updatedAuthIds) {
           let sId = this.player_stats_auth.get(authId)!;

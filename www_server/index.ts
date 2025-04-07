@@ -12,6 +12,7 @@ import apiGetMatchAggStats from './api/get_agg_match_stats';
 import apiGetPlayerAggStats from './api/get_agg_player_stats';
 import apiGetHallOfFame from './api/get_hall_of_fame';
 import apiGetServersTimeline from './api/get_servers_timeline';
+import apiGetMatchRecording from './api/get_match_recording';
 import stripeRedirect from './api/stripe_redirect';
 import apiLogin from './api/login';
 import apiSaveToken from './api/save_token';
@@ -39,6 +40,7 @@ app.use("/api/match_agg_stats", apiGetMatchAggStats);
 app.use("/api/player_agg_stats", apiGetPlayerAggStats);
 app.use("/api/hall_of_fame", apiGetHallOfFame);
 app.use("/api/servers_timeline", apiGetServersTimeline);
+app.use("/api/download/match", apiGetMatchRecording);
 
 app.use("/api/login", apiLogin);
 app.use("/api/save_token", apiSaveToken);
