@@ -74,6 +74,10 @@ declare class RoomObject {
 
     clearGhostPlayers(): void;
 
+    startMonitorInput(playerId: number): void;
+
+    endMonitorInput(playerId: number): [number, number][];
+
     setDiscProperties(discIndex: number, properties: Partial<DiscPropertiesObject>): void;
 
     getDiscProperties(discIndex: number): DiscPropertiesObject;

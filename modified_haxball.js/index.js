@@ -42,13 +42,13 @@ const onHBLoaded = function(cb) {
 
   const AvatarMaxLength = 2; // Argh, no effect :(
   global.CurrentTime = 0;
-  global.PlayerNoX = new Set();
   global.PlayerAvatarOneTime = new Set();
   global.PlayerIsSpec = new Set();
   // global.PlayerGhost = new Map();
   // global.PlayerGhostInput = new Map();
   global.PlayerInput = new Map();
   global.TimeoutForX = 500;
+  global.MonitorPlayerInput = new Map();
   function ActionLog(txt) {
     console.log(`#ACTION# ${txt}`);
   }
@@ -3057,14 +3057,20 @@ const onHBLoaded = function(cb) {
             if (h) {
               // h.noX = n;
               if (n) {
-                global.PlayerNoX.add(h);
                 global.PlayerInput.get(h).no_x = true;
               } else {
-                global.PlayerNoX.delete(h);
                 global.PlayerInput.get(h).no_x = false;
               }
               ActionLog(`setPlayerNoX ${h} = ${n}`);
             }
+          },
+          startMonitorInput: function (h) {
+            global.MonitorPlayerInput.set(h, []);
+          },
+          endMonitorInput: function (h) {
+            let v = global.MonitorPlayerInput.get(h);
+            global.MonitorPlayerInput.delete(h);
+            return v;
           },
           setGhostPlayer: function (h, n) {
             if (h) {
@@ -4348,6 +4354,7 @@ const onHBLoaded = function(cb) {
       this.newValue = a.H()
     }
     static V(a, b) {
+      // to set score: a == 0, to set time: a == 1, b is new value
       let c = new ValueSetterActionHandler;
       c.ve = a;
       c.newValue = b;
@@ -4638,15 +4645,12 @@ const onHBLoaded = function(cb) {
       if (this.spec) {
         b.Cb = !1;
         b.Jb = 0;
-        null !== a.uf && null !== b.N && a.uf(b, this.input, this.eg, this.fg);
+        // null !== a.uf && null !== b.N && a.uf(b, this.input, this.eg, this.fg);
         return;
       }
 
-      // changing here gives only desync!!!
+      // changing player.input here gives only desync!!!
       // console.log(`a=${a} b=${b} aN=${a.noX} bN=${b.noX} auf=${a.uf} bn=${b.N} eg=${this.eg} fg=${this.fg}`);
-      // if (global.PlayerNoX.has(this.B)) {
-      //   this.input = this.input & 15;
-      // }
       var c = this.input;
       // var c = data.keys;
       0 === (b.Jb & 16) && 0 !== (c & 16) &&
@@ -4680,6 +4684,8 @@ const onHBLoaded = function(cb) {
       // executed only on new user input
       this.spec = global.PlayerIsSpec.has(this.B);
       if (!this.spec) {
+        let mon = global.MonitorPlayerInput.get(this.B);
+        if (mon) mon.push([global.CurrentTime, this.input]);
         let data = global.PlayerInput.get(this.B);
         if (data.no_x) {
           data.keys = this.input|0;
@@ -4696,7 +4702,7 @@ const onHBLoaded = function(cb) {
         }
       } else if (this.spec) {
         this.input = 0;
-      } else if (global.PlayerNoX.has(this.B)) this.input = this.input & 15;
+      }
       // ActionLog(`PlayerInputHandler ${this.B} => ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
       a.xa(this.input)
     }
