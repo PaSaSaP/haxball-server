@@ -10,7 +10,6 @@ import { hb_log } from "./log";
 import { Emoji } from "./emoji";
 import { AutoBot } from "./auto_mode";
 import { getIpInfoFromMonitoring } from "./ip_info";
-import { Tennis } from "./tennis";
 
 class BaseCommander {
   hb_room: HaxballRoom;
@@ -64,8 +63,8 @@ class BaseCommander {
     return false;
   }
 
-  warnIfPlayerIsNotApprovedAdmin(player: PlayerData) {
-    return player.admin_level <= 0;
+  warnIfPlayerIsNotApprovedAdmin(player: PlayerData, reqALevel: number = 1) {
+    return player.admin_level < reqALevel;
   }
 
   warnIfPlayerIsNotHost(player: PlayerData, cmd_name: string) {
@@ -80,6 +79,7 @@ class Commander extends BaseCommander {
   commands: Record<string, Function>;
   discordCommander: DiscordCommander;
   ghostCommander: GhostCommander;
+  kickCommander: KickCommander;
 
   constructor(hb_room: HaxballRoom) {
     super(hb_room);
@@ -145,56 +145,6 @@ class Commander extends BaseCommander {
       byebye: this.commandByeBye,
       bye_bye: this.commandByeBye,
       bye: this.commandByeBye,
-      kick: this.commandKick,
-      kick_not_trusted: this.commandKickAllExceptVerified,
-      kk: this.commandKickAllExceptVerified,
-      kkr: this.commandKickAllRed,
-      kkb: this.commandKickAllBlue,
-      kks: this.commandKickAllSpec,
-
-      tkick_5m: this.commandTimeKickPlayer5m,
-      tkick5m: this.commandTimeKickPlayer5m,
-      tkick: this.commandTimeKickPlayer1h,
-      tkick_1h: this.commandTimeKickPlayer1h,
-      tkick1h: this.commandTimeKickPlayer1h,
-      tkick_1d: this.commandTimeKickPlayer1d,
-      tkick1d: this.commandTimeKickPlayer1d,
-      tkick_24h: this.commandTimeKickPlayer1d,
-      tkick24h: this.commandTimeKickPlayer1d,
-      "tkick-": this.commandTimeKickPlayerReset,
-      tmute_5m: this.commandTimeMutePlayer5m,
-      tmute5m: this.commandTimeMutePlayer5m,
-      tm: this.commandTimeMutePlayer1h,
-      tmute: this.commandTimeMutePlayer1h,
-      tmute_1h: this.commandTimeMutePlayer1h,
-      tmute1h: this.commandTimeMutePlayer1h,
-      tmute_1d: this.commandTimeMutePlayer1d,
-      tmute1d: this.commandTimeMutePlayer1d,
-      tmute_24h: this.commandTimeMutePlayer1d,
-      tmute24h: this.commandTimeMutePlayer1d,
-      "tmute-": this.commandTimeMutePlayerReset,
-
-      nkick_5m: this.commandTimeKickNetwork5m,
-      nkick5m: this.commandTimeKickNetwork5m,
-      nkick: this.commandTimeKickNetwork1h,
-      nkick_1h: this.commandTimeKickNetwork1h,
-      nkick1h: this.commandTimeKickNetwork1h,
-      nkick_1d: this.commandTimeKickNetwork1d,
-      nkick1d: this.commandTimeKickNetwork1d,
-      nkick_24h: this.commandTimeKickNetwork1d,
-      nkick24h: this.commandTimeKickNetwork1d,
-      "nkick-": this.commandTimeKickNetworkReset,
-      nmute_5m: this.commandTimeMuteNetwork5m,
-      nmute5m: this.commandTimeMuteNetwork5m,
-      nm: this.commandTimeMuteNetwork1h,
-      nmute: this.commandTimeMuteNetwork1h,
-      nmute_1h: this.commandTimeMuteNetwork1h,
-      nmute1h: this.commandTimeMuteNetwork1h,
-      nmute_1d: this.commandTimeMuteNetwork1d,
-      nmute1d: this.commandTimeMuteNetwork1d,
-      nmute_24h: this.commandTimeMuteNetwork1d,
-      nmute24h: this.commandTimeMuteNetwork1d,
-      "nmute-": this.commandTimeMuteNetworkReset,
 
       auto_mode: this.commandAutoMode,
       limit: this.commandLimit,
@@ -324,9 +274,6 @@ class Commander extends BaseCommander {
       "bot-": this.commandUnmarkBot,
       mon: this.commandStartMonitoring,
       "mon-": this.commandStopMonitoring,
-      kick_bots: this.commandKickBots,
-      tkick_bots: this.commandTKickBots,
-      nkick_bots: this.commandNKickBots,
       ban_reload: this.commandBanReload,
       bot_info: this.commandPrintShortInfo,
       boti: this.commandPrintShortInfo,
@@ -358,6 +305,8 @@ class Commander extends BaseCommander {
     this.discordCommander.update(this);
     this.ghostCommander = new GhostCommander(hb_room);
     this.ghostCommander.update(this);
+    this.kickCommander = new KickCommander(hb_room);
+    this.kickCommander.update(this);
   }
 
   // commands below
@@ -553,7 +502,7 @@ class Commander extends BaseCommander {
   }
 
   commandChangeMapColored(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb futsal_huge/fh', Colors.GameState, 'italic');
       return;
@@ -592,7 +541,7 @@ class Commander extends BaseCommander {
   }
 
   commandMuteAll(playerExt: PlayerData) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     for (let p of this.getPlayersExt()) {
       this.hb_room.addPlayerMuted(p);
     }
@@ -614,7 +563,7 @@ class Commander extends BaseCommander {
   }
 
   commandUnmuteAll(playerExt: PlayerData) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     this.hb_room.muted_players.clear();
     this.sendMsgToPlayer(playerExt, "Unmuted all Players", Colors.GameState);
   }
@@ -707,7 +656,7 @@ class Commander extends BaseCommander {
   }
 
   commandSetAfkOther(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     for (let cmd of cmds) {
       let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
       if (!cmdPlayer) return;
@@ -717,7 +666,7 @@ class Commander extends BaseCommander {
   }
 
   commandClearAfkOther(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     for (let cmd of cmds) {
       let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
       if (!cmdPlayer) return;
@@ -727,134 +676,7 @@ class Commander extends BaseCommander {
   }
 
   commandByeBye(playerExt: PlayerData) {
-    this.r().kickPlayer(playerExt.id, "Bye bye!", false);
-  }
-
-  commandKick(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
-      if (!cmdPlayer) continue;
-      if (cmdPlayer.id == playerExt.id) continue;
-      this.r().kickPlayer(cmdPlayer.id, "Kik!", false);
-    }
-  }
-
-  commandKickAllExceptVerified(playerExt: PlayerData) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    for (let p of this.getPlayersExt()) {
-      if (playerExt.id != p.id && !p.trust_level) this.r().kickPlayer(p.id, "", false);
-    }
-  }
-
-  commandKickAllRed(playerExt: PlayerData) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    this.hb_room.kickAllTeamExceptTrusted(playerExt, 1);
-  }
-
-  commandKickAllBlue(playerExt: PlayerData) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    this.hb_room.kickAllTeamExceptTrusted(playerExt, 2);
-  }
-
-  commandKickAllSpec(playerExt: PlayerData) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    this.hb_room.kickAllTeamExceptTrusted(playerExt, 0);
-  }
-
-  commandTimeKickPlayer5m(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickPlayer(playerExt, cmds, 5 * 60, true);
-  }
-  commandTimeKickPlayer1h(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickPlayer(playerExt, cmds, 60 * 60, true);
-  }
-  commandTimeKickPlayer1d(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickPlayer(playerExt, cmds, 24 * 60 * 60, true);
-  }
-  commandTimeKickPlayerReset(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickPlayer(playerExt, cmds, -1, false);
-  }
-  execCommandTimeKickPlayer(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
-      if (!cmdPlayer) return;
-      if (playerExt.id == cmdPlayer.id) return;
-      this.hb_room.players_game_state_manager.setPlayerTimeKicked(cmdPlayer, seconds, kick);
-      if (seconds <= 0) this.sendMsgToPlayer(playerExt, `Wyczyściłeś Player_kick dla ${cmdPlayer.name}`);
-    }
-  }
-
-  commandTimeMutePlayer5m(playerExt: PlayerData, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(playerExt, cmds, 5 * 60);
-  }
-  commandTimeMutePlayer1h(playerExt: PlayerData, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(playerExt, cmds, 60 * 60);
-  }
-  commandTimeMutePlayer1d(playerExt: PlayerData, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(playerExt, cmds, 24 * 60 * 60);
-  }
-  commandTimeMutePlayerReset(playerExt: PlayerData, cmds: string[]) {
-    return this.execCommandTimeMutePlayer(playerExt, cmds, -1);
-  }
-
-  execCommandTimeMutePlayer(playerExt: PlayerData, cmds: string[], seconds: number) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
-      if (!cmdPlayer) return;
-      if (playerExt.id == cmdPlayer.id) return;
-      this.hb_room.players_game_state_manager.setPlayerTimeMuted(cmdPlayer, seconds);
-      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
-    }
-  }
-
-  commandTimeKickNetwork5m(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickNetwork(playerExt, cmds, 5 * 60, true);
-  }
-  commandTimeKickNetwork1h(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickNetwork(playerExt, cmds, 60 * 60, true);
-  }
-  commandTimeKickNetwork1d(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickNetwork(playerExt, cmds, 24 * 60 * 60, true);
-  }
-  commandTimeKickNetworkReset(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeKickNetwork(playerExt, cmds, -1, false);
-  }
-
-  execCommandTimeKickNetwork(playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
-      if (!cmdPlayer) return;
-      if (playerExt.id == cmdPlayer.id) return;
-      this.hb_room.players_game_state_manager.setNetworkTimeKicked(cmdPlayer, seconds, kick);
-      if (seconds <= 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś Network_kick dla ${cmdPlayer.name}`);
-    }
-  }
-
-  commandTimeMuteNetwork5m(playerExt: PlayerData, cmds: string[]) {
-    return this.execCommandTimeMuteNetwork(playerExt, cmds, 5 * 60);
-  }
-  commandTimeMuteNetwork1h(playerExt: PlayerData, cmds: string[]) {
-    return this.execCommandTimeMuteNetwork(playerExt, cmds, 60 * 60);
-  }
-  commandTimeMuteNetwork1d(playerExt: PlayerData, cmds: string[]) {
-    return this.execCommandTimeMuteNetwork(playerExt, cmds, 24 * 60 * 60);
-  }
-  commandTimeMuteNetworkReset(playerExt: PlayerData, cmds: string[]) {
-    this.execCommandTimeMuteNetwork(playerExt, cmds, -1);
-  }
-
-  execCommandTimeMuteNetwork(playerExt: PlayerData, cmds: string[], seconds: number) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
-    for (let cmd of cmds) {
-      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
-      if (!cmdPlayer) return;
-      if (playerExt.id == cmdPlayer.id) return;
-      this.hb_room.players_game_state_manager.setNetworkTimeMuted(cmdPlayer, seconds);
-      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
-    }
+    this.hb_room.kickPlayer(playerExt, playerExt, "Bye bye!", false);
   }
 
   commandAutoMode(playerExt: PlayerData, values: string[]) {
@@ -939,7 +761,7 @@ class Commander extends BaseCommander {
   }
 
   commandAdminStats(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt, true);
     if (!cmdPlayer) return;
     let p = this.Pid(cmdPlayer.id);
@@ -1012,7 +834,7 @@ class Commander extends BaseCommander {
   }
 
   async commandPlayerOtherNames(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 5)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Wpisz nazwę gracza");
       return;
@@ -1024,7 +846,7 @@ class Commander extends BaseCommander {
   }
 
   async commandSetTimeScore(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 5)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, "Uzycie: !set_time_score <time> <score>");
       return;
@@ -1076,7 +898,7 @@ class Commander extends BaseCommander {
   }
 
   commandVoteReset(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 2)) return;
     this.hb_room.auto_bot.autoVoter.reset();
     this.sendMsgToPlayer(playerExt, 'Głosowanie zresetowane');
   }
@@ -1495,7 +1317,7 @@ class Commander extends BaseCommander {
   }
 
   commandAutoTrust(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 5)) return;
     if (cmds.length == 0) {
       this.sendMsgToPlayer(playerExt, `podkomendy: red/r blue/b spec/s all/a by dodać wszystkich z danego teamu do kolejki`);
       this.sendMsgToPlayer(playerExt, `+ by nadać wszystkim wartość zaufania 1; - by usunąć wszystkich z kolejki; a+ dodaj wszystkich`);
@@ -1572,7 +1394,7 @@ class Commander extends BaseCommander {
   static trustIndicators: string[] = ['❌', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
 
   commandShowTrust(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 2)) return;
     let rStr = '';
     let bStr = '';
     let sStr = '';
@@ -1688,7 +1510,7 @@ class Commander extends BaseCommander {
   }
 
   commandDumpPlayers(playerExt: PlayerData) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 10)) return;
     for (let p of this.getPlayersExt()) {
       this.sendMsgToPlayer(playerExt, `${p.name} [${p.id}] auth: ${p.auth_id.substring(0, 16)} conn: ${p.conn_id}`);
     }
@@ -1753,7 +1575,7 @@ class Commander extends BaseCommander {
   }
 
   commandWhitelistNonTrustedNick(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 10)) return;
     cmds.forEach(player_name => {
       this.hb_room.whitelisted_nontrusted_player_names.add(player_name);
     });
@@ -1798,7 +1620,7 @@ class Commander extends BaseCommander {
       await sleep(1000);
     }
     for (let p of this.getPlayersExt()) {
-      this.r().kickPlayer(p.id, "Reset, wróć za minutę!", false);
+      this.hb_room.kickPlayerByServer(p, "Reset, wróć za minutę!", false);
     }
   }
 
@@ -1882,31 +1704,6 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `BOT usunąłem ${txt}`);
   }
 
-  commandKickBots(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
-    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
-    for (let bot of bots) {
-      this.hb_room.room.kickPlayer(bot.id, '', false);
-    }
-  }
-
-  commandTKickBots(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(playerExt, 'tkick_bots')) return;
-    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
-    for (let bot of bots) {
-      this.hb_room.room.kickPlayer(bot.id, '', false);
-      this.hb_room.players_game_state_manager.setPlayerTimeKicked(bot, 365*24*60*60, false);
-    }
-  }
-
-  commandNKickBots(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(playerExt, 'nkick_bots')) return;
-    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
-    for (let bot of bots) {
-      this.hb_room.room.kickPlayer(bot.id, '', false);
-      this.hb_room.players_game_state_manager.setNetworkTimeKicked(bot, 365*24*60*60, false);
-    }
-  }
 
   commandBanReload(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotHost(playerExt, 'ban_reload')) return;
@@ -2206,12 +2003,12 @@ class DiscordCommander extends BaseCommander {
   }
 
   commandAllUsersUpdate(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 5)) return;
     this.hb_room.discord_account.updateDiscordUsers();
   }
 
   commandAllLinksUpdate(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 5)) return;
     this.hb_room.discord_account.updateDiscordLinks();
   }
 }
@@ -2235,6 +2032,350 @@ class GhostCommander extends BaseCommander {
     if (this.warnIfPlayerIsNotHost(playerExt, 'ghost_disable')) return;
     this.hb_room.ghost_players.setEnabled(false);
     this.sendMsgToPlayer(playerExt, "Ghost Mode OFF");
+  }
+}
+
+class KickCommander extends BaseCommander {
+  constructor(hb_room: HaxballRoom) {
+    super(hb_room);
+  }
+
+  update(commander: Commander) {
+    const registerTkickCmds = (prefix: string, short: string, long: string, cmds: any[]) => {
+      commander.commands[prefix + long + '_5m'] = cmds[0];
+      commander.commands[prefix + long + '5m'] = cmds[0];
+      commander.commands[prefix + short] = cmds[1];
+      commander.commands[prefix + long] = cmds[1];
+      commander.commands[prefix + long + '_1h'] = cmds[1];
+      commander.commands[prefix + long + '1h'] = cmds[1];
+      commander.commands[prefix + long + '_1d'] = cmds[2];
+      commander.commands[prefix + long + '1d'] = cmds[2];
+      commander.commands[prefix + long + '_24h'] = cmds[2];
+      commander.commands[prefix + long + '24h'] = cmds[2];
+      commander.commands[prefix + short + '-'] = cmds[3];
+      commander.commands[prefix + long + '-'] = cmds[3];
+    };
+    let timeKickCmds = [
+      this.commandTimeKickPlayer5m.bind(this),
+      this.commandTimeKickPlayer1h.bind(this),
+      this.commandTimeKickPlayer1d.bind(this),
+      this.commandTimeKickPlayerReset.bind(this),
+    ];
+    let timeMuteCmds = [
+      this.commandTimeMutePlayer5m.bind(this),
+      this.commandTimeMutePlayer1h.bind(this),
+      this.commandTimeMutePlayer1d.bind(this),
+      this.commandTimeMutePlayerReset.bind(this),
+    ];
+    let networkKickCmds = [
+      this.commandTimeKickNetwork5m.bind(this),
+      this.commandTimeKickNetwork1h.bind(this),
+      this.commandTimeKickNetwork1d.bind(this),
+      this.commandTimeKickNetworkReset.bind(this),
+    ];
+    let networkMuteCmds = [
+      this.commandTimeMuteNetwork5m.bind(this),
+      this.commandTimeMuteNetwork1h.bind(this),
+      this.commandTimeMuteNetwork1d.bind(this),
+      this.commandTimeMuteNetworkReset.bind(this),
+    ];
+    let globalTimeKickCmds = [
+      this.commandGlobalTimeKickPlayer5m.bind(this),
+      this.commandGlobalTimeKickPlayer1h.bind(this),
+      this.commandGlobalTimeKickPlayer1d.bind(this),
+      this.commandGlobalTimeKickPlayerReset.bind(this),
+    ];
+    let globalTimeMuteCmds = [
+      this.commandGlobalTimeMutePlayer5m.bind(this),
+      this.commandGlobalTimeMutePlayer1h.bind(this),
+      this.commandGlobalTimeMutePlayer1d.bind(this),
+      this.commandGlobalTimeMutePlayerReset.bind(this),
+    ];
+    let globalNetworkKickCmds = [
+      this.commandGlobalTimeKickNetwork5m.bind(this),
+      this.commandGlobalTimeKickNetwork1h.bind(this),
+      this.commandGlobalTimeKickNetwork1d.bind(this),
+      this.commandGlobalTimeKickNetworkReset.bind(this),
+    ];
+    let globalNetworkMuteCmds = [
+      this.commandGlobalTimeMuteNetwork5m.bind(this),
+      this.commandGlobalTimeMuteNetwork1h.bind(this),
+      this.commandGlobalTimeMuteNetwork1d.bind(this),
+      this.commandGlobalTimeMuteNetworkReset.bind(this),
+    ];
+    registerTkickCmds('t', 'k', 'kick', timeKickCmds);
+    registerTkickCmds('t', 'm', 'mute', timeMuteCmds);
+    registerTkickCmds('n', 'k', 'kick', networkKickCmds);
+    registerTkickCmds('n', 'm', 'mute', networkMuteCmds);
+
+    registerTkickCmds('gt', 'k', 'kick', globalTimeKickCmds);
+    registerTkickCmds('gt', 'm', 'mute', globalTimeMuteCmds);
+    registerTkickCmds('gn', 'k', 'kick', globalNetworkKickCmds);
+    registerTkickCmds('gn', 'm', 'mute', globalNetworkMuteCmds);
+
+    commander.commands['kick_bots'] = this.commandKickBots;
+    commander.commands['tkick_bots'] = this.commandTKickBots;
+    commander.commands['nkick_bots'] = this.commandNKickBots;
+
+    commander.commands['kick'] = this.commandKick;
+    commander.commands['kick_not_trusted'] = this.commandKickAllExceptVerified;
+    commander.commands['kk'] = this.commandKickAllExceptVerified;
+    commander.commands['kkr'] = this.commandKickAllRed;
+    commander.commands['kkb'] = this.commandKickAllBlue;
+    commander.commands['kks'] = this.commandKickAllSpec;
+  }
+
+  // per server
+  commandTimeKickPlayer5m(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(1, playerExt, cmds, 5 * 60, true);
+  }
+  commandTimeKickPlayer1h(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(1, playerExt, cmds, 60 * 60, true);
+  }
+  commandTimeKickPlayer1d(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(2, playerExt, cmds, 24 * 60 * 60, true);
+  }
+  commandTimeKickPlayerReset(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickPlayer(2, playerExt, cmds, -1, false);
+  }
+  execCommandTimeKickPlayer(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setPlayerTimeKicked(cmdPlayer, playerExt, seconds, kick);
+      if (seconds <= 0) this.sendMsgToPlayer(playerExt, `Wyczyściłeś Player_kick dla ${cmdPlayer.name}`);
+    }
+  }
+
+  commandTimeMutePlayer5m(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMutePlayer(1, playerExt, cmds, 5 * 60);
+  }
+  commandTimeMutePlayer1h(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMutePlayer(1, playerExt, cmds, 60 * 60);
+  }
+  commandTimeMutePlayer1d(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMutePlayer(2, playerExt, cmds, 24 * 60 * 60);
+  }
+  commandTimeMutePlayerReset(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMutePlayer(2, playerExt, cmds, -1);
+  }
+
+  execCommandTimeMutePlayer(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setPlayerTimeMuted(cmdPlayer, playerExt, seconds);
+      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    }
+  }
+
+  commandTimeKickNetwork5m(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(2, playerExt, cmds, 5 * 60, true);
+  }
+  commandTimeKickNetwork1h(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(2, playerExt, cmds, 60 * 60, true);
+  }
+  commandTimeKickNetwork1d(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(3, playerExt, cmds, 24 * 60 * 60, true);
+  }
+  commandTimeKickNetworkReset(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeKickNetwork(3, playerExt, cmds, -1, false);
+  }
+
+  execCommandTimeKickNetwork(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setNetworkTimeKicked(cmdPlayer, playerExt, seconds, kick);
+      if (seconds <= 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś Network_kick dla ${cmdPlayer.name}`);
+    }
+  }
+
+  commandTimeMuteNetwork5m(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMuteNetwork(2, playerExt, cmds, 5 * 60);
+  }
+  commandTimeMuteNetwork1h(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMuteNetwork(2, playerExt, cmds, 60 * 60);
+  }
+  commandTimeMuteNetwork1d(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMuteNetwork(3, playerExt, cmds, 24 * 60 * 60);
+  }
+  commandTimeMuteNetworkReset(playerExt: PlayerData, cmds: string[]) {
+    this.execCommandTimeMuteNetwork(3, playerExt, cmds, -1);
+  }
+
+  execCommandTimeMuteNetwork(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setNetworkTimeMuted(cmdPlayer, playerExt, seconds);
+      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    }
+  }
+
+  // global
+
+  commandGlobalTimeKickPlayer5m(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickPlayer(4, playerExt, cmds, 5 * 60, true);
+  }
+  commandGlobalTimeKickPlayer1h(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickPlayer(4, playerExt, cmds, 60 * 60, true);
+  }
+  commandGlobalTimeKickPlayer1d(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickPlayer(4, playerExt, cmds, 24 * 60 * 60, true);
+  }
+  commandGlobalTimeKickPlayerReset(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickPlayer(4, playerExt, cmds, -1, false);
+  }
+  execGlobalCommandTimeKickPlayer(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setGloballyPlayerTimeKicked(cmdPlayer, playerExt, seconds, kick);
+      if (seconds <= 0) this.sendMsgToPlayer(playerExt, `Wyczyściłeś global Player_kick dla ${cmdPlayer.name}`);
+    }
+  }
+
+  commandGlobalTimeMutePlayer5m(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMutePlayer(4, playerExt, cmds, 5 * 60);
+  }
+  commandGlobalTimeMutePlayer1h(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMutePlayer(4, playerExt, cmds, 60 * 60);
+  }
+  commandGlobalTimeMutePlayer1d(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMutePlayer(4, playerExt, cmds, 24 * 60 * 60);
+  }
+  commandGlobalTimeMutePlayerReset(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMutePlayer(4, playerExt, cmds, -1);
+  }
+
+  execGlobalCommandTimeMutePlayer(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setGloballyPlayerTimeMuted(cmdPlayer, playerExt, seconds);
+      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś global Player_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    }
+  }
+
+  commandGlobalTimeKickNetwork5m(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickNetwork(4, playerExt, cmds, 5 * 60, true);
+  }
+  commandGlobalTimeKickNetwork1h(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickNetwork(4, playerExt, cmds, 60 * 60, true);
+  }
+  commandGlobalTimeKickNetwork1d(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickNetwork(4, playerExt, cmds, 24 * 60 * 60, true);
+  }
+  commandGlobalTimeKickNetworkReset(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeKickNetwork(4, playerExt, cmds, -1, false);
+  }
+
+  execGlobalCommandTimeKickNetwork(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number, kick: boolean) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setGloballyNetworkTimeKicked(cmdPlayer, playerExt, seconds, kick);
+      if (seconds <= 0) this.hb_room.sendMsgToPlayer(playerExt, `Wyczyściłeś global Network_kick dla ${cmdPlayer.name}`);
+    }
+  }
+
+  commandGlobalTimeMuteNetwork5m(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMuteNetwork(4, playerExt, cmds, 5 * 60);
+  }
+  commandGlobalTimeMuteNetwork1h(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMuteNetwork(4, playerExt, cmds, 60 * 60);
+  }
+  commandGlobalTimeMuteNetwork1d(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMuteNetwork(4, playerExt, cmds, 24 * 60 * 60);
+  }
+  commandGlobalTimeMuteNetworkReset(playerExt: PlayerData, cmds: string[]) {
+    this.execGlobalCommandTimeMuteNetwork(4, playerExt, cmds, -1);
+  }
+
+  execGlobalCommandTimeMuteNetwork(reqALevel: number, playerExt: PlayerData, cmds: string[], seconds: number) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, reqALevel)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) return;
+      if (playerExt.id == cmdPlayer.id) return;
+      this.hb_room.players_game_state_manager.setGloballyNetworkTimeMuted(cmdPlayer, playerExt, seconds);
+      this.hb_room.sendMsgToPlayer(playerExt, `Ustawiłeś global Network_mute dla ${cmdPlayer.name} na ${seconds} sekund`);
+    }
+  }
+
+  ///////
+
+  commandKickBots(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
+    for (let bot of bots) {
+      this.hb_room.kickPlayer(bot, playerExt, 'bot', false, true);
+    }
+  }
+
+  commandTKickBots(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'tkick_bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
+    for (let bot of bots) {
+      this.hb_room.kickPlayer(bot, playerExt, 'bot', false);
+      this.hb_room.players_game_state_manager.setPlayerTimeKicked(bot, playerExt, 365*24*60*60, false);
+    }
+  }
+
+  commandNKickBots(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'nkick_bots')) return;
+    let bots = this.hb_room.getPlayersExtList().filter(e => e.bot);
+    for (let bot of bots) {
+      this.hb_room.kickPlayer(bot, playerExt, 'bot', false);
+      this.hb_room.players_game_state_manager.setNetworkTimeKicked(bot, playerExt, 365*24*60*60, false);
+    }
+  }
+
+  commandKick(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    for (let cmd of cmds) {
+      let cmdPlayer = this.getPlayerDataByName(cmd, playerExt);
+      if (!cmdPlayer) continue;
+      if (cmdPlayer.id == playerExt.id) continue;
+      this.hb_room.kickPlayer(cmdPlayer, playerExt, "Kik!", false, true);
+    }
+  }
+
+  commandKickAllExceptVerified(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
+    for (let p of this.getPlayersExt()) {
+      if (playerExt.id != p.id && !p.trust_level) this.hb_room.kickPlayer(p, playerExt, "kk", false);
+    }
+  }
+
+  commandKickAllRed(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
+    this.hb_room.kickAllTeamExceptTrusted(playerExt, 1);
+  }
+
+  commandKickAllBlue(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
+    this.hb_room.kickAllTeamExceptTrusted(playerExt, 2);
+  }
+
+  commandKickAllSpec(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
+    this.hb_room.kickAllTeamExceptTrusted(playerExt, 0);
   }
 }
 

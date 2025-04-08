@@ -51,6 +51,7 @@ export class HaxballRoom {
   room: RoomObject;
   room_config: config.RoomServerConfig;
   server_start_time: number;
+  current_date_obj: Date;
   current_time: number;
   scores: ScoresObject|null;
   pressure_left: number;
@@ -138,7 +139,8 @@ export class HaxballRoom {
     this.room = room;
     this.room_config = roomConfig;
 
-    this.server_start_time = Date.now();
+    this.current_date_obj = new Date();
+    this.server_start_time = this.current_date_obj.getTime();
     this.current_time = this.server_start_time;
     this.scores = null;
     this.pressure_left = 0.0;
@@ -274,8 +276,9 @@ export class HaxballRoom {
       this.anti_spam.setEnabled(true); // enable anti spam there
       // on spam set timed mute for 5 mintues
       this.anti_spam.setOnMute((playerId: number) => {
-        const muteInSeconds = this.Pid(playerId).trust_level < 2 ? 5 * 60 : 60;
-        this.players_game_state_manager.setPlayerTimeMuted(this.Pid(playerId), muteInSeconds);
+        let playerExt = this.Pid(playerId);
+        const muteInSeconds = playerExt.trust_level < 2 ? 5 * 60 : 60;
+        this.players_game_state_manager.setPlayerTimeMuted(playerExt, this.God(), muteInSeconds);
         this.anti_spam.clearMute(playerId);
       });
     }
@@ -359,10 +362,10 @@ export class HaxballRoom {
       else if (this.players_ext.size <= OnDelayJoinMinPlayers) {
         this.delay_joiner.addPlayerOnGameStop(player);
         this.auto_bot.handlePlayerJoin(player);
-      } else this.room.kickPlayer(player.id, getBotKickMessage(), false);
+      } else this.kickPlayerByServer(player, getBotKickMessage());
     };
     const onGameStopCallback = (player: PlayerData) => {
-      if (!player.trust_level) this.room.kickPlayer(player.id, getBotKickMessage(), false);
+      if (!player.trust_level) this.kickPlayerByServer(player, getBotKickMessage());
     }
     const shouldBeDelayedInSecondsCallback = (player: PlayerData) => {
       if (this.players_ext.size <= OnDelayJoinMinPlayers) { // no players, allow to play all bots and players :D
@@ -383,6 +386,10 @@ export class HaxballRoom {
 
   private getGodPlayer() {
     return this.Pid(this.god_player.id);
+  }
+
+  God() {
+    return this.getGodPlayer();
   }
 
   getAfkCount() {
@@ -490,7 +497,8 @@ export class HaxballRoom {
   }
 
   async handleGameTick() {
-    const currentTime = Date.now(); // [ms]
+    this.current_date_obj = new Date();
+    const currentTime = this.current_date_obj.getTime(); // [ms]
     this.current_time = currentTime;
     ++this.game_tick_counter;
     this.countTicksPerSecond(currentTime);
@@ -832,7 +840,8 @@ export class HaxballRoom {
     this.scores = null;
 
     this.game_stopped_timer = setInterval(() => {
-      let current_time = Date.now();
+      this.current_date_obj = new Date();
+      let current_time = this.current_date_obj.getTime();
       this.current_time = current_time; // update time here also
       if (this.auto_mode) return;
       let random_new_admin = false;
@@ -1083,10 +1092,10 @@ export class HaxballRoom {
     await this.discord_account.oneTimePlayerNameSetup(playerExt);
 
     if (this.checkForDiscordAccountNameValidity(playerExt)) return;
-    if (this.players_game_state_manager.checkIfPlayerIsNotTimeKicked(player)) return;
+    if (this.players_game_state_manager.checkIfPlayerIsNotTimeKicked(playerExt)) return;
     if (this.checkIfPlayerNameContainsNotAllowedChars(playerExt)) return;
     if (this.checkIfDotPlayerIsHost(playerExt)) return;
-    if (this.checkForPlayerDuplicate(player)) return;
+    if (this.checkForPlayerDuplicate(playerExt)) return;
     try {
       let result = await this.game_state.getTrustAndAdminLevel(playerExt);
       playerExt.trust_level = result.trust_level;
@@ -1098,7 +1107,7 @@ export class HaxballRoom {
           if (playerExt.name.startsWith(player_name_prefix)) whitelisted = true;
         });
         if (!whitelisted) {
-          this.room.kickPlayer(player.id, "I don't trust in You!", false);
+          this.kickPlayerByServer(playerExt, "I don't trust in You!");
           return;
         }
       }
@@ -1209,7 +1218,7 @@ export class HaxballRoom {
       .sort((a, b) => a.afk_switch_time - b.afk_switch_time);
     if (afking.length === 0) return;
     if (playersNum === this.room_config.maxPlayers) {
-      this.room.kickPlayer(afking[0].id, "AFK, full", false);
+      this.kickPlayerByServer(afking[0], "AFK, full");
     }
   }
 
@@ -1232,20 +1241,20 @@ export class HaxballRoom {
     if (afking.length === 0) return;
     if (mode === 1) {
       if (playersNum === this.room_config.maxPlayers) {
-        this.room.kickPlayer(afking[0].id, "AFK, full", false);
+        this.kickPlayerByServer(afking[0], "AFK, full");
       }
       return;
     }
     for (let player of afking) {
       if (!player.vip_data.afk_mode && now - player.afk_switch_time > this.max_afk_time_minutes * 60 * 1000) {
-        this.room.kickPlayer(player.id, "AAAAAAFK", false);
+        this.kickPlayerByServer(player, "AAAAAAFK");
       }
     }
   }
 
   checkForDiscordAccountNameValidity(player: PlayerData) {
     if (!this.discord_account.checkAccountNameValidity(player)) {
-      this.room.kickPlayer(player.id, "Fake!", false);
+      this.kickPlayerByServer(player, "Fake!");
       return true;
     }
     return false;
@@ -1254,15 +1263,15 @@ export class HaxballRoom {
   checkIfPlayerNameContainsNotAllowedChars(player: PlayerData) {
     if ('﷽' === player.name) return false; // there is such player with that name so it is olny exception :)
     if (this.containsWideCharacters(player.name)) {
-      this.room.kickPlayer(player.id, "Zmień nick! ﷽", false);
+      this.kickPlayerByServer(player, "Zmień nick! ﷽");
       return true;
     }
     if (player.name.startsWith('@')) {
-      this.room.kickPlayer(player.id, "Change nick! @ na początku?", false);
+      this.kickPlayerByServer(player, "Change nick! @ na początku?");
       return true;
     }
     if (player.name.startsWith(' ') || player.name.endsWith(' ') || player.name_normalized.replaceAll('_', '').length === 0) {
-      this.room.kickPlayer(player.id, "Change nick, Mr SpaceBarr!", false);
+      this.kickPlayerByServer(player, "Change nick, Mr SpaceBarr!");
       return true;
     }
     return false;
@@ -1270,20 +1279,20 @@ export class HaxballRoom {
 
   checkIfDotPlayerIsHost(player: PlayerData) {
     if (player.name.trim() === '.' && !this.isPlayerHost(player)) {
-      this.room.kickPlayer(player.id, "Kropka Nienawiści!", false);
+      this.kickPlayerByServer(player, "Kropka Nienawiści!");
       return true;
     }
     return false;
   }
 
-  checkForPlayerDuplicate(player: PlayerObject) {
+  checkForPlayerDuplicate(player: PlayerData) {
     if (this.player_duplicate_allowed) return false;
     let kicked = false;
-    let player_auth = player.auth || '';
+    let player_auth = player.auth_id || '';
     for (let p of this.getPlayersExt()) {
       if (p.id != player.id) {
         if (p.auth_id === player_auth) {
-          this.room.kickPlayer(player.id, "One tab, one brain!", false);
+          this.kickPlayerByServer(player, "One tab, one brain!");
           kicked = true;
           break;
         }
@@ -1298,9 +1307,9 @@ export class HaxballRoom {
       if (p.id != joiningPlayer.id) {
         if (p.name_normalized === joiningPlayer.name_normalized) {
           if (joiningPlayer.trust_level > p.trust_level)
-            this.room.kickPlayer(p.id, "Nope, not you.", false);
+            this.kickPlayerByServer(p, "Nope, not you.");
           else
-            this.room.kickPlayer(joiningPlayer.id, "Change nick! Duplicated...", false);
+            this.kickPlayerByServer(joiningPlayer, "Change nick! Duplicated...");
           kicked = true;
           break;
         }
@@ -1431,7 +1440,7 @@ export class HaxballRoom {
   async handlePlayerKicked(kickedPlayer: PlayerObject, reason: string, ban: boolean, byPlayer: PlayerObject | null) {
     let fastKicks = false;
     if (byPlayer) {
-      hb_log(`# Kicked(ban:${ban ? "1" : "0"}): ${kickedPlayer.name} by: ${byPlayer.name} for: ${reason}`);
+      hb_log(`# Kicked(ban:${ban ? "1" : "0"}): ${kickedPlayer.name} by: ${byPlayer.name} for: ${reason}`, true);
       let byPlayerExt = this.P(byPlayer);
       if (byPlayerExt.admin_stats) {
         if (ban) byPlayerExt.admin_stats.banned_users.add(kickedPlayer.name);
@@ -1441,12 +1450,13 @@ export class HaxballRoom {
       }
       let kickedPlayerExt = this.P(kickedPlayer);
       if (byPlayerExt.trust_level === 0) {
-        this.room.kickPlayer(byPlayerExt.id, 'Nie kickuj!', false);
+        this.kickPlayerByServer(byPlayerExt, 'Nie kickuj!');
       } else if (kickedPlayerExt.trust_level > byPlayerExt.trust_level) {
         this.giveAdminSomeRestAfterKicking(byPlayerExt, "Weź głęboki oddech :)");
       } else if (fastKicks) {
         this.giveAdminSomeRestAfterKicking(byPlayerExt, "Weź trzy głębokie oddechy i spójrz w okno :)");
       }
+      this.players_game_state_manager.logKicked(kickedPlayerExt, byPlayerExt);
     }
     if (ban) {
       this.room.clearBan(kickedPlayer.id); // TODO idk how to handle that
@@ -1832,8 +1842,8 @@ export class HaxballRoom {
 
   checkPossibleSpamBot(player: PlayerData) {
     if (this.anti_spam.isSpammingSameMessage(player)) {
-      if (this.auto_mode) this.players_game_state_manager.setPlayerTimeMuted(this.Pid(player.id), 5 * 60);
-      else this.room.kickPlayer(player.id, "Nastepnym razem cie pokonam Hautameki", false);
+      if (this.auto_mode) this.players_game_state_manager.setPlayerTimeMuted(player, this.God(), 5 * 60);
+      else this.kickPlayerByServer(player, "Nastepnym razem cie pokonam Hautameki");
       return true;
     }
     return false;
@@ -1989,9 +1999,19 @@ export class HaxballRoom {
     });
   }
 
-  async kickAllTeamExceptTrusted(player: PlayerData, team_id: number) {
+  kickPlayer(player: PlayerData, byPlayer: PlayerData, reason: string, ban = false, log = false) {
+    hb_log(`#KICK# ${player.name} [${player.id}] kicked(ban:${ban}) by ${byPlayer.name} [${byPlayer.id}]: ${reason}`);
+    this.room.kickPlayer(player.id, reason, ban);
+    if (log) this.players_game_state_manager.logKicked(player, byPlayer);
+  }
+
+  kickPlayerByServer(player: PlayerData, reason: string, ban: boolean = false) {
+    return this.kickPlayer(player, this.God(), reason, ban);
+  }
+
+  kickAllTeamExceptTrusted(player: PlayerData, team_id: number) {
     for (let p of this.getPlayersExt()) {
-      if (player.id != p.id && p.team == team_id && !p.trust_level) this.room.kickPlayer(p.id, "", false);
+      if (player.id != p.id && p.team == team_id && !p.trust_level) this.kickPlayerByServer(p, '');
     }
   }
 

@@ -215,7 +215,7 @@ export class VoteByAllPlayers implements AutoVoter {
 export class VoteMuter extends VoteByAllPlayers {
   constructor(hb_room: HaxballRoom) {
     let callback = (voted: PlayerData) => {
-      this.hb_room.players_game_state_manager.setPlayerTimeMuted(voted, 60 * 60);
+      this.hb_room.players_game_state_manager.setPlayerTimeMuted(voted, this.hb_room.God(), 60 * 60);
     };
     super(hb_room, "votemute", "wyciszenie", callback);
   }
@@ -224,7 +224,7 @@ export class VoteMuter extends VoteByAllPlayers {
 export class VoteBotKicker extends VoteByAllPlayers {
   constructor(hb_room: HaxballRoom) {
     let callback = (voted: PlayerData) => {
-      this.hb_room.players_game_state_manager.setNetworkTimeKicked(voted, 24 * 60 * 60, true);
+      this.hb_room.players_game_state_manager.setNetworkTimeKicked(voted, this.hb_room.God(), 24 * 60 * 60, true);
     };
     super(hb_room, "votebot", "rozBOTowanie", callback);
     this.shouldBeVoted = (voted: PlayerData) => {

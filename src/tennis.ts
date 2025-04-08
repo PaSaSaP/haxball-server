@@ -22,6 +22,7 @@ export class Tennis {
   private ballInTeamFromTime: number; // game time, in seconds
   private penaltyGiven: boolean;
   private lastBallPosition: DiscPropertiesObject;
+  private ballXDirection: number;
   private lastTouchingSq: number;
   private ballState: BallState;
   private static MaxTimeHoldingBall = 10; // seconds
@@ -39,6 +40,7 @@ export class Tennis {
     this.penaltyGiven = false;
     // this.lastTouchBy = null;
     this.lastBallPosition = this.getZeroedBallPosition();
+    this.ballXDirection = 0;
   }
 
   setEnabled(enabled: boolean) {
@@ -120,7 +122,8 @@ export class Tennis {
           // if (this.lastTouchingSq < distances.touchingSq && closestDistanceSq > this.lastTouchingSq) {
           if (closestDistanceSq > this.lastTouchingSq) {
             this.ballState = BallState.kicked;
-            TNLog(`ballState (ballInTeam: ${this.ballInTeam}) movingToPlayer => kicked(${closestPlayerId}), totalTouches(${this.totalTouchesInTeam}) lastPlayer(${this.lastTouchByPlayerId})`);
+            TNLog(`ballState (ballInTeam: ${this.ballInTeam}) movingToPlayer => kicked(${closestPlayerId}),`
+              + ` totalTouches(${this.totalTouchesInTeam}) lastPlayer(${this.lastTouchByPlayerId})`);
             const redPlayer = redTeam.includes(closestPlayerId);
             const bluePlayer = !redPlayer;
             if ((this.ballInTeam === 1 && bluePlayer) || (this.ballInTeam === 2 && redPlayer)) {
@@ -143,12 +146,24 @@ export class Tennis {
           if (closestDistanceSq < distances.touchingSq) {
             this.ballState = BallState.movingToPlayer;
             TNLog(`ballState (ballInTeam: ${this.ballInTeam}) inGame => movingToPlayer(${closestPlayerId})`);
+          } else {
+            const xDirection = Math.sign(ballPosition.x - this.lastBallPosition.x);
+            if (this.ballXDirection !== 0 && xDirection !== 0 && xDirection !== this.ballXDirection) {
+              this.hbRoom.sendMsgToAll("❓Aj waj, nie wykryto kopnięcia, a boisko się zatrzęsło, resetujemy licznik kopnięć!",
+                Colors.DarkRed, 'bold');
+              TNLog(`Piłka zmieniła X kierunek, prawdopodobnie nie wykryte kopnięcie, więc resetujemy totalTouches`
+                + ` i ballInTeamForTime, closest(${closestPlayerId}, ${closestDistanceSq})`);
+              this.totalTouchesInTeam = 0;
+              this.ballInTeamFromTime = scores.time;
+            }
           }
+
         }
 
         this.lastTouchingSq = closestDistanceSq;
       }
     }
+    this.ballXDirection = Math.sign(ballPosition.x - this.lastBallPosition.x);
     if (this.ballState !== BallState.reset && ballPosition.x === 0) {
       this.lastBallPosition.x = this.lastBallPosition.x < 0 ? -1e-5 : 1e-5; // do not set to zero but to value close to zero just to keep simple other calculations
       this.lastBallPosition.y = ballPosition.y;
@@ -167,6 +182,7 @@ export class Tennis {
     this.ballState = BallState.reset;
     this.penaltyGiven = false;
     this.lastBallPosition = this.getZeroedBallPosition();
+    this.ballXDirection = 0;
   }
 
   handlePositionsReset() {
@@ -180,6 +196,7 @@ export class Tennis {
     this.ballState = BallState.reset;
     this.penaltyGiven = false;
     this.lastBallPosition = this.getZeroedBallPosition();
+    this.ballXDirection = 0;
   }
 
   handlePlayerBallKick(currentTime: number, player: PlayerData, redTeam: number[], blueTeam: number[]) {

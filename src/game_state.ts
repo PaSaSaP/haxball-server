@@ -63,6 +63,8 @@ export class DBHandler {
   vipDb: sqlite3.Database;
   players: PlayersDB;
   playerNames: PlayerNamesDB;
+  globalPlayerState: PlayersStateDB;
+  globalNetworksState: NetworksStateDB;
   votes: VotesDB;
   probableBots: ProbableBotsDB;
   discordAuthLinks: DiscordAuthLinksDB;
@@ -99,6 +101,8 @@ export class DBHandler {
     // main players database
     this.players = new PlayersDB(this.playersDb);
     this.playerNames = new PlayerNamesDB(this.playersDb);
+    this.globalPlayerState = new PlayersStateDB(this.playersDb);
+    this.globalNetworksState = new NetworksStateDB(this.playersDb);
     this.votes = new VotesDB(this.playersDb);
     this.probableBots = new ProbableBotsDB(this.playersDb);
     this.discordAuthLinks = new DiscordAuthLinksDB(this.playersDb);
@@ -201,6 +205,8 @@ export class DBHandler {
   async setupDatabases() {
     await this.players.setupDatabase();
     await this.playerNames.setupDatabase();
+    await this.globalPlayerState.setupDatabase();
+    await this.globalNetworksState.setupDatabase();
     await this.votes.setupDatabase();
     await this.probableBots.setupDatabase();
     await this.discordAuthLinks.setupDatabase();
@@ -426,6 +432,30 @@ export class GameState {
 
   getWeeklyTop10PlayersShort() {
     return this.dbHandler.topRatingsWeekly.getTopNPlayersShort(10);
+  }
+
+  getGlobalAllPlayersGameState() {
+    return this.dbHandler.globalPlayerState.getAllPlayersGameState();
+  }
+
+  updateOrInsertGlobalPlayerStateKicked(auth_id: string, kicked_to: number) {
+    return this.dbHandler.globalPlayerState.updateOrInsertPlayerStateKicked(auth_id, kicked_to);
+  }
+
+  updateOrInsertGlobalPlayerStateMuted(auth_id: string, muted_to: number) {
+    return this.dbHandler.globalPlayerState.updateOrInsertPlayerStateMuted(auth_id, muted_to);
+  }
+
+  getGlobalAllNetworksGameState() {
+    return this.dbHandler.globalNetworksState.getAllNetworksGameState();
+  }
+
+  updateOrInsertGlobalNetworkStateKicked(conn_id: string, kicked_to: number) {
+    return this.dbHandler.globalNetworksState.updateOrInsertNetworkStateKicked(conn_id, kicked_to);
+  }
+
+  updateOrInsertGlobalNetworkStateMuted(conn_id: string, muted_to: number) {
+    return this.dbHandler.globalNetworksState.updateOrInsertNetworkStateMuted(conn_id, muted_to);
   }
 
   getAllPlayersGameState() {
