@@ -1084,7 +1084,7 @@ export class HaxballRoom {
 
     if (this.checkForDiscordAccountNameValidity(playerExt)) return;
     if (this.players_game_state_manager.checkIfPlayerIsNotTimeKicked(player)) return;
-    if (this.checkIfPlayerNameContainsNotAllowedChars(player)) return;
+    if (this.checkIfPlayerNameContainsNotAllowedChars(playerExt)) return;
     if (this.checkIfDotPlayerIsHost(playerExt)) return;
     if (this.checkForPlayerDuplicate(player)) return;
     try {
@@ -1251,7 +1251,7 @@ export class HaxballRoom {
     return false;
   }
 
-  checkIfPlayerNameContainsNotAllowedChars(player: PlayerObject) {
+  checkIfPlayerNameContainsNotAllowedChars(player: PlayerData) {
     if ('﷽' === player.name) return false; // there is such player with that name so it is olny exception :)
     if (this.containsWideCharacters(player.name)) {
       this.room.kickPlayer(player.id, "Zmień nick! ﷽", false);
@@ -1259,6 +1259,10 @@ export class HaxballRoom {
     }
     if (player.name.startsWith('@')) {
       this.room.kickPlayer(player.id, "Change nick! @ na początku?", false);
+      return true;
+    }
+    if (player.name.startsWith(' ') || player.name.endsWith(' ') || player.name_normalized.replaceAll('_', '').length === 0) {
+      this.room.kickPlayer(player.id, "Change nick, Mr SpaceBarr!", false);
       return true;
     }
     return false;

@@ -40,10 +40,18 @@ async function monitorLogs(channel: TextChannel, roomLinksChannel: TextChannel) 
   const sendToChannel = (log: any) => {
     if (!log.for_discord) return;
     log.text = log.text.replace(/[@#]/g, '');
+    const clearLinks = () => {
+      log.text = log.text
+        .replace(/\b(?:https?|ftp|htp):\/\//gi, '')
+        .replace(/\bwww\./gi, '');
+    };
     try {
-      if (log.action === 'chat') channel.send(`**\`${log.user_name}\`** ${log.text}`);
-      else if (log.action === 'server') channel.send(`*${log.text}*`);
-      else if (log.action === 'players') {
+      if (log.action === 'chat') {
+        clearLinks();
+        channel.send(`**\`${log.user_name}\`** ${log.text}`);
+      } else if (log.action === 'server') {
+        channel.send(`*${log.text}*`);
+      }  else if (log.action === 'players') {
         let data = JSON.parse(log.text);
         let selector = data.selector;
         let description = data.description;

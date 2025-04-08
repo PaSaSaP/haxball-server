@@ -18,8 +18,8 @@ router.get('/:selector/:matchId', async (req: Request, res: Response) => {
       res.status(404).send('Invalid matchId');
       return;
     }
-    const filename = `${selector}-M${matchId}.hbr2.gz`;
-    const fullPath = `${matches_dir}/${filename}`;
+    const filename = `${selector}-M${matchId}.hbr2`;
+    const fullPath = `${matches_dir}/${filename}.gz`;
 
     fs.access(fullPath, fs.constants.R_OK, (err) => {
       if (err) {

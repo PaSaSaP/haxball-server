@@ -40,7 +40,8 @@ export class PlayerJoinLogger {
 
   handlePlayerJoin(playerExt: PlayerData) {
     // there is still zero trust level, is not set
-    const now = new Date().toISOString();
+    const dateObj = new Date();
+    const now = dateObj.toISOString();
     this.appendLineToFile(this.filename, `${now},${playerExt.auth_id},${playerExt.conn_id},${playerExt.real_ip},${playerExt.name}`);
     this.hbRoom.game_state.probableBotExists(playerExt.auth_id, playerExt.conn_id).then((isBot) => {
       if (isBot) {

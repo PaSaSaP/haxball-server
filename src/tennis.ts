@@ -2,6 +2,7 @@ import { Colors } from "./colors";
 import { HaxballRoom } from "./hb_room";
 import { Distances } from "./possesion_tracker";
 import { PlayerData } from "./structs";
+import { getTimestampHMS } from "./utils";
 
 enum BallState {
   reset,
@@ -75,7 +76,7 @@ export class Tennis {
     }
 
     if (this.ballState === BallState.reset && this.lastBallPosition.x === 0 && ballPosition.x !== 0) {
-      TNLog(`Ball position changed from ${this.lastBallPosition.x} to ${ballPosition.x}`);
+      TNLog(`(ballInTeam: ${this.ballInTeam}) Ball position changed from ${this.lastBallPosition.x} to ${ballPosition.x}`);
       this.ballInTeam = ballPosition.x < 0 ? 1 : 2;
       this.ballInTeamFromTime = scores.time;
       // this.lastTouchTime = scores.time;
@@ -106,26 +107,27 @@ export class Tennis {
         if (this.ballState === BallState.kicked) {
           this.ballState = BallState.movingFromPlayer;
           this.lastTouchTime = scores.time;
-          TNLog(`ballState kicked => movingFromPlayer(${closestPlayerId})`);
+          TNLog(`ballState (ballInTeam: ${this.ballInTeam}) kicked => movingFromPlayer(${closestPlayerId})`);
         } else if (this.ballState === BallState.movingFromPlayer) {
           if (closestDistanceSq > distances.touchingSq) {
             this.ballState = BallState.inGame;
-            TNLog(`ballState movingFromPlayer => inGame(${closestPlayerId})`);
+            TNLog(`ballState (ballInTeam: ${this.ballInTeam}) movingFromPlayer => inGame(${closestPlayerId})`);
           } else if (closestDistanceSq < this.lastTouchingSq && scores.time - this.lastTouchTime > 0.2) {
             this.ballState = BallState.movingToPlayer;
-            TNLog(`ballState movingFromPlayer => movingToPlayer(${closestPlayerId})`);
+            TNLog(`ballState (ballInTeam: ${this.ballInTeam}) movingFromPlayer => movingToPlayer(${closestPlayerId})`);
           }
         } else if (this.ballState === BallState.movingToPlayer) {
-          if (this.lastTouchingSq < distances.touchingSq && closestDistanceSq > this.lastTouchingSq) {
+          // if (this.lastTouchingSq < distances.touchingSq && closestDistanceSq > this.lastTouchingSq) {
+          if (closestDistanceSq > this.lastTouchingSq) {
             this.ballState = BallState.kicked;
-            TNLog(`ballState movingToPlayer => kicked(${closestPlayerId}), ballInTeam(${this.ballInTeam}) totalTouches(${this.totalTouchesInTeam}) lastPlayer(${this.lastTouchByPlayerId})`);
+            TNLog(`ballState (ballInTeam: ${this.ballInTeam}) movingToPlayer => kicked(${closestPlayerId}), totalTouches(${this.totalTouchesInTeam}) lastPlayer(${this.lastTouchByPlayerId})`);
             const redPlayer = redTeam.includes(closestPlayerId);
             const bluePlayer = !redPlayer;
             if ((this.ballInTeam === 1 && bluePlayer) || (this.ballInTeam === 2 && redPlayer)) {
-              TNLog(`Drużyna ${this.ballInTeam} (${this.lastTouchByPlayerId}) dotknęła piłkę, piłka po stronie przeciwnika!`);
               this.totalTouchesInTeam = 0;
               this.ballInTeam = redPlayer ? 1 : 2;
               this.ballInTeamFromTime = scores.time;
+              TNLog(`Drużyna ${this.ballInTeam} (${closestPlayerId}) dotknęła piłkę pierwszy raz na tej połowie! Poprzedni dotyk(${this.lastTouchByPlayerId})`);
             }
             this.totalTouchesInTeam++;
             this.lastTouchByPlayerId = closestPlayerId;
@@ -140,7 +142,7 @@ export class Tennis {
         } else if (this.ballState === BallState.inGame) {
           if (closestDistanceSq < distances.touchingSq) {
             this.ballState = BallState.movingToPlayer;
-            TNLog(`ballState inGame => movingToPlayer(${closestPlayerId})`);
+            TNLog(`ballState (ballInTeam: ${this.ballInTeam}) inGame => movingToPlayer(${closestPlayerId})`);
           }
         }
 
@@ -183,10 +185,10 @@ export class Tennis {
   handlePlayerBallKick(currentTime: number, player: PlayerData, redTeam: number[], blueTeam: number[]) {
     if (!this.isEnabled()) return;
     if (this.ballState === BallState.reset) return;
-    TNLog(`Player ${player.name} kicked the ball!`);
     if (player.team === 0) return;
-    if (this.lastTouchByPlayerId === player.id) {
-      TNLog(`Player ${player.name} kicked the ball again!`);
+    TNLog(`handlePlayerBallKick (ballInTeam: ${this.ballInTeam}) Player ${player.name} kopnął piłkę!`);
+    if (this.lastTouchByPlayerId === player.id && this.ballState !== BallState.kicked && this.ballState !== BallState.movingFromPlayer) {
+      TNLog(`handlePlayerBallKick (ballInTeam: ${this.ballInTeam}) Player ${player.name} kopnął piłkę ponownie!`);
       this.hbRoom.sendMsgToAll(`❌ Kara! ${player.name} drugi raz próbuje przebić piłkę na połowę przeciwnika!`,
         Colors.LightRed, 'bold');
       this.givePenalty(player.team);
@@ -197,10 +199,10 @@ export class Tennis {
     this.ballState = BallState.kicked;
     if (player.team !== this.ballInTeam) {
       this.ballInTeam = player.team as 1 | 2;
-      this.totalTouchesInTeam = 1;
-    } else {
-      this.totalTouchesInTeam++;
+      this.totalTouchesInTeam = 0;
+      TNLog(`handlePlayerBallKick (ballInTeam: ${this.ballInTeam}) Player ${player.name} kopnął z X pierwszy raz u siebie!`);
     }
+    this.totalTouchesInTeam++;
   }
 
   handleTeamGoal(team: 0 | 1 | 2) {
@@ -227,5 +229,5 @@ export class Tennis {
 }
 
 function TNLog(txt: string) {
-  console.log(`#TENNIS# ${txt}`);
+  console.log(`[${getTimestampHMS()}] #TENNIS# ${txt}`);
 }
