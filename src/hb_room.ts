@@ -600,6 +600,21 @@ export class HaxballRoom {
           this.allPlayersAfking(players);
         }
       }
+      const checkBallOutside = true;
+      if (checkBallOutside) {
+        let ballOutside = false;
+        if (this.last_selected_map_name === "futsal" && (ball_position.x < -460 || ball_position.x > 460 || ball_position.y < -210 || ball_position.y > 210)) {
+          ballOutside = true;
+        } else if (this.last_selected_map_name === "futsal_big" && (ball_position.x < -660 || ball_position.x > 660 || ball_position.y < -280 || ball_position.y > 280)) {
+          ballOutside = true;
+        } else if (this.last_selected_map_name === "futsal_huge" && (ball_position.x < -760 || ball_position.x > 760 || ball_position.y < -330 || ball_position.y > 330)) {
+          ballOutside = true;
+        }
+        if (ballOutside) {
+          this.sendMsgToAll('Piłka poza boiskiem, następnym razem nie oddam!', Colors.DarkRed);
+          this.room.setDiscProperties(0, {x: 0, y: 0, xspeed: 0, yspeed: 0});
+        }
+      }
     }
     this.acceleration_tasks.update();
     this.ball_possesion_tracker.trackPossession(currentMatchTime, ball_position, players);
