@@ -44,13 +44,34 @@ const onHBLoaded = function(cb) {
   global.CurrentTime = 0;
   global.PlayerAvatarOneTime = new Set();
   global.PlayerIsSpec = new Set();
-  // global.PlayerGhost = new Map();
+  global.PlayerGhost = new Map();
   // global.PlayerGhostInput = new Map();
   global.PlayerInput = new Map();
   global.TimeoutForX = 500;
   global.MonitorPlayerInput = new Map();
   function ActionLog(txt) {
     console.log(`#ACTION# ${txt}`);
+  }
+
+  function logObjectFields(which, obj) {
+    const max_length = 120;
+    const ellipsis = '✂️';
+
+    for (const key in obj) {
+      if (!obj.hasOwnProperty(key)) continue;
+
+      const value = obj[key];
+
+      if (typeof value === 'function') continue;
+
+      let display_value = String(value);
+      if (display_value.length > max_length) {
+        display_value = display_value.slice(0, max_length) + ellipsis;
+      }
+
+      console.log(`${which}.${key} = ${display_value}`);
+    }
+    console.log('***************************');
   }
 
   function toStringSafe() {
@@ -927,7 +948,7 @@ const onHBLoaded = function(cb) {
       ActionHandler.$(SomeSmallActionHandler);
       ActionHandler.$(CleanupActionHandler);
       ActionHandler.$(MatchFlagToggler);
-      ActionHandler.$(ValueSetterActionHandler);
+      ActionHandler.$(MatchTimeScoreLimitsActionHandler);
       ActionHandler.$(MapDataCompressionHandler);
       ActionHandler.$(GameStartStopSwitcher);
       ActionHandler.$(ValueChangeHandler);
@@ -1150,11 +1171,18 @@ const onHBLoaded = function(cb) {
           d != HaxballActionContext.na ? (this.$a = 2, this.Ab = 150, this.Nd = d, d == HaxballActionContext.fa ? this.vb++ : this.zb++, null != this.ha
               .Lf && this.ha.Lf(d.Zc), null != this.ha.yf && this.ha.yf(d.S)) : 0 < this.Na && this.Lb >= 60 * this
             .Na && this.zb != this.vb && (null != this.ha.ji && this.ha.ji(), this.If())
-        } else if (2 ==
-          this.$a) this.Ab--, 0 >= this.Ab && (0 < this.ab && (this.zb >= this.ab || this.vb >= this.ab) || 0 < this
-          .Na && this.Lb >= 60 * this.Na && this.zb != this.vb ? this.If() : (this.af(), null != this.ha.wf &&
-            this.ha.wf()));
-        else if (3 == this.$a && (this.Ab--, 0 >= this.Ab && (b = this.ha, null != b.D))) {
+        } else if (2 === this.$a) {
+          // on team goal, Ab is counter from 150 to 0, do not change or will be desync
+          // ActionLog(`2 == action, red: ${this.zb} blue: ${this.vb}, Ab=${this.Ab}`);
+          this.Ab--;
+          if (0 >= this.Ab) {
+            0 < this.ab && (this.zb >= this.ab || this.vb >= this.ab) || 0 < this
+              .Na && this.Lb >= 60 * this.Na && this.zb != this.vb ? this.If() : (this.af(), null != this.ha.wf &&
+                this.ha.wf())
+          };
+        } else if (3 === this.$a && (this.Ab--, 0 >= this.Ab && (b = this.ha, null != b.D))) {
+          // on team victory
+          // ActionLog(`3 == action, red: ${this.zb} blue: ${this.vb}`);
           b.D = null;
           a = 0;
           for (c = b.ba; a < c.length;) d = c[a], ++a, d.N = null, d.Eb = 0;
@@ -3075,14 +3103,14 @@ const onHBLoaded = function(cb) {
           setGhostPlayer: function (h, n) {
             if (h) {
               // TODO
-              // if (n) global.PlayerGhost.set(h, n);
-              // else global.PlayerGhost.delete(h);
-              // ActionLog(`PlayerGhost ${h} = ${n}`);
+              if (n) global.PlayerGhost.set(h, n);
+              else global.PlayerGhost.delete(h);
+              ActionLog(`PlayerGhost ${h} = ${n}`);
             }
           },
           clearGhostPlayers: function () {
-            // global.PlayerGhost.clear();
-            // ActionLog(`clearGhostPlayers`);
+            global.PlayerGhost.clear();
+            ActionLog(`clearGhostPlayers`);
           },
           kickPlayer: function(h, n, v) {
             null == n && (n = "");
@@ -3096,10 +3124,10 @@ const onHBLoaded = function(cb) {
             D.Ed()
           },
           setScoreLimit: function(h) {
-            c(ValueSetterActionHandler.V(0, h))
+            c(MatchTimeScoreLimitsActionHandler.V(0, h))
           },
           setTimeLimit: function(h) {
-            c(ValueSetterActionHandler.V(1, h))
+            c(MatchTimeScoreLimitsActionHandler.V(1, h))
           },
           setCustomStadium: function(h) {
             let n = new HaxballMapsManager;
@@ -3263,7 +3291,7 @@ const onHBLoaded = function(cb) {
         },
         3E3);
       D.kf = function(h) {
-        null != y.R(h) && D.nc(PlayerRemovalHandler.V(h, "Bad actor", !1))
+        null != y.R(h) && D.nc(PlayerRemovalHandler.V(h, "Bad person", !1))
       };
       D.yh = function(h, n) {
         let v = n.mb();
@@ -3905,6 +3933,7 @@ const onHBLoaded = function(cb) {
       super()
     }
     apply(a) {
+      // ActionLog(`DataActionHandler apply id: ${this.B} qd(len: ${this.qd.byteLength})`);
       a.Eg(this.qd)
     }
     P(a) {
@@ -4262,7 +4291,7 @@ const onHBLoaded = function(cb) {
       super()
     }
     apply(a) {
-      // ActionLog(`StateChangeActionHandler ${this.re}`); // TODO
+      // ActionLog(`StateChangeActionHandler id: ${this.B} re: ${this.re}`); // TODO
       let b = a.R(this.B);
       null != b && this.re != b.ne && (b.ne = this.re, CallbackHandler.sa(a.Ki, b))
     }
@@ -4328,7 +4357,8 @@ const onHBLoaded = function(cb) {
     W() {}
   }
   const Da = ContextualActionHandler;
-  class ValueSetterActionHandler extends ActionHandler {
+  class MatchTimeScoreLimitsActionHandler extends ActionHandler {
+    // class to change limits for score and time
     constructor() {
       super()
     }
@@ -4355,13 +4385,13 @@ const onHBLoaded = function(cb) {
     }
     static V(a, b) {
       // to set score: a == 0, to set time: a == 1, b is new value
-      let c = new ValueSetterActionHandler;
+      let c = new MatchTimeScoreLimitsActionHandler;
       c.ve = a;
       c.newValue = b;
       return c
     }
   }
-  const U = ValueSetterActionHandler;
+  const U = MatchTimeScoreLimitsActionHandler;
   class GiveAdminActionHandler extends ActionHandler {
     constructor() {
       super()
@@ -4507,7 +4537,7 @@ const onHBLoaded = function(cb) {
       if (a.za(this.B)) {
         var b = a.md;
         a.md = this.newValue;
-        // ActionLog(`ValueChangeHandler ${this.newValue}`); // TODO
+        // ActionLog(`ValueChangeHandler id: ${this.B} oldValue: ${b} newValue: ${this.newValue}`); // TODO
         b != this.newValue && CallbackInvoker.sa(a.ii, a.R(this.B), this.newValue)
       }
     }
@@ -4527,6 +4557,8 @@ const onHBLoaded = function(cb) {
       if (0 == this.B) {
         var b = new HaxballPlayerData;
         // ActionLog(`ma=${this.ma} name=${this.name} me=${this.me} Db=${this.Db}`) // TODO
+        // ActionLog(`PlayerRegistrationHandler ma=${this.ma} name=${this.name}`);
+        // logObjectFields(this);
         b.ma = this.ma; // playerId
         b.oa = this.name; // playerName
         b.country = this.me; // country
@@ -4598,7 +4630,7 @@ const onHBLoaded = function(cb) {
           e = 0 < b.Xa;
         this.wc ? b.Xa = 120 : 120 ==
           b.Xa && (b.Xa = 119);
-          // ActionLog(`MatchFlagToggler ${this.wc}`); // TODO
+          ActionLog(`MatchFlagToggler id: ${this.B} d: ${d} e: ${e} wc: ${this.wc}`); // TODO
         d != this.wc && CallbackHandler2.sa(a.Ch, c, this.wc, e)
       }
     }
@@ -4669,6 +4701,23 @@ const onHBLoaded = function(cb) {
         }
         // ActionLog(`PlayerInputHandler id=${this.B} keys=${data.keys} input=${this.input} x=${data.x} X=${b.Cb}`);
       }
+      // b.ja is team object, b.N is disc object
+      // b.N.a is current position, b.N.u is delta position, b.N.la is (0,0) as I am checking so maybe some lag diff?
+      // b.ja.hi has two probably color values: (de, Qa), b.ja.Zc is reference to global team obj which is the same obj
+      // logObjectFields("this", this);
+      // logObjectFields("b", b);
+      // if (b.ja) logObjectFields("b.ja", b.ja);
+      // if (b.N) logObjectFields("b.N", b.N);
+      // if (b.ja) {
+        // logObjectFields("b.ja.Zc", b.ja.Zc);
+        // logObjectFields("b.ja.hi", b.ja.hi);
+
+      // }
+      // if (b.N) {
+        // logObjectFields("b.N.la", b.N.la);
+        // logObjectFields("b.N.u", b.N.u);
+        // logObjectFields("b.N.a", b.N.a);
+      // }
 
       // ActionLog(`PlayerInputHandler ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
       null != a.uf && null != b.N && a.uf(b, this.input, this.eg, this.fg)
@@ -4701,7 +4750,7 @@ const onHBLoaded = function(cb) {
           }
         }
       } else if (this.spec) {
-        this.input = 0;
+        // this.input = 0; // do not change it here, probably causes desyncs
       }
       // ActionLog(`PlayerInputHandler ${this.B} => ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
       a.xa(this.input)
@@ -4713,15 +4762,17 @@ const onHBLoaded = function(cb) {
   }
   const Ca = PlayerInputHandler;
   class PlayerStateNotifier extends ActionHandler {
+    // It is info about player writing message just now
     constructor() {
       super()
     }
     apply(a) {
       let b = a.R(this.B);
-      // ActionLog(`PlayerStateNotifier ${this.gg}`); // TODO
+      // ActionLog(`PlayerStateNotifier apply id:${this.B} gg: ${this.gg}`); // TODO
       null != b && CallbackInvoker.sa(a.Li, b, this.gg)
     }
     P(a) {
+      // ActionLog(`PlayerStateNotifier id:${this.B} gg: ${this.gg}`); // TODO
       a.f(this.gg)
     }
     W(a) {
@@ -4978,6 +5029,7 @@ const onHBLoaded = function(cb) {
   }
   const na = CleanupActionHandler;
   class CollectionSynchronizer extends ActionHandler {
+    // players ping
     constructor() {
       super()
     }
@@ -5234,10 +5286,10 @@ const onHBLoaded = function(cb) {
   Object.assign(ContextualActionHandler.prototype, {
     h: ContextualActionHandler
   });
-  ValueSetterActionHandler.b = !0;
-  ValueSetterActionHandler.J = ActionHandler;
-  Object.assign(ValueSetterActionHandler.prototype, {
-    h: ValueSetterActionHandler
+  MatchTimeScoreLimitsActionHandler.b = !0;
+  MatchTimeScoreLimitsActionHandler.J = ActionHandler;
+  Object.assign(MatchTimeScoreLimitsActionHandler.prototype, {
+    h: MatchTimeScoreLimitsActionHandler
   });
   GiveAdminActionHandler.b = !0;
   GiveAdminActionHandler.J = ActionHandler;
@@ -5485,7 +5537,7 @@ const onHBLoaded = function(cb) {
     ca: !1,
     delay: !1
   });
-  ValueSetterActionHandler.U = ActionHandler.Z({
+  MatchTimeScoreLimitsActionHandler.U = ActionHandler.Z({
     ca: !1,
     delay: !1
   });
