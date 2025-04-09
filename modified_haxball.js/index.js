@@ -4674,12 +4674,12 @@ const onHBLoaded = function(cb) {
     apply(a) {
       let b = a.R(this.B);
       if (null === b) return;
-      if (this.spec) {
-        b.Cb = !1;
-        b.Jb = 0;
-        // null !== a.uf && null !== b.N && a.uf(b, this.input, this.eg, this.fg);
-        return;
-      }
+      // if (this.spec) {
+      //   b.Cb = !1;
+      //   b.Jb = 0;
+      //   // null !== a.uf && null !== b.N && a.uf(b, this.input, this.eg, this.fg);
+      //   return;
+      // }
 
       // changing player.input here gives only desync!!!
       // console.log(`a=${a} b=${b} aN=${a.noX} bN=${b.noX} auf=${a.uf} bn=${b.N} eg=${this.eg} fg=${this.fg}`);
@@ -4689,17 +4689,19 @@ const onHBLoaded = function(cb) {
         (b.Cb = !0);
       b.Jb = c;
 
-      let data = b.input;
-      if (data.no_x) {
-        if (data.x) {
-          if (!data.x_once) {
-            data.x_once = global.CurrentTime - data.x_since > global.TimeoutForX;
-          } else {
-            data.x_counter++;
-            data.x_once = false;
+      if (!this.spec) {
+        let data = b.input;
+        if (data.no_x) {
+          if (data.x) {
+            if (!data.x_once) {
+              data.x_once = global.CurrentTime - data.x_since > global.TimeoutForX;
+            } else {
+              data.x_counter++;
+              data.x_once = false;
+            }
           }
+          // ActionLog(`PlayerInputHandler id=${this.B} keys=${data.keys} input=${this.input} x=${data.x} X=${b.Cb}`);
         }
-        // ActionLog(`PlayerInputHandler id=${this.B} keys=${data.keys} input=${this.input} x=${data.x} X=${b.Cb}`);
       }
       // b.ja is team object, b.N is disc object
       // b.N.a is current position, b.N.u is delta position, b.N.la is (0,0) as I am checking so maybe some lag diff?
