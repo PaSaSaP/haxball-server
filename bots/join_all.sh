@@ -12,6 +12,11 @@ if [[ -n $1 ]]; then
 else
     F=$(ls ./dynamic/inputs/*)
 fi
+shift 1
+if [[ -n $1 ]]; then
+    F=$(echo "$F"|grep -e "$1")
+fi
+
 for f in ${F}; do
     if [[ ! -f $f ]]; then
         continue
