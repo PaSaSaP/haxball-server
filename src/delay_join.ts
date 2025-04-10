@@ -2,7 +2,7 @@ import { PlayerData } from "./structs";
 
 export class DelayJoiner {
   playerTimers: Map<number, NodeJS.Timeout>;
-  onDelayJoin: (player: PlayerData) => void;
+  onDelayJoin: (player: PlayerData, kick: boolean) => boolean;
   onGameStop: (player: PlayerData) => void;
   shouldBeDelayedInSeconds: (player: PlayerData) => number;
   shouldKickOnGameStop: () => boolean;
@@ -10,7 +10,7 @@ export class DelayJoiner {
   kickZeroTrust: boolean;
   playersOnGameStop: PlayerData[];
 
-  constructor(onDelayJoin: (player: PlayerData) => void,
+  constructor(onDelayJoin: (player: PlayerData, kick: boolean) => boolean,
     onGameStop: (player: PlayerData) => void,
     shouldBeDelayed: (player: PlayerData) => number,
     shouldKickOnGameStop: () => boolean,
@@ -28,14 +28,23 @@ export class DelayJoiner {
   addPlayerOnGameStop(player: PlayerData) {
     this.playersOnGameStop.push(player);
   }
+  private createDelayJoinTimer(playerExt: PlayerData, delayTime: number) {
+    return () => {
+      const newDelay = Math.max(delayTime - 5, 0);
+      const joined = this.onDelayJoin(playerExt, newDelay === 0);
+      if (joined || newDelay === 0) {
+        this.playerTimers.delete(playerExt.id);
+      } else {
+        this.playerTimers.set(playerExt.id, setTimeout(this.createDelayJoinTimer(playerExt, newDelay), 5 * 1000));
+      }
+    }
+  }
+
   handlePlayerJoin(playerExt: PlayerData) {
     if (!this.enabled) return;
     const delayTime = this.shouldBeDelayedInSeconds(playerExt);
-    if (delayTime === 0) return this.onDelayJoin(playerExt);
-    this.playerTimers.set(playerExt.id, setTimeout(() => {
-      this.onDelayJoin(playerExt);
-      this.playerTimers.delete(playerExt.id);
-    }, delayTime * 1000));
+    if (delayTime === 0) return this.onDelayJoin(playerExt, true);
+    this.playerTimers.set(playerExt.id, setTimeout(this.createDelayJoinTimer(playerExt, delayTime), 5 * 1000));
   }
 
   handlePlayerLeave(playerExt: PlayerData) {

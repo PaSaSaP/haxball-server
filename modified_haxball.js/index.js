@@ -3092,6 +3092,11 @@ const onHBLoaded = function(cb) {
               ActionLog(`setPlayerNoX ${h} = ${n}`);
             }
           },
+          getPlayerInput(h) {
+            let data = global.PlayerInput.get(h);
+            if (data) return data.keys;
+            return 0;
+          },
           startMonitorInput: function (h) {
             global.MonitorPlayerInput.set(h, []);
           },
@@ -4738,17 +4743,19 @@ const onHBLoaded = function(cb) {
         let mon = global.MonitorPlayerInput.get(this.B);
         if (mon) mon.push([global.CurrentTime, this.input]);
         let data = global.PlayerInput.get(this.B);
-        if (data.no_x) {
-          data.keys = this.input|0;
-          if (this.input & 16) {
-            if (!data.x) data.x_since = global.CurrentTime;
-            data.x = true;
-            // ActionLog(`no_x=${data.no_x} x_once=${data.x_once} if(${data.no_x && !data.x_once})`);
-            if (data.no_x && !data.x_once) this.input = this.input & 15;
-          } else {
-            data.x_counter = 0;
-            data.x_once = false;
-            data.x = false;
+        if (data) {
+          data.keys = this.input | 0;
+          if (data.no_x) {
+            if (this.input & 16) {
+              if (!data.x) data.x_since = global.CurrentTime;
+              data.x = true;
+              // ActionLog(`no_x=${data.no_x} x_once=${data.x_once} if(${data.no_x && !data.x_once})`);
+              if (data.no_x && !data.x_once) this.input = this.input & 15;
+            } else {
+              data.x_counter = 0;
+              data.x_once = false;
+              data.x = false;
+            }
           }
         }
       } else if (this.spec) {

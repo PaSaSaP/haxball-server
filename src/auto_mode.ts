@@ -1141,35 +1141,26 @@ export class AutoBot {
     const afkFilter = (e: PlayerData) => { return !e.vip_data.afk_mode && (e.afk || e.afk_maybe) };
     let specAfk = this.specTeam.filter(e => afkFilter(e));
     let specNonAfk = this.specTeam.filter(e => !afkFilter(e));
-    this.specTeam = [...specNonAfk, ...specAfk];
-    let firstAfkPlayerId = -1;
-    if (specAfk.length) {
-      firstAfkPlayerId = specAfk[0].id;
-    }
 
     // anyway make that check to get insert idx
     let insertIdx = 0;
-    for (let i = 0; i < this.specTeam.length; i++) {
-      if (!this.specTeam[i].afk && !this.specTeam[i].afk_maybe) {
+    for (let i = 0; i < specNonAfk.length; i++) {
+      if (!specNonAfk[i].afk && !specNonAfk[i].afk_maybe) {
         insertIdx = i + 1;
         break;
       }
     }
     for (let p of inTeam) {
       if (inFavor.includes(p.id)) {
-        this.specTeam.splice(insertIdx, 0, p); // insert after first or other in favor
+        specNonAfk.splice(insertIdx, 0, p); // insert after first or other in favor
         insertIdx++;
-      } else if (firstAfkPlayerId !== -1 && addedWhileMatch.includes(p.id)) { // insert before first afk
-        const firstAfkIdx = this.specTeam.findIndex(e => e.id === firstAfkPlayerId);
-        if (firstAfkIdx !== -1) {
-          this.specTeam.splice(firstAfkIdx, 0, p);
-        }
       } else {
-        this.specTeam.push(p);
+        specNonAfk.push(p);
       }
       p.team = 0;
       this.room.setPlayerTeam(p.id, p.team);
     }
+    this.specTeam = [...specNonAfk, ...specAfk];
   }
 
   private moveWinnerBlueToRed() {

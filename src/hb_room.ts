@@ -357,12 +357,16 @@ export class HaxballRoom {
 
   private createDelayJoincer() {
     const OnDelayJoinMinPlayers = 5;
-    const onDelayJoinCallback = (player: PlayerData) => {
-      if (player.trust_level) this.auto_bot.handlePlayerJoin(player);
-      else if (this.players_ext.size <= OnDelayJoinMinPlayers) {
+    const onDelayJoinCallback = (player: PlayerData, kick: boolean): boolean => {
+      if (player.trust_level) {
+        this.auto_bot.handlePlayerJoin(player);
+        return true;
+      } else if (this.players_ext.size <= OnDelayJoinMinPlayers) {
         this.delay_joiner.addPlayerOnGameStop(player);
         this.auto_bot.handlePlayerJoin(player);
-      } else this.kickPlayerByServer(player, getBotKickMessage());
+        return true;
+      } else if (kick) this.kickPlayerByServer(player, getBotKickMessage());
+      return false;
     };
     const onGameStopCallback = (player: PlayerData) => {
       if (!player.trust_level) this.kickPlayerByServer(player, getBotKickMessage());
@@ -372,7 +376,6 @@ export class HaxballRoom {
         if (!player.trust_level) return 10; // 10 seconds delay for non trusted
         return 5; // 5 seconds delay for trusted
       } else if (!player.trust_level) {
-        if (this.volleyball.isEnabled() || this.tennis.isEnabled()) return 15;
         return 60; // 60 seconds delay for non trusted when more players
       } else return 5; // 5 seconds delay for trusted
     };
@@ -1719,6 +1722,19 @@ export class HaxballRoom {
     return false;
   }
 
+  private applyReplaceCommand(command: string, targetString: string|undefined) {
+    if (!targetString) return '';
+    const regex = /^s\/([^\/]+)\/([^\/]+)\/g$/;
+    const match = command.match(regex);
+    if (match) {
+      const oldStr = match[1]; // część 'old'
+      const newStr = match[2]; // część 'new'
+      // Zwróć zmodyfikowany string
+      return targetString.replace(new RegExp(oldStr, 'g'), newStr);
+    }
+    return targetString; // Jeśli komenda nie pasuje do formatu, zwróć oryginalny string
+  }
+
   async handlePlayerChatExt(playerExt: PlayerData, message: string) {
     message = message.trim();
     if (!message) return; // not interested in empty messages
@@ -1739,9 +1755,11 @@ export class HaxballRoom {
       else if (serveType === 'a') message = '!serve_a';
       else if (serveType === 'q') message = '!serve_q';
       else if (serveType === 'e') message = '!serve_e';
+    } else if (message.startsWith('s/')) {
+      message = this.applyReplaceCommand(message, this.last_command.get(playerExt.id));
     }
     // then handle commands
-    if (message[0] === '!') {
+    if (message[0] === '!' || message[0] === '@') {
       // Handle last command
       if (message === "!!") {
         let last_command_str = this.last_command.get(playerExt.id);
@@ -1751,10 +1769,14 @@ export class HaxballRoom {
         }
         message = last_command_str;
       }
+      let privMsg = message.startsWith('@@');
       this.last_command.set(playerExt.id, message);
 
       message = message.substring(1);
       let message_split = message.split(" ");
+      if (privMsg) {
+        message_split.unshift("w");
+      }
       let command = message_split[0].toLowerCase();
       this.executeCommand(command, playerExt, message_split.slice(1).filter(e => e));
       return; // Returning false will prevent the message from being broadcasted

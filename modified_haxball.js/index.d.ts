@@ -70,6 +70,8 @@ declare class RoomObject {
 
     setPlayerNoX(playerId: number, state: boolean): void;
 
+    getPlayerInput(playerId: number): number;
+
     setGhostPlayer(playerId: number, ghostedPlayerId: number | null): void;
 
     clearGhostPlayers(): void;
