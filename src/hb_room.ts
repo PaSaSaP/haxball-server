@@ -827,7 +827,7 @@ export class HaxballRoom {
     this.rejoice_maker.handleGameStop();
     this.gatekeeper.handleGameStop();
     this.ghost_players.handleGameStop();
-    const recorded = this.recording.handleGameStop(this.auto_bot.isRanked() || this.force_recording_enabled);
+    const recorded = this.recording.handleGameStop(this.auto_bot.isRanked() || this.tennis.isEnabled() || this.force_recording_enabled);
     const recFilename = recorded ? this.recording.getFilename() : '';
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;

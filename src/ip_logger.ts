@@ -53,8 +53,13 @@ export class PlayerJoinLogger {
   }
 
   async handlePlayerJoinWithIp(playerExt: PlayerData, players: Map<number, PlayerData>) {
-    if (playerExt.trust_level < 2) {
+    let started = false;
+    if (this.hbRoom.tennis.isEnabled()) {
       this.startMonitoring(playerExt);
+      started = true;
+    }
+    if (playerExt.trust_level < 2) {
+      if (!started) this.startMonitoring(playerExt);
       try {
         const ip = playerExt.real_ip.split(',').at(-1)?.trim() ?? '';
         let ipInfo = await getIpInfoFromMonitoring(ip);

@@ -60,10 +60,14 @@ async function readCsvFile(fileName: string): Promise<PlayersCount[]> {
 
 async function fetchAllPlayerCounts(cache: Cache) {
   let results: typeof cache.data = new Map();
-  const matches = await fg('./dynamic/current_players_number_?vs?_?.csv');
+  const matches = await fg('./dynamic/current_players_number_*.csv');
   for (let filename of matches) {
     let content = await readCsvFile(filename);
-    let selector = filename.slice(-10, -4);
+    const nsplit = filename.split('_');
+    const selector = nsplit.slice(-2).join('_').split('.').at(0);
+    if (!selector) {
+      throw new Error(`fetchAllPlayerCounts(): empty selector for file ${filename}`);
+    }
     results.set(selector, content);
   }
   cache.cache = Array.from(results.entries());
