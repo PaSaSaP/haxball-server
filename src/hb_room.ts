@@ -35,7 +35,7 @@ import { DelayJoiner } from './delay_join';
 import { PlayerGatekeeper } from './gatekeeper/player_gatekeeper';
 import { PlayerJoinLogger } from './ip_logger';
 import { VipOptionsHandler } from './vip_options';
-import { getBotKickMessage } from './spam_data';
+import { getBotKickMessage, getStillAfkMessage } from './spam_data';
 import { DiscordAccountManager } from './discord_account';
 import { GhostPlayers } from './ghost_players';
 import { Volleyball } from './volleyball';
@@ -100,6 +100,9 @@ export class HaxballRoom {
   default_map_name: string;
   last_selected_map_name: string | null;
   last_selected_ball: MapPhysicsType;
+  map_name_classic: string;
+  map_name_big: string;
+  map_name_huge: string;
   time_limit_reached: boolean;
   players_num: number;
   room_link: string;
@@ -255,8 +258,19 @@ export class HaxballRoom {
     this.default_map_name = 'futsal';
     if (this.room_config.selector === 'volleyball') this.default_map_name = 'volleyball';
     else if (this.room_config.selector === 'tennis') this.default_map_name = 'tennis';
+    else if (this.room_config.selector === 'handball') this.default_map_name = 'handball';
     this.last_selected_map_name = null;
     this.last_selected_ball = 'vehax';
+    if (this.room_config.mapSet === 'handball') {
+      this.map_name_classic = 'handball';
+      this.map_name_big = 'handball_big';
+      this.map_name_huge = 'handball_huge';
+    this.last_selected_ball = 'hand_power';
+    } else {
+      this.map_name_classic = 'futsal';
+      this.map_name_big = 'futsal_big';
+      this.map_name_huge = 'futsal_huge';
+    }
     this.time_limit_reached = false;
     this.players_num = 0;
     this.room.setDefaultStadium("Classic");
@@ -351,6 +365,7 @@ export class HaxballRoom {
     p.mark_disconnected();
     p.admin_level = 40;
     p.trust_level = 40;
+    if (this.room_config.mapSet === 'handball') p.selected_ball = 'hand_power';
     this.players_ext_all.set(p.id, p);
     return ppp;
   }
@@ -455,6 +470,7 @@ export class HaxballRoom {
     else if (selector === 'volleyball_1') selectorSting = 'volleyball';
     else if (selector === 'tennis_1') selectorSting = 'tennis';
     else if (selector === 'freestyle_1') selectorSting = 'freestyle';
+    else if (selector === 'handball_1') selectorSting = 'handball';
     else return;
     this.game_state.logMessage('God', 'players', JSON.stringify({
       selector: selectorSting,
@@ -577,47 +593,11 @@ export class HaxballRoom {
       }
     }
 
-    let afkPlayersNum = 0;
     // check for AFK, twice per second
-    if (this.auto_afk && this.game_tick_counter % 30 === 0) {
-      if (!this.auto_mode || (this.auto_mode && !this.auto_bot.isLobbyTime())) {
-        players.forEach(playerExt => {
-          if (playerExt.team) {
-            const afkTime = ((currentTime - playerExt.activity.game) / 1000)|0; // [s]
-            if (afkTime > HaxballRoom.MaxAllowedAfkNoMoveTime) {
-              if (!playerExt.afk) {
-                this.markPlayerAsAutoAfk(playerExt, currentTime);
-              }
-              else if (playerExt.afk_maybe) this.moveAfkMaybeToSpec(playerExt);
-            } else if (afkTime > HaxballRoom.MaxAllowedAfkNoMoveTimeEmojiCooldown) {
-              let idx = afkTime - HaxballRoom.MaxAllowedAfkNoMoveTimeEmojiCooldown;
-              idx = idx < 0 ? 0 : idx > 8 ? 8 : idx;
-              this.setPlayerAvatarTo(playerExt, Emoji.CountdownEmojis[idx]);
-            }
-            if (playerExt.afk) afkPlayersNum++;
-          }
-        });
-      }
-      if (!this.auto_mode) {
-        if (afkPlayersNum == players.length) {
-          this.allPlayersAfking(players);
-        }
-      }
-      const checkBallOutside = true;
-      if (checkBallOutside) {
-        let ballOutside = false;
-        if (this.last_selected_map_name === "futsal" && (ball_position.x < -460 || ball_position.x > 460 || ball_position.y < -210 || ball_position.y > 210)) {
-          ballOutside = true;
-        } else if (this.last_selected_map_name === "futsal_big" && (ball_position.x < -660 || ball_position.x > 660 || ball_position.y < -280 || ball_position.y > 280)) {
-          ballOutside = true;
-        } else if (this.last_selected_map_name === "futsal_huge" && (ball_position.x < -760 || ball_position.x > 760 || ball_position.y < -330 || ball_position.y > 330)) {
-          ballOutside = true;
-        }
-        if (ballOutside) {
-          this.sendMsgToAll('Piłka poza boiskiem, następnym razem nie oddam!', Colors.DarkRed);
-          this.room.setDiscProperties(0, {x: 0, y: 0, xspeed: 0, yspeed: 0});
-        }
-      }
+    if (this.game_tick_counter % 30 === 0) {
+      const afkPlayersNum = this.checkIfPlayersAreAfkWhileGame(currentTime, currentMatchTime, players, this.game_tick_counter % 60 === 0? 1: 2);
+      this.checkAllPlayersAfk(afkPlayersNum, players);
+      this.checkBallOutside(ball_position);
     }
     this.acceleration_tasks.update();
     this.ball_possesion_tracker.trackPossession(currentMatchTime, ball_position, players);
@@ -633,6 +613,55 @@ export class HaxballRoom {
   static readonly MaxAllowedAfkNoMoveTime = 15; // [s]
   static readonly MaxAllowedAfkNoMoveTimeMs = this.MaxAllowedAfkNoMoveTime * 1000; // [ms]
   static readonly MaxAllowedAfkNoMoveTimeEmojiCooldown = this.MaxAllowedAfkNoMoveTime - 10; // [s]
+
+  checkIfPlayersAreAfkWhileGame(currentTime: number, currentMatchTime: number, players: PlayerData[], soundType: number) {
+    let afkPlayersNum = 0;
+    if (this.auto_afk) {
+      if (!this.auto_mode || (this.auto_mode && !this.auto_bot.isLobbyTime())) {
+        players.forEach(playerExt => {
+          if (playerExt.team) {
+            const afkTime = ((currentTime - playerExt.activity.game) / 1000) | 0; // [s]
+            if (afkTime > HaxballRoom.MaxAllowedAfkNoMoveTime) {
+              if (!playerExt.afk) {
+                this.markPlayerAsAutoAfk(playerExt, currentTime);
+              }
+              else if (playerExt.afk_maybe) this.moveAfkMaybeToSpec(playerExt);
+            } else if (afkTime >= HaxballRoom.MaxAllowedAfkNoMoveTimeEmojiCooldown) {
+              let idx = afkTime - HaxballRoom.MaxAllowedAfkNoMoveTimeEmojiCooldown;
+              idx = idx < 0 ? 0 : idx > 8 ? 8 : idx;
+              this.setPlayerAvatarTo(playerExt, Emoji.CountdownEmojis[idx]);
+              if (this.auto_mode && currentMatchTime < 20) this.sendMsgToPlayer(playerExt, getStillAfkMessage(), Colors.BrightBlue, undefined, soundType);
+            }
+            if (playerExt.afk) afkPlayersNum++;
+          }
+        });
+      }
+    }
+    return afkPlayersNum;
+  }
+
+  checkAllPlayersAfk(afkPlayersNum: number, players: PlayerData[]) {
+    if (!this.auto_mode) {
+      if (afkPlayersNum == players.length) {
+        this.allPlayersAfking(players);
+      }
+    }
+  }
+
+  checkBallOutside(ball_position: DiscPropertiesObject) {
+    let ballOutside = false;
+    if (this.last_selected_map_name === "futsal" && (ball_position.x < -460 || ball_position.x > 460 || ball_position.y < -210 || ball_position.y > 210)) {
+      ballOutside = true;
+    } else if (this.last_selected_map_name === "futsal_big" && (ball_position.x < -660 || ball_position.x > 660 || ball_position.y < -280 || ball_position.y > 280)) {
+      ballOutside = true;
+    } else if (this.last_selected_map_name === "futsal_huge" && (ball_position.x < -760 || ball_position.x > 760 || ball_position.y < -330 || ball_position.y > 330)) {
+      ballOutside = true;
+    }
+    if (ballOutside) {
+      this.sendMsgToAll('Piłka poza boiskiem, następnym razem nie oddam!', Colors.DarkRed);
+      this.room.setDiscProperties(0, { x: 0, y: 0, xspeed: 0, yspeed: 0 });
+    }
+  }
 
   setPlayerAvatarTo(playerExt: PlayerData, avatar: string) {
     if (playerExt.avatar === avatar) return;
@@ -700,6 +729,9 @@ export class HaxballRoom {
     if (['1', '2', 'f'].includes(map_name)) map_name = 'futsal';
     else if (['3', 'fb'].includes(map_name)) map_name = 'futsal_big';
     else if (['4', 'fh'].includes(map_name)) map_name = 'futsal_huge';
+    else if (['n'].includes(map_name)) map_name = 'handball';
+    else if (['nb'].includes(map_name)) map_name = 'handball_big';
+    else if (['nh'].includes(map_name)) map_name = 'handball_huge';
     else if (['v', 'volley'].includes(map_name)) map_name = 'volleyball';
     else if (['t', 'tenis'].includes(map_name)) map_name = 'tennis';
     if (this.last_selected_map_name !== map_name || this.last_selected_ball !== ballPhysics) {
@@ -724,13 +756,13 @@ export class HaxballRoom {
     });
     if (red >= 4 && blue >= 4) {
       this.setScoreTimeLimitByMode("4vs4");
-      this.setMapByName("futsal_huge");
+      this.setMapByName(this.map_name_huge);
     }  else if ((red >= 2 && blue >= 3) || (red >= 3 && blue >= 2)) {
       this.setScoreTimeLimitByMode("3vs3");
-      this.setMapByName("futsal_big");
+      this.setMapByName(this.map_name_big);
     } else {
       this.setScoreTimeLimitByMode("2vs2");
-      this.setMapByName("futsal");
+      this.setMapByName(this.map_name_classic);
     }
   }
 
@@ -1097,6 +1129,7 @@ export class HaxballRoom {
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
     let playerExt = this.Pid(player.id);
+    if (this.room_config.mapSet === 'handball') playerExt.selected_ball = 'hand_power';
     if (player.country && player.country.length) {
       if (player.country.toLowerCase() === 'pl') playerExt.flag = '🇵🇱';
       else playerExt.flag = '🇪🇺';
@@ -1408,6 +1441,8 @@ export class HaxballRoom {
     else if (`${t} 2 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal';
     else if (`${t} 3 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal_big';
     else if (`${t} 4 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal_huge';
+    else if (`${t} 2 Handball` === newStadiumName) this.last_selected_map_name = 'handball';
+    else if (`${t} 3 Handball` === newStadiumName) this.last_selected_map_name = 'handball_big';
     else {
       this.feature_pressure_stadium = false;
       this.last_selected_map_name = '';

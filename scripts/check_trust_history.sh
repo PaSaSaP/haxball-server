@@ -17,7 +17,9 @@ if [[ "$1" = "-a" ]]; then
     echo "put auth_id as argument..."
     exit 1
   fi
-  check_auth_id "$AUTH_ID"
+  for AUTH_ID in "$@"; do
+    check_auth_id "$AUTH_ID"
+  done
   exit 0
 fi
 
@@ -27,8 +29,11 @@ if [[ -z $NICK ]]; then
   exit 1
 fi
 
-AUTH_IDS=$("$SCRIPT_DIR/get_auth_id_for.sh" -l "$MAIN_DB" "$NICK" |cut -d\| -f2)
+for NICK in "$@"; do
+    AUTH_IDS=$("$SCRIPT_DIR/get_auth_id_for.sh" -l "$MAIN_DB" "$NICK" |cut -d\| -f2)
 
-for auth_id in ${AUTH_IDS}; do
-  check_auth_id "$auth_id"
+    for auth_id in ${AUTH_IDS}; do
+      check_auth_id "$auth_id"
+    done
 done
+

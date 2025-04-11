@@ -26,5 +26,51 @@ const KickMessages: string[] = [
   'Bot Banned.exe Executed',
 ];
 export function getBotKickMessage() {
-  return KickMessages[Math.floor(Math.random() * KickMessages.length)]; 
+  return KickMessages[Math.floor(Math.random() * KickMessages.length)];
+}
+
+const AfkMessages: string[] = [
+  'Still idle... Are you even there?',
+  'AFK detected. Ping failed.',
+  'Keyboard not found. Please reconnect human.',
+  'Still in sleep mode...',
+  'No signs of life. Initiating sarcasm.',
+  'Human.exe is not responding.',
+  'Still buffering your attention...',
+  'Echo request timed out.',
+  'You went AFK and never came back.',
+  'Status: Away From Existence',
+  'Hello? Earth to user!',
+  'Your chair is warmer than you.',
+  'Do you need a reboot?',
+  'Time waits for no user.',
+  'You’ve been idle for so long, we sent search parties.',
+  'Did you fall into a black hole?',
+  'System timeout reached. User presumed lost.',
+  'Your coffee has gone cold, just like your presence.',
+  'You left your soul in sleep mode.',
+  'Still waiting... but hope is dwindling.',
+  'Halo, użytkowniku? Żyjesz?',
+  'Cisza... Czy to już offline?',
+  'Użytkownik zniknął w eterze.',
+  'Sygnał zerwany. AFK potwierdzone.',
+  'Nie ruszasz się. System zaczyna się martwić.',
+  'Zostawiłeś nas... samych z botami.',
+  'Twój awatar się kurzy.',
+  'Przeciąg w Twoim fotelu.',
+  'Twoja nieobecność została zlogowana.',
+  'Status: Nieobecny od czasów dinozaurów.',
+  'Ты где? Сервер скучает.',
+  'Пользователь ушёл в астрал.',
+  'Связь потеряна. Повторите попытку позже.',
+  'Клавиатура молчит... страшно.',
+  'АФК зафиксирован. Ищем замену.',
+  'Ты всё ещё там... или уже нет?',
+  'Кажется, ты ушёл пить чай. Без нас.',
+  'Время простоя превышено.',
+  'Твоё отсутствие стало легендой.',
+  'Последний пинг — час назад.',
+];
+export function getStillAfkMessage() {
+  return AfkMessages[Math.floor(Math.random() * AfkMessages.length)];
 }

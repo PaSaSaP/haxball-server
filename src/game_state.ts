@@ -48,7 +48,7 @@ interface DBHandlerOtherType {
 }
 
 export class DBHandler {
-  static GameModes: GameModeType[] = ['freestyle', '1vs1', '2vs2', '3vs3', '4vs4', 'volleyball', 'tennis'];
+  static GameModes: GameModeType[] = ['freestyle', '1vs1', '2vs2', '3vs3', '4vs4', 'volleyball', 'tennis','handball'];
   mainMode: GameModeType;
   playersDb: sqlite3.Database;
   otherDb: {
@@ -59,6 +59,7 @@ export class DBHandler {
     '4vs4': DBHandlerOtherType | null,
     'volleyball': DBHandlerOtherType | null,
     'tennis': DBHandlerOtherType | null,
+    'handball': DBHandlerOtherType | null,
   };
   vipDb: sqlite3.Database;
   players: PlayersDB;
@@ -108,10 +109,19 @@ export class DBHandler {
     this.discordAuthLinks = new DiscordAuthLinksDB(this.playersDb);
     this.discordUsers = new DiscordUsersDB(this.playersDb);
     // and second table
-    this.otherDb = { 'freestyle': null, '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null, 'volleyball': null, 'tennis': null };
+    this.otherDb = { 'freestyle': null, '1vs1': null, '2vs2': null, '3vs3': null, '4vs4': null, 'volleyball': null, 'tennis': null, 'handball': null };
+    let prevOtherDbFiles: Map<string, DBHandlerOtherType> = new Map();
     for (let selector of DBHandler.GameModes) {
       if (!otherDbFiles[selector] || !otherDbFiles[selector].length) continue;
-      this.otherDb[selector] = this.createOtherDb(otherDbFiles[selector]);
+      const otherDbFile = otherDbFiles[selector];
+      if (prevOtherDbFiles.has(otherDbFile)) {
+        let otherDb = prevOtherDbFiles.get(otherDbFile)!;
+        this.otherDb[selector] = otherDb;
+      } else {
+        let otherDb = this.createOtherDb(otherDbFile);
+        this.otherDb[selector] = otherDb;
+        prevOtherDbFiles.set(otherDbFile, otherDb);
+      }
     }
     this.playerState = this.otherDb[this.mainMode]!.playerState;
     this.networksState = this.otherDb[this.mainMode]!.networksState;

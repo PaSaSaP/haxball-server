@@ -1,5 +1,6 @@
 
-export type RoomConfigSelectorType = 'freestyle' | '1vs1' | '2vs2' | '3vs3' | '4vs4' | "volleyball" | "tennis";
+export type RoomConfigSelectorType = 'freestyle' | '1vs1' | '2vs2' | '3vs3' | '4vs4' | "volleyball" | "tennis"|"handball";
+export type MapSet = 'futsal' | 'handball';
 
 type LimitsEntry = {
   score: number,
@@ -13,6 +14,7 @@ interface RoomLimits {
   '4vs4': LimitsEntry;
   'volleyball': LimitsEntry;
   'tennis': LimitsEntry;
+  'handball': LimitsEntry;
 };
 
 const roomLimits: RoomLimits = {
@@ -23,6 +25,7 @@ const roomLimits: RoomLimits = {
   '4vs4': {score: 3, time: 4},
   'volleyball': {score: 5, time: 0},
   'tennis': {score: 5, time: 0},
+  'handball': {score: 3, time: 4},
 }
 
 export interface OtherDbFiles {
@@ -33,6 +36,7 @@ export interface OtherDbFiles {
   '4vs4': string;
   'volleyball': string;
   'tennis': string;
+  'handball': string;
 }
 
 export interface RoomServerConfig {
@@ -50,6 +54,7 @@ export interface RoomServerConfig {
   noPlayer: boolean;
   autoModeEnabled: boolean;
   token: string;
+  mapSet: MapSet;
   selector: RoomConfigSelectorType;
   subselector: string;
 }
@@ -72,22 +77,53 @@ export const AllOtherDbFiles: OtherDbFiles = {
     '4vs4':  `${dbDir}/other_futsal_4vs4.db`,
     'volleyball':  `${dbDir}/other_futsal_volleyball.db`,
     'tennis':  `${dbDir}/other_futsal_tennis.db`,
+    'handball':  `${dbDir}/other_handball.db`,
 }
+
+const handball: RoomServerConfig = {
+  playersDbFile: mainDbFile,
+  otherDbFiles: {
+    'freestyle': ``,
+    '1vs1': ``,
+    '2vs2': ``,
+    '3vs3': AllOtherDbFiles['handball'],
+    '4vs4': AllOtherDbFiles['handball'],
+    'volleyball':  ``,
+    'tennis':  ``,
+    'handball':  AllOtherDbFiles['handball'],
+  },
+  vipDbFile: vipDbFile,
+  chatLogDbFile: "./haxball_player_chat_4vs4.mpk",
+  roomName: "🍒 Handball 4vs4 XxX Cherry League 🍒",
+  isPublic: true,
+  geo: { code: "it", lat: 40.0, lon: 14.0 },
+  limits: roomLimits,
+  playersInTeamLimit: 4,
+  maxPlayers: 20,
+  maxPlayersOverride: 15,
+  noPlayer: true,
+  autoModeEnabled: true,
+  token: 'thr1.AAAAAGfSC6jERkIwkXt2Iw.4kIK2P1gTUc',
+  mapSet: 'handball',
+  selector: 'handball',
+  subselector: '1',
+};
 
 const futsal_4vs4: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFiles: {
     'freestyle': ``,
-    '1vs1':  ``,
-    '2vs2':  ``,
-    '3vs3':  AllOtherDbFiles['3vs3'],
-    '4vs4':  AllOtherDbFiles['4vs4'],
+    '1vs1': ``,
+    '2vs2': ``,
+    '3vs3': AllOtherDbFiles['3vs3'],
+    '4vs4': AllOtherDbFiles['4vs4'],
     'volleyball':  ``,
     'tennis':  ``,
+    'handball':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_4vs4.mpk",
-  roomName: "🍌 FUTSAL 4vs4 XxX Banana League!",
+  roomName: " FUTSAL 4vs4 XxX Banana League!",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   limits: roomLimits,
@@ -97,6 +133,7 @@ const futsal_4vs4: RoomServerConfig = {
   noPlayer: true,
   autoModeEnabled: true,
   token: 'thr1.AAAAAGfSC6jERkIwkXt2Iw.4kIK2P1gTUc',
+  mapSet: 'futsal',
   selector: '4vs4',
   subselector: '1',
 };
@@ -105,12 +142,13 @@ const futsal_3vs3: RoomServerConfig = {
   playersDbFile: mainDbFile,
   otherDbFiles: {
     'freestyle': ``,
-    '1vs1':  ``,
-    '2vs2':  ``,
-    '3vs3':  AllOtherDbFiles['3vs3'],
-    '4vs4':  ``,
-    'volleyball':  ``,
+    '1vs1': ``,
+    '2vs2': ``,
+    '3vs3': AllOtherDbFiles['3vs3'],
+    '4vs4': ``,
+    'volleyball': ``,
     'tennis':  ``,
+    'handball':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat.mpk",
@@ -124,6 +162,7 @@ const futsal_3vs3: RoomServerConfig = {
   noPlayer: true,
   autoModeEnabled: true,
   token: 'thr1.AAAAAGfSC6jERkIwkXt2Iw.4kIK2P1gTUc',
+  mapSet: 'futsal',
   selector: '3vs3',
   subselector: '1',
 };
@@ -138,6 +177,7 @@ const futsal_1vs1: RoomServerConfig = {
     '4vs4':  ``,
     'volleyball':  ``,
     'tennis':  ``,
+    'handball':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_1vs1.mpk",
@@ -151,6 +191,7 @@ const futsal_1vs1: RoomServerConfig = {
   noPlayer: true,
   autoModeEnabled: true,
   token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
+  mapSet: 'futsal',
   selector: '1vs1',
   subselector: '1',
 };
@@ -165,6 +206,7 @@ const futsal_freestyle: RoomServerConfig = {
     '4vs4':  ``,
     'volleyball':  ``,
     'tennis':  ``,
+    'handball':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_freestyle.mpk",
@@ -178,6 +220,7 @@ const futsal_freestyle: RoomServerConfig = {
   noPlayer: true,
   autoModeEnabled: false,
   token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
+  mapSet: 'futsal',
   selector: 'freestyle',
   subselector: '1',
 };
@@ -192,6 +235,7 @@ const futsal_volleyball: RoomServerConfig = {
     '4vs4':  ``,
     'volleyball':  AllOtherDbFiles["volleyball"],
     'tennis':  ``,
+    'handball':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_volleyball.mpk",
@@ -205,6 +249,7 @@ const futsal_volleyball: RoomServerConfig = {
   noPlayer: true,
   autoModeEnabled: true,
   token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
+  mapSet: 'futsal',
   selector: 'volleyball',
   subselector: '1',
 };
@@ -219,6 +264,7 @@ const futsal_tennis: RoomServerConfig = {
     '4vs4':  ``,
     'volleyball':  ``,
     'tennis':  AllOtherDbFiles["tennis"],
+    'handball':  ``,
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_tennis.mpk",
@@ -232,6 +278,7 @@ const futsal_tennis: RoomServerConfig = {
   noPlayer: true,
   autoModeEnabled: true,
   token: 'thr1.AAAAAGfS-uGauY5INpzeTA.QX8667z7Xvo',
+  mapSet: 'futsal',
   selector: 'tennis',
   subselector: '1',
 };
@@ -248,6 +295,7 @@ export const getRoomConfig = (selector: RoomConfigSelectorType, subselector: str
   else if (selector === 'freestyle') config = futsal_freestyle;
   else if (selector === 'volleyball') config = futsal_volleyball;
   else if (selector === 'tennis') config = futsal_tennis;
+  else if (selector === 'handball') config = handball;
   else throw new Error(`There is no config with name ${selector}`);
   config.chatLogDbFile = getChatLogDbFile(selector, subselector);
   config.subselector = subselector;

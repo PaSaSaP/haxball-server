@@ -14,7 +14,7 @@ const subselector = process.env.HX_SUBSELECTOR;
 const roomConfig = config.getRoomConfig(selector, subselector);
 let channelId = '';
 const roomLinksChannelId = '1345415730337939456';
-if (selector == 'freestyle') {
+if (selector == 'freestyle' || selector === 'handball') {
   if (subselector === '1') {
     channelId = '1345442311684751491';
   } else throw new Error(`Invalid HX_SUBSELECTOR: ${subselector}`);

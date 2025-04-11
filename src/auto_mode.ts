@@ -202,7 +202,7 @@ export class AutoBot {
     if (added) {
       if (limit === 3) {
         if (rl === 3 && bl === 3) {
-          if (this.hb_room.last_selected_map_name != 'futsal_big') { // start ranked
+          if (this.hb_room.last_selected_map_name != this.hb_room.map_name_big) { // start ranked
             this.justStopGame();
           } // else it was ranked and player joined
         } // they still should play at futsal map
@@ -298,7 +298,7 @@ export class AutoBot {
         this.movePlayerToBlue(playerExt, this.specTeam);
         bl++;
       }
-      if (limit === 3 && rl === 3 && bl === 3 && this.hb_room.last_selected_map_name !== 'futsal_big') {
+      if (limit === 3 && rl === 3 && bl === 3 && this.hb_room.last_selected_map_name !== this.hb_room.map_name_big) {
         this.justStopGame();
       }
       this.switchVolleyballTrainingMode(rl + bl);
@@ -376,7 +376,7 @@ export class AutoBot {
     if (rl === bl && bl === limit) return;
     if (rl === limit && bl === limit-1 || rl === limit-1 && bl === limit) return;
     const currentMap = this.hb_room.last_selected_map_name;
-    if ((limit === 3 && currentMap === "futsal_big") || (limit === 4 && currentMap === "futsal_huge")) {
+    if ((limit === 3 && currentMap === this.hb_room.map_name_big) || (limit === 4 && currentMap === this.hb_room.map_name_huge)) {
       if (!this.currentMatch.isEnded()) {
         if (!this.currentMatch.winnerTeam && this.currentScores) {
           if (this.currentScores.red > this.currentScores.blue) this.setLastWinner(1);
@@ -551,6 +551,13 @@ export class AutoBot {
       this.chosingPlayerNextReminder += 60;
     }
     if (scores.time > this.adNextReminder) {
+      if (this.hb_room.volleyball.isEnabled()) {
+        this.hb_room.sendMsgToAll(`🏐 Serwowanie: ✋Z-wysokie 🎯Z-niskie 🕳️Q-wsteczna rotacja 💨E-przednia rotacja`,
+          Colors.BrightGreen, 'bold');
+      } else if (this.hb_room.tennis.isEnabled()) {
+        this.hb_room.sendMsgToAll(`🎾 Piłkę mozna odbic bez X, to jest normalne odbicie! 🐢 Wciskając X kopiesz z mniejszą siłą!`,
+          Colors.BrightGreen, 'bold');
+      }
       this.hb_room.sendMsgToAll(`🎉 Kup cieszynkę: !kup lub !vip |💬Discord: ${config.discordLink} |🌐Strona: ${config.webpageLink}`,
         Colors.OrangeTangelo, 'small-bold');
       this.adNextReminder = 9999; // send only once
@@ -893,9 +900,9 @@ export class AutoBot {
   private getMapNameByLimit(limit: number) {
     if (this.hb_room.volleyball.isEnabled()) return "volleyball";
     if (this.hb_room.tennis.isEnabled()) return "tennis";
-    if (limit === 3) return "futsal_big";
-    if (limit === 4) return "futsal_huge";
-    return "futsal";
+    if (limit === 3) return this.hb_room.map_name_big;
+    if (limit === 4) return this.hb_room.map_name_huge;
+    return this.hb_room.map_name_classic;
   }
 
   private getScoreTimeLimitMode(limit: number) {
@@ -1040,7 +1047,7 @@ export class AutoBot {
       if (nonAfkPlayers >= 8 && this.currentLimit != 4) {
         AMLog(`Zmieniam limit na 4, bo mamy non afk: ${nonAfkPlayers}`);
         this.currentLimit = 4;
-      } else {
+      } else if (this.currentLimit !== 3) {
         AMLog(`Zmieniam limit na 3, bo mamy non afk: ${nonAfkPlayers}`);
         this.currentLimit = 3;
       }

@@ -10,6 +10,7 @@ import { hb_log } from "./log";
 import { Emoji } from "./emoji";
 import { AutoBot } from "./auto_mode";
 import { getIpInfoFromMonitoring } from "./ip_info";
+import { networkInterfaces } from "os";
 
 class BaseCommander {
   hb_room: HaxballRoom;
@@ -81,6 +82,7 @@ class Commander extends BaseCommander {
   ghostCommander: GhostCommander;
   kickCommander: KickCommander;
   hostCommander: HostCommander;
+  adminCommander: AdminCommander;
 
   constructor(hb_room: HaxballRoom) {
     super(hb_room);
@@ -308,6 +310,8 @@ class Commander extends BaseCommander {
     this.kickCommander.update(this);
     this.hostCommander = new HostCommander(hb_room);
     this.hostCommander.update(this);
+    this.adminCommander = new AdminCommander(hb_room);
+    this.adminCommander.update(this);
   }
 
   // commands below
@@ -488,7 +492,7 @@ class Commander extends BaseCommander {
   commandChangeMap(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotAdmin(playerExt)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb futsal_huge/fh', Colors.GameState, 'italic');
+      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb futsal_huge/fh handball/n handball_big/nb', Colors.GameState, 'italic');
       return;
     }
     let map_name = cmds[0].toLowerCase();
@@ -505,7 +509,7 @@ class Commander extends BaseCommander {
   commandChangeMapColored(playerExt: PlayerData, cmds: string[]) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     if (cmds.length == 0) {
-      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb futsal_huge/fh', Colors.GameState, 'italic');
+      this.sendMsgToPlayer(playerExt, 'Napisz jaką mapę chcesz, dostępne: classic/c, big/b, futsal/f, futsal_big/fb futsal_huge/fh handball/n handball_big/nb', Colors.GameState, 'italic');
       return;
     }
     let map_name = cmds[0].toLowerCase();
@@ -1469,14 +1473,16 @@ class Commander extends BaseCommander {
 
   commandSetBallPhysics(playerExt: PlayerData, cmds: string[]) {
     if (!this.hb_room.auto_mode) return; // only in auto mode
+    const available = this.hb_room.room_config.mapSet === 'handball' ? ['hand', 'hand_power'] : ['vehax', 'winky', 'bff', 'efc'];
+    const availableStr = available.join(', ');
     if (!cmds.length) {
-      this.sendMsgToPlayer(playerExt, `Jako wybierający w Red mozesz wybrać piłkę meczową z dostępnych: vehax, winky, bff, efc. `
+      this.sendMsgToPlayer(playerExt, `Jako wybierający w Red mozesz wybrać piłkę meczową z dostępnych: ${availableStr}. `
         + `Obecna to ${this.hb_room.last_selected_ball}`, Colors.DarkGreen, 'italic');
       return;
     }
     let physics = cmds[0].toLowerCase();
-    if (!['winky', 'vehax', 'bff', 'efc'].includes(physics)) {
-      this.sendMsgToPlayer(playerExt, `Piłka ${physics} nie jest dostępna! Dostępne piłki: vehax, winky, bff, efc`, Colors.DarkGreen, 'italic');
+    if (!available.includes(physics)) {
+      this.sendMsgToPlayer(playerExt, `Piłka ${physics} nie jest dostępna! Dostępne piłki: ${availableStr}`, Colors.DarkGreen, 'italic');
       return;
     }
     playerExt.selected_ball = physics as MapPhysicsType;
@@ -2379,6 +2385,36 @@ class KickCommander extends BaseCommander {
   commandKickAllSpec(playerExt: PlayerData) {
     if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
     this.hb_room.kickAllTeamExceptTrusted(playerExt, 0);
+  }
+}
+
+class AdminCommander extends BaseCommander {
+  constructor(hb_room: HaxballRoom) {
+    super(hb_room);
+  }
+
+  update(commander: Commander) {
+    commander.commands["same_net"] = this.commandSameNetwork;
+  }
+
+  commandSameNetwork(playerExt: PlayerData) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 3)) return;
+    let net = new Map<string, PlayerData[]>();
+    this.hb_room.players_ext.forEach(p => {
+      const conn = p.conn_id;
+      if (!net.has(conn)) net.set(conn, []);
+      net.get(conn)!.push(p);
+    });
+    net.forEach(players => {
+      if (players.length > 1) {
+        let txt = '';
+        players.forEach(p => {
+          const trustTxt = (this.hb_room.temporarily_trusted.has(p.id) ? 't' : 'T') + `:${p.trust_level}`;
+          txt += `${p.name} [${p.id},${trustTxt}]`;
+        });
+        this.sendMsgToPlayer(playerExt, `Z jednej sieci: ${txt}`);
+      }
+    });
   }
 }
 
