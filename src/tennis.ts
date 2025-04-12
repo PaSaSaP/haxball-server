@@ -28,6 +28,7 @@ export class Tennis {
   private gravityEnabledFor: number;
   private static MaxTimeHoldingBall = 10; // seconds
   private static MaxTimeForMatch = 150; // seconds
+  private static GravityEnabled = false;
   constructor(hbRoom: HaxballRoom, enabled: boolean = false) {
     this.hbRoom = hbRoom;
     this.enabled = enabled;
@@ -51,6 +52,18 @@ export class Tennis {
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  setTourneyMode(enabled: boolean) {
+    if (enabled) {
+      this.setMaxTimeHoldingBall(20);
+      this.setMaxTimeForMatch(30 * 60);
+      Tennis.GravityEnabled = false;
+    } else {
+      this.setMaxTimeHoldingBall(10);
+      this.setMaxTimeForMatch(150);
+      Tennis.GravityEnabled = true;
+    }
   }
 
   setMaxTimeHoldingBall(maxTime: number) {
@@ -206,12 +219,14 @@ export class Tennis {
   }
 
   private setBallGravity(ballPosition: DiscPropertiesObject) {
+    if (!Tennis.GravityEnabled) return;
     const XGravity = 0.04;
     const xgravity = ballPosition.xspeed >= 0 ? -XGravity : XGravity;
     this.hbRoom.room.setDiscProperties(0, { xgravity: xgravity });
   }
 
   private resetBallGravity() {
+    if (!Tennis.GravityEnabled) return;
     this.hbRoom.room.setDiscProperties(0, { xgravity: 0 });
     this.gravityEnabledFor = 0;
     // TNLog(`ballState gravity reset`);

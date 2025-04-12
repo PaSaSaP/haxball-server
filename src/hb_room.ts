@@ -43,6 +43,7 @@ import { Tennis } from './tennis';
 import { Recording } from './recording';
 import { Handball } from './handball';
 import { CurrentMatchState } from './match_state';
+import { Fouls } from './fouls';
 
 
 declare global {
@@ -143,6 +144,8 @@ export class HaxballRoom {
   logs_to_discord: boolean;
   recording: Recording;
   force_recording_enabled: boolean;
+  tourney_mode: boolean;
+  fouls: Fouls;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -229,6 +232,8 @@ export class HaxballRoom {
     this.logs_to_discord = true;
     this.recording = new Recording(this, './recordings', true);
     this.force_recording_enabled = false;
+    this.tourney_mode = false;
+    this.fouls = new Fouls(this);
 
     this.ratings.isEnabledPenaltyFor = (playerId: number) => {
       let playerExt = this.Pid(playerId);
@@ -792,6 +797,7 @@ export class HaxballRoom {
     this.pl_logger.handleGameStart();
     this.recording.handleGameStart(true);
     this.current_match_state.handleGameStart();
+    if (this.tourney_mode) this.fouls.handleGameStart();
     this.last_winner_team = 0;
     this.time_limit_reached = false;
     this.resetPressureStats();
@@ -1211,7 +1217,7 @@ export class HaxballRoom {
       this.updateAdmins(null);
       await this.loadPlayerStat(playerExt);
       if (this.gatekeeper.handlePlayerJoin(playerExt)) return;
-      if (this.auto_mode) this.delay_joiner.handlePlayerJoin(playerExt);
+      if (this.auto_mode && !this.tourney_mode) this.delay_joiner.handlePlayerJoin(playerExt);
       this.rejoice_maker.handlePlayerJoin(playerExt);
       this.welcome_message.sendWelcomeMessage(playerExt, this.players_ext);
       this.pl_logger.handlePlayerJoinWithIp(playerExt, this.players_ext);
@@ -1612,6 +1618,7 @@ export class HaxballRoom {
 
   async handleTeamGoal(team: TeamID) {
     this.current_match_state.handleTeamGoal();
+    if (this.tourney_mode) this.fouls.handleTeamGoal(team);
     this.ball_possesion_tracker.onTeamGoal(team);
     if (this.auto_mode) this.auto_bot.handleTeamGoal(team);
     this.volleyball.handleTeamGoal(team);

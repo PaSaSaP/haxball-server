@@ -13,6 +13,7 @@
     "futsal_freestyle": "HX_ROOM_CONFIG_SELECTOR=freestyle HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",
     "futsal_volleyball": "HX_ROOM_CONFIG_SELECTOR=volleyball HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",
     "futsal_tennis": "HX_ROOM_CONFIG_SELECTOR=tennis HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",
+    "futsal_tennis_2": "HX_ROOM_CONFIG_SELECTOR=tennis HX_ROOM_CONFIG_SUBSELECTOR=2 node dist/src/src/index.js",
     "futsal_handball": "HX_ROOM_CONFIG_SELECTOR=handball HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",
     "futsal_1vs1": "HX_ROOM_CONFIG_SELECTOR=1vs1 HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",
     "futsal_3vs3_1": "HX_ROOM_CONFIG_SELECTOR=3vs3 HX_ROOM_CONFIG_SUBSELECTOR=1 node dist/src/src/index.js",

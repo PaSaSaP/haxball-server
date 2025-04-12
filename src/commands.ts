@@ -83,6 +83,7 @@ class Commander extends BaseCommander {
   kickCommander: KickCommander;
   hostCommander: HostCommander;
   adminCommander: AdminCommander;
+  tourneyCommander: TourneyCommander;
 
   constructor(hb_room: HaxballRoom) {
     super(hb_room);
@@ -313,6 +314,8 @@ class Commander extends BaseCommander {
     this.hostCommander.update(this);
     this.adminCommander = new AdminCommander(hb_room);
     this.adminCommander.update(this);
+    this.tourneyCommander = new TourneyCommander(hb_room);
+    this.tourneyCommander.update(this);
   }
 
   // commands below
@@ -576,7 +579,8 @@ class Commander extends BaseCommander {
 
   commandIgnore(playerExt: PlayerData, cmds: string[]) {
     if (!cmds.length) {
-      this.sendMsgToPlayer(playerExt, `Lista ignorowanych osób: ${Array.from(playerExt.ignores).map(e => `#${e}`).join(' ')}`, Colors.LightYellow, 'italic');
+      this.sendMsgToPlayer(playerExt, `Lista ignorowanych osób: ${Array.from(playerExt.ignores)
+        .map(e => this.hb_room.players_ext_all.get(e)?.name ?? `#${e}`).join(' ')}`, Colors.LightYellow, 'italic');
       return;
     }
     let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
@@ -2531,6 +2535,164 @@ class HostCommander extends BaseCommander {
       return;
     }
     this.sendMsgToPlayer(playerExt, `scores: red: ${scores.red} blue: ${scores.blue} tlimit: ${scores.timeLimit} slimit: ${scores.scoreLimit}`);
+  }
+}
+
+class TourneyCommander extends BaseCommander {
+  constructor(hb_room: HaxballRoom) {
+    super(hb_room);
+  }
+
+  update(commander: Commander) {
+    commander.commands["tourney"] = this.commandTourney.bind(this);
+    commander.commands["lock"] = this.commandSetRoomLocked.bind(this);
+    commander.commands["unlock"] = this.commandSetRoomUnlocked.bind(this);
+    commander.commands["red"] = this.commandRed.bind(this);
+    commander.commands["blue"] = this.commandBlue.bind(this);
+    commander.commands["spec"] = this.commandSpec.bind(this);
+    commander.commands["play"] = this.commandPlay.bind(this);
+    commander.commands["end"] = this.commandEnd.bind(this);
+    commander.commands["foul_red"] = this.commandFoulRed.bind(this);
+    commander.commands["foul_red-"] = this.commandFoulRedDec.bind(this);
+    commander.commands["foul_blue"] = this.commandFoulBlue.bind(this);
+    commander.commands["foul_blue-"] = this.commandFoulBlueDec.bind(this);
+    commander.commands["faul_red"] = this.commandFoulRed.bind(this);
+    commander.commands["faul_red-"] = this.commandFoulRedDec.bind(this);
+    commander.commands["faul_blue"] = this.commandFoulBlue.bind(this);
+    commander.commands["faul_blue-"] = this.commandFoulBlueDec.bind(this);
+  }
+
+  commandTourney(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, '')) return;
+    if (cmds.length === 0) return;
+    const newState = toBoolean(cmds[0]);
+    this.hb_room.tourney_mode = newState;
+    this.hb_room.tennis.setTourneyMode(newState);
+    this.hb_room.auto_bot.setTourneyMode(newState);
+    this.hb_room.auto_afk = !newState;
+    if (newState) {
+      this.hb_room.force_recording_enabled = true;
+    }
+    this.hb_room.setScoreTimeLimit(0, 0);
+    this.sendMsgToPlayer(playerExt, `ustawiam tryb turniejowy na: ${newState}`);
+  }
+
+  commandSetRoomLocked(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.room.setPassword('sfdljk');
+    this.sendMsgToPlayer(playerExt, `Pokój zablokowany, nikt inny nie dołączy!`, Colors.GameState, 'italic');
+  }
+  commandSetRoomUnlocked(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.room.setPassword(null);
+    this.sendMsgToPlayer(playerExt, `Pokój odblokowany, inni juz mogą wbijać!`, Colors.GameState, 'italic');
+  }
+
+  async commandRed(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (!cmds.length) {
+      this.sendMsgToPlayer(playerExt, "daj nick gracza jako argument...");
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer) {
+      this.sendMsgToPlayer(playerExt, `Nie mogę znaleźć gracza o nicku ${cmds}`);
+      return;
+    }
+    if (playerExt.id === cmdPlayer.id) {
+      this.sendMsgToPlayer(playerExt, `Nie mozesz sam siebie dodać! sorry!`);
+      return;
+    }
+    this.hb_room.auto_bot.addSpec(cmdPlayer);
+    await sleep(500);
+    this.hb_room.room.setPlayerTeam(cmdPlayer.id, 1);
+    await sleep(100);
+    this.sendMsgToPlayer(playerExt, `Gracz ${cmdPlayer.name} [${cmdPlayer.id}] jest w Red!`, Colors.GameState, 'italic');
+  }
+
+  async commandBlue(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (!cmds.length) {
+      this.sendMsgToPlayer(playerExt, "daj nick gracza jako argument...");
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer) {
+      this.sendMsgToPlayer(playerExt, `Nie mogę znaleźć gracza o nicku ${cmds}`);
+      return;
+    }
+    if (playerExt.id === cmdPlayer.id) {
+      this.sendMsgToPlayer(playerExt, `Nie mozesz sam siebie dodać! sorry!`);
+      return;
+    }
+    this.hb_room.auto_bot.addSpec(cmdPlayer);
+    await sleep(500);
+    this.hb_room.room.setPlayerTeam(cmdPlayer.id, 2);
+    await sleep(100);
+    this.sendMsgToPlayer(playerExt, `Gracz ${cmdPlayer.name} [${cmdPlayer.id}] jest w Blue!`, Colors.GameState, 'italic');
+  }
+
+  async commandSpec(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    if (!cmds.length) {
+      this.sendMsgToPlayer(playerExt, "daj nick gracza jako argument...");
+      return;
+    }
+    let cmdPlayer = this.getPlayerDataByName(cmds, playerExt);
+    if (!cmdPlayer) {
+      this.sendMsgToPlayer(playerExt, `Nie mogę znaleźć gracza o nicku ${cmds}`);
+      return;
+    }
+    if (playerExt.id === cmdPlayer.id) {
+      this.sendMsgToPlayer(playerExt, `Nie mozesz sam siebie dodać! sorry!`);
+      return;
+    }
+    this.hb_room.auto_bot.addSpec(cmdPlayer);
+    await sleep(100);
+    this.hb_room.room.setPlayerTeam(cmdPlayer.id, 0);
+    this.sendMsgToPlayer(playerExt, `Gracz ${cmdPlayer.name} [${cmdPlayer.id}] jest w Spec!`, Colors.GameState, 'italic');
+  }
+
+  commandPlay(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.auto_bot.startMatchOnce();
+    this.sendMsgToPlayer(playerExt, `Mecz wystartowany!`, Colors.GameState, 'italic');
+  }
+
+  async commandEnd(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    this.hb_room.room.stopGame();
+    this.sendMsgToPlayer(playerExt, `Mecz zakończony!`, Colors.GameState, 'italic');
+  }
+
+  commandFoulRedDec(playerExt: PlayerData, cmds: string[]) {
+    return this.commandFoulRed(playerExt, ['-']);
+  }
+  commandFoulRed(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let inc = 1;
+    if (cmds.length && cmds[0] === '-') inc = -1;
+    const newValue = this.hb_room.fouls.incFoulByRed(inc);
+    this.sendMsgToPlayer(playerExt, `Zmiana liczby fauli dla Red o ${inc}, obecnie ma ${newValue} fauli`, Colors.GameState, 'italic');
+  }
+
+  commandFoulBlueDec(playerExt: PlayerData, cmds: string[]) {
+    return this.commandFoulBlue(playerExt, ['-']);
+  }
+  commandFoulBlue(playerExt: PlayerData, cmds: string[]) {
+    if (!this.hb_room.tourney_mode) return;
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt)) return;
+    let inc = 1;
+    if (cmds.length && cmds[0] === '-') inc = -1;
+    const newValue = this.hb_room.fouls.incFoulByBlue(inc);
+    this.sendMsgToPlayer(playerExt, `Zmiana liczby fauli dla Blue o ${inc}, obecnie ma ${newValue} fauli`, Colors.GameState, 'italic');
   }
 }
 
