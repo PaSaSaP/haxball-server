@@ -41,6 +41,7 @@ import { GhostPlayers } from './ghost_players';
 import { Volleyball } from './volleyball';
 import { Tennis } from './tennis';
 import { Recording } from './recording';
+import { Handball } from './handball';
 
 
 declare global {
@@ -99,6 +100,7 @@ export class HaxballRoom {
   commander: Commander;
   default_map_name: string;
   last_selected_map_name: string | null;
+  default_selected_ball: MapPhysicsType;
   last_selected_ball: MapPhysicsType;
   map_name_classic: string;
   map_name_big: string;
@@ -130,9 +132,11 @@ export class HaxballRoom {
   ghost_players: GhostPlayers;
   volleyball: Volleyball;
   tennis: Tennis;
+  handball: Handball;
   no_x_for_all: boolean;
   bot_stopping_enabled = false;
   temporarily_trusted: Set<number>;
+  auto_temp_trust: boolean;
   game_tick_array: number[];
   logs_to_discord: boolean;
   recording: Recording;
@@ -214,8 +218,10 @@ export class HaxballRoom {
     this.ghost_players = new GhostPlayers(this);
     this.volleyball = new Volleyball(this, this.room_config.selector === 'volleyball');
     this.tennis = new Tennis(this, this.room_config.selector === 'tennis');
+    this.handball = new Handball(this, this.room_config.selector === 'handball');
     this.no_x_for_all = false;
     this.temporarily_trusted = new Set();
+    this.auto_temp_trust = this.room_config.selector === 'handball';
     this.game_tick_array = [];
     this.logs_to_discord = true;
     this.recording = new Recording(this, './recordings', true);
@@ -260,17 +266,18 @@ export class HaxballRoom {
     else if (this.room_config.selector === 'tennis') this.default_map_name = 'tennis';
     else if (this.room_config.selector === 'handball') this.default_map_name = 'handball';
     this.last_selected_map_name = null;
-    this.last_selected_ball = 'vehax';
+    this.default_selected_ball = 'vehax';
     if (this.room_config.mapSet === 'handball') {
       this.map_name_classic = 'handball';
       this.map_name_big = 'handball_big';
       this.map_name_huge = 'handball_huge';
-    this.last_selected_ball = 'hand_power';
+      this.default_selected_ball = 'hand_power';
     } else {
       this.map_name_classic = 'futsal';
       this.map_name_big = 'futsal_big';
       this.map_name_huge = 'futsal_huge';
     }
+    this.last_selected_ball = this.default_selected_ball;
     this.time_limit_reached = false;
     this.players_num = 0;
     this.room.setDefaultStadium("Classic");
@@ -365,7 +372,7 @@ export class HaxballRoom {
     p.mark_disconnected();
     p.admin_level = 40;
     p.trust_level = 40;
-    if (this.room_config.mapSet === 'handball') p.selected_ball = 'hand_power';
+    if (this.room_config.mapSet === 'handball') p.selected_ball = this.default_selected_ball;
     this.players_ext_all.set(p.id, p);
     return ppp;
   }
@@ -606,6 +613,7 @@ export class HaxballRoom {
     this.volleyball.handleGameTick(currentTime, ball_position);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(players);
     this.tennis.handleGameTick(currentTime, scores, ball_position, redTeam, blueTeam, distances);
+    this.handball.handleGameTick(currentTime, scores, ball_position, this.players_ext, redTeam, blueTeam, distances);
     this.match_stats.handleGameTick(scores, ball_position, this.players_ext_all, redTeam, blueTeam);
     this.ghost_players.handleGameTick(scores, redTeam, blueTeam);
     this.rejoice_maker.handleGameTick();
@@ -650,16 +658,23 @@ export class HaxballRoom {
 
   checkBallOutside(ball_position: DiscPropertiesObject) {
     let ballOutside = false;
+    let x = 0;
     if (this.last_selected_map_name === "futsal" && (ball_position.x < -460 || ball_position.x > 460 || ball_position.y < -210 || ball_position.y > 210)) {
       ballOutside = true;
     } else if (this.last_selected_map_name === "futsal_big" && (ball_position.x < -660 || ball_position.x > 660 || ball_position.y < -280 || ball_position.y > 280)) {
       ballOutside = true;
     } else if (this.last_selected_map_name === "futsal_huge" && (ball_position.x < -760 || ball_position.x > 760 || ball_position.y < -330 || ball_position.y > 330)) {
       ballOutside = true;
+    } else if (this.last_selected_map_name === "handball" && (ball_position.x < -450 || ball_position.x > 450 || ball_position.y < -210 || ball_position.y > 210)) {
+      ballOutside = true;
+      x = ball_position.x < 0 ? -405 : 405;
+    } else if ((this.last_selected_map_name === "handball_big" || this.last_selected_map_name === "handball_huge") && (ball_position.x < -680 || ball_position.x > 680 || ball_position.y < -330 || ball_position.y > 330)) {
+      ballOutside = true;
+      x = ball_position.x < 0 ? -600 : 600;
     }
     if (ballOutside) {
       this.sendMsgToAll('Piłka poza boiskiem, następnym razem nie oddam!', Colors.DarkRed);
-      this.room.setDiscProperties(0, { x: 0, y: 0, xspeed: 0, yspeed: 0 });
+      this.room.setDiscProperties(0, { x, y: 0, xspeed: 0, yspeed: 0 });
     }
   }
 
@@ -736,7 +751,7 @@ export class HaxballRoom {
     else if (['t', 'tenis'].includes(map_name)) map_name = 'tennis';
     if (this.last_selected_map_name !== map_name || this.last_selected_ball !== ballPhysics) {
       let next_map = getMap(map_name, bg_color, ball_color);
-      if (!this.volleyball.isEnabled() && !this.tennis.isEnabled() && this.last_selected_ball !== ballPhysics) {
+      if (!this.volleyball.isEnabled() && !this.tennis.isEnabled() && (this.last_selected_ball !== ballPhysics || this.last_selected_map_name !== map_name)) {
         updateMapPhysics(map_name, next_map, ballPhysics);
         this.last_selected_ball = ballPhysics;
       }
@@ -790,6 +805,7 @@ export class HaxballRoom {
     this.volleyball.handleGameStart();
     this.tennis.handleGameStart();
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
+    this.handball.handleGameStart(redTeam, blueTeam);
     this.matchStatsTimer = setTimeout(() => {
       this.matchStatsTimer = null;
       let anyPlayerProperties = this.getAnyPlayerDiscProperties();
@@ -830,8 +846,12 @@ export class HaxballRoom {
   }
 
   getRedBluePlayerInTeams(from: PlayerData[]): [PlayerData[], PlayerData[]] {
-    if (this.auto_mode) return [this.auto_bot.R(), this.auto_bot.B()];
+    if (this.auto_mode) return this.getRedBluePLayerInTeamsAutoMode();
     return this.getRedBluePlayerTeamIdsFrom(from);
+  }
+
+  getRedBluePLayerInTeamsAutoMode(): [PlayerData[], PlayerData[]] {
+    return [this.auto_bot.R(), this.auto_bot.B()];
   }
 
   getRedBluePlayerTeamIdsFrom(players: PlayerData[]): [PlayerData[], PlayerData[]] {
@@ -1129,7 +1149,7 @@ export class HaxballRoom {
     this.players_ext.set(player.id, new PlayerData(player));
     this.players_ext_all.set(player.id, this.players_ext.get(player.id)!);
     let playerExt = this.Pid(player.id);
-    if (this.room_config.mapSet === 'handball') playerExt.selected_ball = 'hand_power';
+    if (this.room_config.mapSet === 'handball') playerExt.selected_ball = this.default_selected_ball;
     if (player.country && player.country.length) {
       if (player.country.toLowerCase() === 'pl') playerExt.flag = '🇵🇱';
       else playerExt.flag = '🇪🇺';
@@ -1164,6 +1184,10 @@ export class HaxballRoom {
       }
       if (playerExt.auth_id && playerExt.trust_level == 0) {
         this.captcha.askCaptcha(playerExt);
+      }
+      if (!playerExt.trust_level && this.auto_temp_trust) {
+        playerExt.trust_level = 1;
+        this.temporarily_trusted.add(playerExt.id);
       }
       this.player_ids_by_auth.set(playerExt.auth_id, playerExt.id);
       this.player_names_by_auth.set(playerExt.auth_id, playerExt.name);
@@ -1518,26 +1542,27 @@ export class HaxballRoom {
 
   async handlePlayerTeamChange(changedPlayer: PlayerObject, byPlayer: PlayerObject | null) {
     if (changedPlayer && !changedPlayer.name) return;
-    let changed_player_ext = this.P(changedPlayer);
-    changed_player_ext.activity.updateGame(this.current_time); // reset timer
-    if (changed_player_ext.team != 0) {
-      if (changed_player_ext.afk) {
+    let changedPlayerExt = this.P(changedPlayer);
+    changedPlayerExt.activity.updateGame(this.current_time); // reset timer
+    if (changedPlayerExt.team != 0) {
+      if (changedPlayerExt.afk) {
         if (byPlayer != null) {
           // TODO block it?
-          changed_player_ext.afk_maybe = true;
-          this.setPlayerAvatarTo(changed_player_ext, Emoji.AfkMaybe);
-          this.sendMsgToPlayer(byPlayer, `${changed_player_ext.name} był AFK! Czy na pewno wrócił?`, Colors.Afk);
+          changedPlayerExt.afk_maybe = true;
+          this.setPlayerAvatarTo(changedPlayerExt, Emoji.AfkMaybe);
+          this.sendMsgToPlayer(byPlayer, `${changedPlayerExt.name} był AFK! Czy na pewno wrócił?`, Colors.Afk);
         }
       }
     }
     if (byPlayer != null) {
       this.last_player_team_changed_by_admin_time = Date.now();
-      let p = this.P(byPlayer);
-      p.activity.updateChat(this.current_time);
-      p.activity.updateMove(this.current_time);
-      p.admin_stat_team();
+      let byPlayerExt = this.P(byPlayer);
+      byPlayerExt.activity.updateChat(this.current_time);
+      byPlayerExt.activity.updateMove(this.current_time);
+      byPlayerExt.admin_stat_team();
     }
-    if (this.auto_mode) this.auto_bot.handlePlayerTeamChange(changed_player_ext);
+    if (this.auto_mode) this.auto_bot.handlePlayerTeamChange(changedPlayerExt);
+    this.handball.handlePlayerTeamChange(changedPlayerExt);
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
     this.match_stats.handlePlayerTeamChange(this.P(changedPlayer), redTeam, blueTeam);
   }
@@ -1576,6 +1601,7 @@ export class HaxballRoom {
     if (this.auto_mode) this.auto_bot.handleTeamGoal(team);
     this.volleyball.handleTeamGoal(team);
     this.tennis.handleTeamGoal(team);
+    this.handball.handleTeamGoal(team);
     const ballProperties = this.getBallProperties();
     let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
     if (team) {
@@ -1739,9 +1765,13 @@ export class HaxballRoom {
   }
 
   async handlePositionsReset() {
-    if (this.auto_mode) this.auto_bot.handlePositionsReset();
-    this.volleyball.handlePositionsReset();
-    this.tennis.handlePositionsReset();
+    if (this.auto_mode) {
+      this.auto_bot.handlePositionsReset();
+      this.volleyball.handlePositionsReset();
+      this.tennis.handlePositionsReset();
+      let [redTeam, blueTeam] = this.getRedBluePLayerInTeamsAutoMode();
+      this.handball.handlePositionsReset(redTeam, blueTeam);
+    }
     this.match_stats.handlePositionsReset();
     this.rejoice_maker.handlePositionsReset();
     this.players_ext.forEach(p => {
@@ -1792,9 +1822,13 @@ export class HaxballRoom {
       else if (serveType === 'e') message = '!serve_e';
     } else if (message.startsWith('s/')) {
       message = this.applyReplaceCommand(message, this.last_command.get(playerExt.id));
+    } else if (message.startsWith('@wyb ')) {
+      message = '!' + message.substring(1);
+    } else if (message.startsWith('@@')) {
+      message = '!w ' + message.substring(1);
     }
     // then handle commands
-    if (message[0] === '!' || message[0] === '@') {
+    if (message[0] === '!') {
       // Handle last command
       if (message === "!!") {
         let last_command_str = this.last_command.get(playerExt.id);
@@ -1804,14 +1838,10 @@ export class HaxballRoom {
         }
         message = last_command_str;
       }
-      let privMsg = message.startsWith('@@');
       this.last_command.set(playerExt.id, message);
 
       message = message.substring(1);
       let message_split = message.split(" ");
-      if (privMsg) {
-        message_split.unshift("w");
-      }
       let command = message_split[0].toLowerCase();
       this.executeCommand(command, playerExt, message_split.slice(1).filter(e => e));
       return; // Returning false will prevent the message from being broadcasted

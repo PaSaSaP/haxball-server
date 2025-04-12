@@ -244,7 +244,7 @@ export class Volleyball {
       }
     } else {
       const maxX = justServed ? 50 : 30;
-      if (lastTouchBy && player.position.x >= -maxX && player.position.x <= maxX && player.position.y <= 90) {
+      if (lastTouchBy && player.position && player.position.x >= -maxX && player.position.x <= maxX && player.position.y <= 90) {
         this.totalTouches = 0;
         this.blocked = true;
         if (justServed) {

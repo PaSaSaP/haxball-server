@@ -557,6 +557,9 @@ export class AutoBot {
       } else if (this.hb_room.tennis.isEnabled()) {
         this.hb_room.sendMsgToAll(`🎾 Piłkę mozna odbic bez X, to jest normalne odbicie! 🐢 Wciskając X kopiesz z mniejszą siłą!`,
           Colors.BrightGreen, 'bold');
+      } else if (this.hb_room.handball.isEnabled()) {
+        this.hb_room.sendMsgToAll(`🤾‍♂️ Gracz najbliżej bramki staje się bramkarzem! Może biegać po linii bramkowej! 🧤`,
+          Colors.BrightGreen, 'bold');
       }
       this.hb_room.sendMsgToAll(`🎉 Kup cieszynkę: !kup lub !vip |💬Discord: ${config.discordLink} |🌐Strona: ${config.webpageLink}`,
         Colors.OrangeTangelo, 'small-bold');
@@ -1047,7 +1050,7 @@ export class AutoBot {
       if (nonAfkPlayers >= 8 && this.currentLimit != 4) {
         AMLog(`Zmieniam limit na 4, bo mamy non afk: ${nonAfkPlayers}`);
         this.currentLimit = 4;
-      } else if (this.currentLimit !== 3) {
+      } else if (nonAfkPlayers < 8 && this.currentLimit === 4) {
         AMLog(`Zmieniam limit na 3, bo mamy non afk: ${nonAfkPlayers}`);
         this.currentLimit = 3;
       }

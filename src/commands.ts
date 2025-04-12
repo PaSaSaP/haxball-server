@@ -221,6 +221,7 @@ class Commander extends BaseCommander {
       xtl: this.commandShowTrustTemporary,
       after: this.commandAfter,
       ball: this.commandSetBallPhysics,
+      default_ball: this.commandSetDefaultBallPhysics,
 
       serve: this.commandVolleyballServiceZ,
       serve_z: this.commandVolleyballServiceZ,
@@ -1489,6 +1490,23 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Piłka meczowa zmieniona na ${physics}!`, Colors.DarkGreen, 'italic');
   }
 
+  commandSetDefaultBallPhysics(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotApprovedAdmin(playerExt, 5)) return;
+    if (!cmds.length) return;
+    const physicsName = cmds[0];
+    const available = ['hand', 'hand_power', 'vehax', 'winky', 'bff', 'efc']
+    if (!available.includes(physicsName)) {
+      this.sendMsgToPlayer(playerExt, `Nieprawidłowa nazwa piłki: ${physicsName}, dostępne: ${available}`);
+      return;
+    }
+    const physics = physicsName as MapPhysicsType;
+    this.hb_room.default_selected_ball = physics;
+    this.hb_room.players_ext.forEach(p => {
+      p.selected_ball = physics;
+    });
+    this.sendMsgToPlayer(playerExt, `Zmiana domyślnej piłki dla wszystkich na ${physicsName}`);
+  }
+
   formatUptime(ms: number) {
     const total_seconds = Math.floor(ms / 1000);
     const hours = String(Math.floor(total_seconds / 3600)).padStart(2, '0');
@@ -2019,8 +2037,8 @@ class GhostCommander extends BaseCommander {
   }
 
   update(commander: Commander) {
-    commander.commands['ghost_enable'] = this.comandGhostEnable;
-    commander.commands['ghost_disable'] = this.comandGhostDisable;
+    commander.commands['ghost_enable'] = this.comandGhostEnable.bind(this);
+    commander.commands['ghost_disable'] = this.comandGhostDisable.bind(this);
   }
 
   comandGhostEnable(playerExt: PlayerData, cmds: string[]) {
@@ -2113,16 +2131,16 @@ class KickCommander extends BaseCommander {
     registerTkickCmds('gn', 'k', 'kick', globalNetworkKickCmds);
     registerTkickCmds('gn', 'm', 'mute', globalNetworkMuteCmds);
 
-    commander.commands['kick_bots'] = this.commandKickBots;
-    commander.commands['tkick_bots'] = this.commandTKickBots;
-    commander.commands['nkick_bots'] = this.commandNKickBots;
+    commander.commands['kick_bots'] = this.commandKickBots.bind(this);
+    commander.commands['tkick_bots'] = this.commandTKickBots.bind(this);
+    commander.commands['nkick_bots'] = this.commandNKickBots.bind(this);
 
-    commander.commands['kick'] = this.commandKick;
-    commander.commands['kick_not_trusted'] = this.commandKickAllExceptVerified;
-    commander.commands['kk'] = this.commandKickAllExceptVerified;
-    commander.commands['kkr'] = this.commandKickAllRed;
-    commander.commands['kkb'] = this.commandKickAllBlue;
-    commander.commands['kks'] = this.commandKickAllSpec;
+    commander.commands['kick'] = this.commandKick.bind(this);
+    commander.commands['kick_not_trusted'] = this.commandKickAllExceptVerified.bind(this);
+    commander.commands['kk'] = this.commandKickAllExceptVerified.bind(this);
+    commander.commands['kkr'] = this.commandKickAllRed.bind(this);
+    commander.commands['kkb'] = this.commandKickAllBlue.bind(this);
+    commander.commands['kks'] = this.commandKickAllSpec.bind(this);
   }
 
   // per server
@@ -2394,7 +2412,7 @@ class AdminCommander extends BaseCommander {
   }
 
   update(commander: Commander) {
-    commander.commands["same_net"] = this.commandSameNetwork;
+    commander.commands["same_net"] = this.commandSameNetwork.bind(this);
   }
 
   commandSameNetwork(playerExt: PlayerData) {
@@ -2424,7 +2442,85 @@ class HostCommander extends BaseCommander {
   }
 
   update(commander: Commander) {
-    commander.commands["get_scores"] = this.commandGetScores;
+    commander.commands["get_scores"] = this.commandGetScores.bind(this);
+    commander.commands["cm_add"] = this.commandCMaskAdd.bind(this);
+    commander.commands["cm_del"] = this.commandCMaskDelete.bind(this);
+    commander.commands["cg_add"] = this.commandCGroupAdd.bind(this);
+    commander.commands["cg_del"] = this.commandCGroupDelete.bind(this);
+  }
+
+  private getMaskBit(cmd: string) {
+    const C = this.hb_room.room.CollisionFlags;
+    let m = 0;
+    if (cmd === 'c0') m = C.c0;
+    else if (cmd === 'c1') m = C.c1;
+    else if (cmd === 'red') m = C.red;
+    else if (cmd === 'blue') m = C.blue;
+    return m;
+  }
+
+  commandCMaskAdd(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, '')) return;
+    if (cmds.length === 0) return;
+    const props = this.hb_room.room.getPlayerDiscProperties(playerExt.id);
+    if (!props) {
+      this.sendMsgToPlayer(playerExt, 'nie masz props');
+      return;
+    }
+    const m = this.getMaskBit(cmds[0]);
+    const cMask = props.cMask | m;
+    this.hb_room.room.setPlayerDiscProperties(playerExt.id, { cMask });
+    this.sendMsgToPlayer(playerExt, `Zmieniam ADD mask dla z ${props.cMask} na ${cMask}`);
+  }
+
+  commandCMaskDelete(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, '')) return;
+    if (cmds.length === 0) return;
+    const props = this.hb_room.room.getPlayerDiscProperties(playerExt.id);
+    if (!props) {
+      this.sendMsgToPlayer(playerExt, 'nie masz props');
+      return;
+    }
+    const m = this.getMaskBit(cmds[0]);
+    const cMask = props.cMask & ~m;
+    this.hb_room.room.setPlayerDiscProperties(playerExt.id, { cMask });
+    this.sendMsgToPlayer(playerExt, `Zmieniam DEL mask dla z ${props.cMask} na ${cMask}`);
+  }
+
+  commandCGroupAdd(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, '')) return;
+    if (cmds.length === 0) return;
+    const props = this.hb_room.room.getPlayerDiscProperties(playerExt.id);
+    if (!props) {
+      this.sendMsgToPlayer(playerExt, 'nie masz props');
+      return;
+    }
+    const m = this.getMaskBit(cmds[0]);
+    const cGroup = props.cGroup | m;
+    this.hb_room.room.setPlayerDiscProperties(playerExt.id, { cGroup });
+    this.sendMsgToPlayer(playerExt, `Zmieniam ADD group dla z ${props.cGroup} na ${cGroup}`);
+  }
+
+  commandCGroupDelete(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, '')) return;
+    if (cmds.length === 0) return;
+    const props = this.hb_room.room.getPlayerDiscProperties(playerExt.id);
+    if (!props) {
+      this.sendMsgToPlayer(playerExt, 'nie masz props');
+      return;
+    }
+    const m = this.getMaskBit(cmds[0]);
+    const cGroup = props.cGroup & ~m;
+    this.hb_room.room.setPlayerDiscProperties(playerExt.id, { cGroup });
+    this.sendMsgToPlayer(playerExt, `Zmieniam DEL group dla z ${props.cGroup} na ${cGroup}`);
+  }
+
+  commandAutoTempTrust(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, '')) return;
+    if (cmds.length === 0) return;
+    const newState = toBoolean(cmds[0]);
+    this.hb_room.auto_temp_trust = newState;
+    this.sendMsgToPlayer(playerExt, `ustawiam auto temp trust na: ${newState}`);
   }
 
   commandGetScores(playerExt: PlayerData, cmds: string[]) {
