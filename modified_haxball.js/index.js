@@ -49,6 +49,7 @@ const onHBLoaded = function(cb) {
   global.PlayerInput = new Map();
   global.TimeoutForX = 500;
   global.MonitorPlayerInput = new Map();
+  global.MapSegments = null;
   function ActionLog(txt) {
     console.log(`#ACTION# ${txt}`);
   }
@@ -296,15 +297,15 @@ const onHBLoaded = function(cb) {
   class PhysicsObject {
     constructor() {
       this.rf = 0;
-      this.c = this.m = 63;
-      this.T = 16777215;
-      this.ga = .99;
-      this.L = 1;
-      this.i = .5;
-      this.M = 10;
-      this.la = new Point2D(0, 0);
-      this.u = new Point2D(0, 0);
-      this.a = new Point2D(0, 0)
+      this.c = this.m = 63; // cMask
+      this.T = 16777215; // color
+      this.ga = .99; // damping
+      this.L = 1; // invMass
+      this.i = .5; // bCoeff
+      this.M = 10; // radius
+      this.la = new Point2D(0, 0); // gravity
+      this.u = new Point2D(0, 0); // speed
+      this.a = new Point2D(0, 0) // position
     }
     G(a) {
       // ActionLog(`PhysicsObject rf=${this.rf} c=${this.c} T=${this.T} ga=${this.ga} L=${this.L} M=${this.M}`);
@@ -356,6 +357,7 @@ const onHBLoaded = function(cb) {
       }
     }
     Dg(a) {
+      // Probably checking player disc collision with segments
       if (0 != 0 * a.Ha) {
         var b = a.F.a;
         var c = a.K.a;
@@ -1883,46 +1885,46 @@ const onHBLoaded = function(cb) {
         }
         return f
       }
-      this.oa = a.Ya();
-      this.Ec = a.H();
-      this.Fc = a.o();
-      this.Dc = a.o();
-      this.bc = a.o();
-      this.ac = a.o();
-      this.zd = a.o();
-      this.Cc = a.H();
-      this.cc = a.o();
-      this.Gc = a.o();
-      this.Ma = a.o();
-      this.Mb.pa(a);
-      this.Qd = a.kc();
-      this.Bd = a.C();
-      this.Cd = 0 != a.C();
-      this.dd = 0 != a.C();
-      this.v = [];
+      this.oa = a.Ya(); // name
+      this.Ec = a.H(); // bg, type(grass|hockey)
+      this.Fc = a.o(); // bg.width
+      this.Dc = a.o(); // bg.height
+      this.bc = a.o(); // bg.kickOffRadius
+      this.ac = a.o(); // bg.cornerRadius
+      this.zd = a.o(); // bg.goalLine
+      this.Cc = a.H(); // bg.color
+      this.cc = a.o(); // width
+      this.Gc = a.o(); // height
+      this.Ma = a.o(); // spawnDistance, default 200
+      this.Mb.pa(a); // playerPhysics
+      this.Qd = a.kc(); // maxViewWidth
+      this.Bd = a.C(); // cameraFollow, default 0
+      this.Cd = 0 != a.C(); // canBeStored
+      this.dd = 0 != a.C(); // kickOffReset (full)
+      this.v = []; // vertexes
       for (var c = a.C(), d = 0; d < c;) {
         var e = new DataContainer;
         e.pa(a);
         e.Kc = d++;
         this.v.push(e)
       }
-      this.I = [];
+      this.I = []; // segments
       c = a.C();
       for (d = 0; d < c;) ++d, e = new VectorCalculation, e.pa(a, this.v), this.I.push(e);
-      this.Y = [];
+      this.Y = []; // planes
       c = a.C();
       for (d = 0; d < c;) ++d, e = new K, e.pa(a), this.Y.push(e);
-      this.Sa = [];
+      this.Sa = []; // goals
       c = a.C();
       for (d = 0; d < c;) ++d, e = new PlayerPosition, e.pa(a), this.Sa.push(e);
-      this.A = [];
+      this.A = []; // ballPhysics
       c = a.C();
       for (d = 0; d < c;) ++d, e = new HaxballPhysicalEntity, e.pa(a), this.A.push(e);
-      this.Ta = [];
+      this.Ta = []; // joints
       c = a.C();
       for (d = 0; d < c;) ++d, e = new ForceCalculator, e.pa(a), this.Ta.push(e);
-      this.Pb = b();
-      this.Ib = b();
+      this.Pb = b(); // redSpawnPoints
+      this.Ib = b(); // blueSpawnPoints
       this.Nb();
       if (!this.Rf()) throw r.s(new EmptyClass("Invalid stadium"));
     }
@@ -2021,6 +2023,7 @@ const onHBLoaded = function(cb) {
       c(this.I, "segments", function(k) {
         return HaxballMapsManager.ph(k, g.v)
       });
+      global.MapSegments = this.I;
       c(this.Sa, "goals", HaxballMapsManager.lh);
       c(this.A, "discs", function(k) {
         return HaxballMapsManager.df(k, new HaxballPhysicalEntity)
@@ -3152,6 +3155,9 @@ const onHBLoaded = function(cb) {
             }
             c(MapDataCompressionHandler.V(n))
           },
+          getStadiumSegments: function () {
+            return global.MapSegments;
+          },
           setDefaultStadium: function(h) {
             let n = HaxballMapsManager.Gd(),
               v = null,
@@ -3500,7 +3506,7 @@ const onHBLoaded = function(cb) {
       this.Nc =
         0;
       this.M = 15;
-      this.m = 0;
+      this.m = 0; // cGroup
       this.la = new Point2D(0, 0);
       this.L = this.i = .5;
       this.ga = .96;

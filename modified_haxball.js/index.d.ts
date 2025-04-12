@@ -32,6 +32,8 @@ declare class RoomObject {
 
     setCustomStadiumJson(jsonStadiumContents: any): void;
 
+    getStadiumSegments(): any[] | null;
+
     setDefaultStadium(stadiumName: string): void;
 
     setTeamsLock(locked: boolean): void;
