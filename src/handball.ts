@@ -26,6 +26,9 @@ export class Handball {
   private gravityEnabledFor: number;
   private closerRed: number;
   private closerBlue: number;
+  private ballInRedFieldTicks: number;
+  private ballInBlueFieldTicks: number;
+  private ballInFieldNextWarn: number;
   private currentTick: number;
   private static readonly SegmentIdsRed = [0, 1, 2];
   private static readonly SegmentIdsBlue = [3, 4, 5];
@@ -43,6 +46,9 @@ export class Handball {
     // this.ballXDirection = 0;
     this.closerRed = -1;
     this.closerBlue = -1;
+    this.ballInRedFieldTicks = 0;
+    this.ballInBlueFieldTicks = 0;
+    this.ballInFieldNextWarn = 0;
     this.currentTick = 0;
   }
 
@@ -64,56 +70,79 @@ export class Handball {
       // TNLog(`(ballInTeam: ${this.ballInTeam}) Ball position changed from ${this.lastBallPosition.x} to ${ballPosition.x}`);
       this.ballState = BallState.inGame;
     } else if (this.ballState !== BallState.reset) {
-        let segments = this.hbRoom.room.getStadiumSegments();
-        if (!segments) {
-          TNLog(`segments is null`);
-        } else if (segments.length < 6) {
-          TNLog(`Too low segments (${segments.length})`);
-        } else {
-          // if (this.currentTick % 60 === 0) TNLog(`got ${segments.length} segments, closerRed(${this.closerRed}) closerBlue(${this.closerBlue})`);
-          if (this.closerRed !== -1 && !redTeam.includes(this.closerRed)) this.closerRed = -1;
-          if (this.closerBlue !== -1 && !blueTeam.includes(this.closerBlue)) this.closerBlue = -1;
-          const CheckDistance = this.hbRoom.last_selected_map_name === 'handball' ? Handball.CheckDistance : Handball.CheckDistanceBig;
+      let segments = this.hbRoom.room.getStadiumSegments();
+      if (!segments) {
+        TNLog(`segments is null`);
+      } else if (segments.length < 6) {
+        TNLog(`Too low segments (${segments.length})`);
+      } else {
+        // if (this.currentTick % 60 === 0) TNLog(`got ${segments.length} segments, closerRed(${this.closerRed}) closerBlue(${this.closerBlue})`);
+        if (this.closerRed !== -1 && !redTeam.includes(this.closerRed)) this.closerRed = -1;
+        if (this.closerBlue !== -1 && !blueTeam.includes(this.closerBlue)) this.closerBlue = -1;
+        const CheckDistance = this.hbRoom.last_selected_map_name === 'handball' ? Handball.CheckDistance : Handball.CheckDistanceBig;
 
-          if (this.closerRed === -1) {
-            let closerRed = -1;
-            let closerRedDist = Infinity;
-            redTeam.forEach(pId => {
-              let p = players.get(pId)!;
-              if (p.position && p.position.x < -CheckDistance) {
-                const d = this.getMinDistanceToSegmentRed(segments, p.position);
-                if (d < closerRedDist) {
-                  closerRed = pId;
-                  closerRedDist = d;
-                }
+        if (this.closerRed === -1) {
+          let closerRed = -1;
+          let closerRedDist = Infinity;
+          redTeam.forEach(pId => {
+            let p = players.get(pId)!;
+            if (p.position && p.position.x < -CheckDistance) {
+              const d = this.getMinDistanceToSegmentRed(segments, p.position);
+              if (d < closerRedDist) {
+                closerRed = pId;
+                closerRedDist = d;
               }
-            });
-            if (closerRedDist !== Infinity) {
-              this.closerRed = closerRed;
-              this.deleteMaskForRedPlayer(this.closerRed);
             }
+          });
+          if (closerRedDist !== Infinity) {
+            this.closerRed = closerRed;
+            this.deleteMaskForRedPlayer(this.closerRed);
           }
-
-          if (this.closerBlue === -1) {
-            let closerBlue = -1;
-            let closerDistDist = Infinity;
-            blueTeam.forEach(pId => {
-              let p = players.get(pId)!;
-              if (p.position && p.position.x > CheckDistance) {
-                const d = this.getMinDistanceToSegmentBlue(segments, p.position);
-                if (d < closerDistDist) {
-                  closerBlue = pId;
-                  closerDistDist = d;
-                }
-              }
-            });
-            if (closerDistDist !== Infinity) {
-              this.closerBlue = closerBlue;
-              this.deleteMaskForBluePlayer(this.closerBlue);
-            }
-          }
-
         }
+
+        if (this.closerBlue === -1) {
+          let closerBlue = -1;
+          let closerDistDist = Infinity;
+          blueTeam.forEach(pId => {
+            let p = players.get(pId)!;
+            if (p.position && p.position.x > CheckDistance) {
+              const d = this.getMinDistanceToSegmentBlue(segments, p.position);
+              if (d < closerDistDist) {
+                closerBlue = pId;
+                closerDistDist = d;
+              }
+            }
+          });
+          if (closerDistDist !== Infinity) {
+            this.closerBlue = closerBlue;
+            this.deleteMaskForBluePlayer(this.closerBlue);
+          }
+        }
+
+        if (ballPosition.x < -CheckDistance) {
+          if (this.isBallWithinRedGoalField(segments, ballPosition)) {
+            this.ballInRedFieldTicks++;
+          } else {
+            this.ballInRedFieldTicks = 0;
+            this.ballInFieldNextWarn = 1;
+          }
+          this.warnRedTeamForHoldingBall();
+          this.ballInBlueFieldTicks = 0;
+        } else if (ballPosition.x > CheckDistance) {
+          if (this.isBallWithinBlueGoalField(segments, ballPosition)) {
+            this.ballInBlueFieldTicks++;
+          } else {
+            this.ballInBlueFieldTicks = 0;
+            this.ballInFieldNextWarn = 1;
+          }
+          this.warnBlueTeamForHoldingBall();
+          this.ballInRedFieldTicks = 0;
+        } else {
+          this.ballInRedFieldTicks = 0;
+          this.ballInBlueFieldTicks = 0;
+          this.ballInFieldNextWarn = 1;
+        }
+      }
     }
 
     if (this.gravityEnabledFor) {
@@ -188,6 +217,50 @@ export class Handball {
     return dist - segment_radius;
   }
 
+  private warnRedTeamForHoldingBall() {
+    this.warnTeamForHoldingBall(this.ballInRedFieldTicks, '🔴 Red');
+  }
+  private warnBlueTeamForHoldingBall() {
+    this.warnTeamForHoldingBall(this.ballInBlueFieldTicks, '🔵 Blue');
+  }
+
+  private warnTeamForHoldingBall(ticks: number, teamTxt: string) {
+    const nextWarn = 60 * 10;
+    if (ticks > nextWarn && ticks > this.ballInFieldNextWarn) {
+      this.hbRoom.sendMsgToAll(`${teamTxt} traci Honor, przetrzymują piłkę! WSTYD! KOMPROMITACJA! NIE WRACAJCIE DO DOMU!`,
+        Colors.LightRed, 'bold');
+      this.ballInFieldNextWarn += nextWarn+1;
+    }
+  }
+
+  private isBallWithinRedGoalField(segments: any[], disc_pos: Position) {
+    return this.isDiscWithinSegments(segments, 0, 3, disc_pos, [1, 1, 1]);
+  }
+  private isBallWithinBlueGoalField(segments: any[], disc_pos: Position) {
+    return this.isDiscWithinSegments(segments, 3, 6, disc_pos, [1, 1, 1]);
+  }
+
+  private isDiscWithinSegments(segments: any[], startIdx: number, endIdx: number, disc_pos: Position, signs: number[]) {
+    try {
+      for (let i = startIdx; i < endIdx; ++i) {
+        const s = segments[i];
+        const sign = signs[i-startIdx];
+        let d = this.getDiscSideOfSegment(disc_pos, s.F.a, s.K.a, s.Ha);
+        // if (this.currentTick % 30 === 0) TNLog(`i: ${startIdx}+${i} d: ${d} sign: ${sign} warn: ${this.ballInFieldNextWarn} red: ${this.ballInRedFieldTicks} blue: ${this.ballInBlueFieldTicks}`);
+        if (!d) continue;
+        if (d !== sign) return false;
+      }
+      return true;
+    } catch (e) {
+      TNLog(`isDiscWithinSegments error: ${e}`);
+      return false;
+    }
+  }
+
+  private getDiscSideOfSegment(disc_pos: Position, seg_a: Position, seg_b: Position, segment_radius: number) {
+    return this.distanceToRoundedSegmentV2(disc_pos, seg_a, seg_b, segment_radius);
+  }
+
   private distanceToRoundedSegmentV2(
     disc_pos: Position,
     seg_a: Position,
@@ -221,8 +294,9 @@ export class Handball {
     const cross = dx * to_disc_y - dy * to_disc_x;
 
     const sign = cross < 0 ? -1 : 1;
-
-    return sign * (dist - segment_radius);
+    return sign;
+    // below to return signed distance
+    // return sign * (dist - segment_radius);
   }
 
   private setBallGravity(ballPosition: DiscPropertiesObject) {
@@ -294,6 +368,9 @@ export class Handball {
     // this.ballXDirection = 0;
     this.closerRed = -1;
     this.closerBlue = -1;
+    this.ballInRedFieldTicks = 0;
+    this.ballInBlueFieldTicks = 0;
+    this.ballInFieldNextWarn = 0;
     redTeam.concat(blueTeam).forEach(playerId => {
       this.setMaskForPlayer(playerId);
     });
@@ -309,6 +386,9 @@ export class Handball {
     // this.ballXDirection = 0;
     this.closerRed = -1;
     this.closerBlue = -1;
+    this.ballInRedFieldTicks = 0;
+    this.ballInBlueFieldTicks = 0;
+    this.ballInFieldNextWarn = 0;
     redTeam.concat(blueTeam).forEach(player => {
       this.setMaskForPlayer(player.id);
     });

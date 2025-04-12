@@ -42,6 +42,7 @@ import { Volleyball } from './volleyball';
 import { Tennis } from './tennis';
 import { Recording } from './recording';
 import { Handball } from './handball';
+import { CurrentMatchState } from './match_state';
 
 
 declare global {
@@ -88,6 +89,7 @@ export class HaxballRoom {
   ratings: Ratings;
   ratings_for_all_games: boolean;
   match_stats: MatchStats;
+  current_match_state: CurrentMatchState;
   game_stopped_timer: any | null;
   game_paused_timer: any | null;
   matchStatsTimer: any | null;
@@ -181,7 +183,6 @@ export class HaxballRoom {
     this.last_winner_team = 0;
     this.limit = roomConfig.playersInTeamLimit;
     this.max_afk_time_minutes = 10;
-    this.auto_bot = new AutoBot(this);
     this.player_stats = new Map();
     this.player_stats_auth = new Map();
     // this.glicko_settings = null;
@@ -190,6 +191,7 @@ export class HaxballRoom {
     this.ratings = new Ratings(this.glicko, { limits: this.room_config.limits });
     this.ratings_for_all_games = false;
     this.match_stats = new MatchStats();
+    this.current_match_state = new CurrentMatchState();
     this.auto_mode = roomConfig.autoModeEnabled;
     this.auto_afk = true;
     this.room_link = '';
@@ -216,6 +218,7 @@ export class HaxballRoom {
     this.pl_logger = new PlayerJoinLogger(this);
     this.discord_account = new DiscordAccountManager(this);
     this.ghost_players = new GhostPlayers(this);
+    this.auto_bot = new AutoBot(this);
     this.volleyball = new Volleyball(this, this.room_config.selector === 'volleyball');
     this.tennis = new Tennis(this, this.room_config.selector === 'tennis');
     this.handball = new Handball(this, this.room_config.selector === 'handball');
@@ -530,6 +533,7 @@ export class HaxballRoom {
     this.countTicksPerSecond(currentTime);
     this.pinger.sendKeepAlive(currentTime);
     let scores = this.room.getScores();
+    this.current_match_state.handleGameTick(scores);
     this.scores = scores;
     let players = this.getPlayersExtList(true);
     let currentMatchTime = scores.time;
@@ -657,6 +661,7 @@ export class HaxballRoom {
   }
 
   checkBallOutside(ball_position: DiscPropertiesObject) {
+    if (this.auto_mode && !this.current_match_state.isBallInGame()) return;
     let ballOutside = false;
     let x = 0;
     if (this.last_selected_map_name === "futsal" && (ball_position.x < -460 || ball_position.x > 460 || ball_position.y < -210 || ball_position.y > 210)) {
@@ -786,6 +791,7 @@ export class HaxballRoom {
     this.pinger.stop();
     this.pl_logger.handleGameStart();
     this.recording.handleGameStart(true);
+    this.current_match_state.handleGameStart();
     this.last_winner_team = 0;
     this.time_limit_reached = false;
     this.resetPressureStats();
@@ -868,6 +874,7 @@ export class HaxballRoom {
     this.pinger.start();
     this.pl_logger.handleGameStop();
     this.delay_joiner.handleGameStop();
+    this.current_match_state.handleGameStop();
     if (byPlayer) this.Pid(byPlayer.id).admin_stat_start_stop();
     const MaxAllowedGameStopTime = 20.0 * 1000; // [ms]
     const now = Date.now();
@@ -1466,7 +1473,14 @@ export class HaxballRoom {
     else if (`${t} 3 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal_big';
     else if (`${t} 4 Vehax` === newStadiumName) this.last_selected_map_name = 'futsal_huge';
     else if (`${t} 2 Handball` === newStadiumName) this.last_selected_map_name = 'handball';
-    else if (`${t} 3 Handball` === newStadiumName) this.last_selected_map_name = 'handball_big';
+    else if (`${t} 3 Handball` === newStadiumName) {
+      if (this.room_config.playersInTeamLimit === 4 && this.auto_bot.getCurrentLimit() === 4) {
+        // stupid fix, but maybe auto update limit while game?!?!
+        this.last_selected_map_name = 'handball_huge';
+      } else {
+        this.last_selected_map_name = 'handball_big';
+      }
+    } else if (`${t} 4 Handball` === newStadiumName) this.last_selected_map_name = 'handball_huge';
     else {
       this.feature_pressure_stadium = false;
       this.last_selected_map_name = '';
@@ -1597,6 +1611,7 @@ export class HaxballRoom {
   }
 
   async handleTeamGoal(team: TeamID) {
+    this.current_match_state.handleTeamGoal();
     this.ball_possesion_tracker.onTeamGoal(team);
     if (this.auto_mode) this.auto_bot.handleTeamGoal(team);
     this.volleyball.handleTeamGoal(team);
@@ -1613,6 +1628,7 @@ export class HaxballRoom {
   }
 
   async handleTeamVictory(scores: ScoresObject) {
+    this.current_match_state.handleTeamVictory();
     if (scores.red > scores.blue) this.last_winner_team = 1;
     else if (scores.blue > scores.red) this.last_winner_team = 2;
     else this.last_winner_team = 0;
@@ -1765,6 +1781,7 @@ export class HaxballRoom {
   }
 
   async handlePositionsReset() {
+    this.current_match_state.handlePositionsReset();
     if (this.auto_mode) {
       this.auto_bot.handlePositionsReset();
       this.volleyball.handlePositionsReset();
