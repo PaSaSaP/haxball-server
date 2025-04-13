@@ -166,6 +166,11 @@ export class AutoBot {
   setTourneyMode(tourneyMode: boolean) {
     this.tourneyMode = tourneyMode;
     this.tourneyModeMatchStarted = false;
+    if (this.tourneyMode) {
+      AutoBot.MaxMatchTime = 60 * 60;
+    } else {
+      AutoBot.MaxMatchTime = 6 * 60;
+    }
   }
 
   startMatchOnce() {
@@ -858,8 +863,10 @@ export class AutoBot {
         this.room.reorderPlayers(this.specTeam.map(e => e.id), true);
         // AMLog(`REORDERED: s:${this.specTeam.map(e=>e.name).join(",")}`);
         if (rl === limit && bl === limit) {
-          this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(limit));
-          this.hb_room.setMapByName(this.getMapNameByLimit(limit), 0, 0, this.getBallPhysics());
+          if (!this.tourneyMode) {
+            this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(limit));
+            this.hb_room.setMapByName(this.getMapNameByLimit(limit), 0, 0, this.getBallPhysics());
+          }
           await sleep(500);
           if (!this.ranked) {
             this.lastWinner = 0;
@@ -868,7 +875,9 @@ export class AutoBot {
           this.ranked = true;
           this.room.startGame();
         } else {
-          this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(2));
+          if (!this.tourneyMode) {
+            this.hb_room.setScoreTimeLimitByMode(this.getScoreTimeLimitMode(2));
+          }
           if (rl + bl === 1 && this.hb_room.volleyball.isEnabled()) {
             this.hb_room.volleyball.setTraining(true);
             this.hb_room.setMapByName("volleyball_training", 0, 0, this.getBallPhysics());

@@ -28,7 +28,7 @@ export class Tennis {
   private gravityEnabledFor: number;
   private static MaxTimeHoldingBall = 10; // seconds
   private static MaxTimeForMatch = 150; // seconds
-  private static GravityEnabled = false;
+  private static GravityEnabled = true;
   constructor(hbRoom: HaxballRoom, enabled: boolean = false) {
     this.hbRoom = hbRoom;
     this.enabled = enabled;

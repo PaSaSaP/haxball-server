@@ -2572,6 +2572,8 @@ class TourneyCommander extends BaseCommander {
     this.hb_room.auto_afk = !newState;
     if (newState) {
       this.hb_room.force_recording_enabled = true;
+    } else {
+      this.hb_room.auto_bot.resetAndStart();
     }
     this.hb_room.setScoreTimeLimit(0, 0);
     this.sendMsgToPlayer(playerExt, `ustawiam tryb turniejowy na: ${newState}`);

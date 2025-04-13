@@ -139,6 +139,7 @@ export class PlayerData {
   command_after_match_ends: string;
   selected_ball: MapPhysicsType;
   monitor_enabled = false;
+  finger_game = true;
 
   bot = false;
 
