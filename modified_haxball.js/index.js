@@ -49,6 +49,7 @@ const onHBLoaded = function(cb) {
   global.PlayerInput = new Map();
   global.TimeoutForX = 500;
   global.MonitorPlayerInput = new Map();
+  global.StepMove = false;
   global.MapSegments = null;
   function ActionLog(txt) {
     console.log(`#ACTION# ${txt}`);
@@ -749,6 +750,8 @@ const onHBLoaded = function(cb) {
       this.x_once = false;
       this.x_counter = 0;
       this.keys = 0;
+      this.prev_keys = 0;
+      this.diff_keys = 0;
     }
   }
 
@@ -3100,6 +3103,19 @@ const onHBLoaded = function(cb) {
             if (data) return data.keys;
             return 0;
           },
+          getPlayerInputDiff(h) {
+            let data = global.PlayerInput.get(h);
+            if (data) {
+              const diff_keys = data.diff_keys|0;
+              data.diff_keys = 0;
+              return diff_keys;
+            }
+            return 0;
+          },
+          setStepMove(newState) {
+            global.StepMove = newState;
+            ActionLog(`stepMove = ${newState}`);
+          },
           startMonitorInput: function (h) {
             global.MonitorPlayerInput.set(h, []);
           },
@@ -4713,6 +4729,12 @@ const onHBLoaded = function(cb) {
           }
           // ActionLog(`PlayerInputHandler id=${this.B} keys=${data.keys} input=${this.input} x=${data.x} X=${b.Cb}`);
         }
+        if (global.StepMove) {
+          // b.Jb = b.Jb & 16; // not here, desync!
+          data.diff_keys = (data.keys & ~data.prev_keys) | data.diff_keys;
+          // ActionLog(`prev keys = ${data.prev_keys} curr keys = ${data.keys}, diff = ${data.diff_keys}`);
+        }
+        data.prev_keys = data.keys;
       }
       // b.ja is team object, b.N is disc object
       // b.N.a is current position, b.N.u is delta position, b.N.la is (0,0) as I am checking so maybe some lag diff?
@@ -4751,6 +4773,10 @@ const onHBLoaded = function(cb) {
         let data = global.PlayerInput.get(this.B);
         if (data) {
           data.keys = this.input | 0;
+
+        if (global.StepMove) {
+            this.input = this.input & 16;
+        }
           if (data.no_x) {
             if (this.input & 16) {
               if (!data.x) data.x_since = global.CurrentTime;
@@ -4765,7 +4791,7 @@ const onHBLoaded = function(cb) {
           }
         }
       } else if (this.spec) {
-        // this.input = 0; // do not change it here, probably causes desyncs
+        // this.input = 0; // do not change it here, causes desyncs
       }
       // ActionLog(`PlayerInputHandler ${this.B} => ${this.input}`); // TODO up=1, down=2, left=4, right=8, x=16
       a.xa(this.input)

@@ -201,51 +201,6 @@ services:
       start_period: 60s
     command: ["futsal_tennis"]
 ######
-  tennis-2:
-    image: hx-puppeteer:1.0
-    container_name: haxball-server-tennis-2
-    restart: unless-stopped
-    ports:
-      - "0.0.0.0:53000-53100:53000-53100/udp"
-      - "[::]:53000-53100:53000-53100/udp"
-    environment:
-      - MONITORING=monitoring
-      - HTTP_PROXY=http://ssh-proxy:3132
-      - HTTPS_PROXY=http://ssh-proxy:3132
-      - NODE_TLS_REJECT_UNAUTHORIZED=0
-      - HX_ROOM_CONFIG_SELECTOR=tennis
-      - HX_ROOM_CONFIG_SUBSELECTOR=2
-      - TZ=Europe/Warsaw
-      - NODE_TZ=Europe/Warsaw
-    volumes:
-      - .:/src
-      - /mnt/sqlite_ram/db:/src/db
-    cap_add:
-      - SYS_ADMIN
-      - CAP_NET_ADMIN
-    shm_size: "1gb"
-    sysctls:
-      - net.ipv4.ip_local_port_range=53000 53100
-    deploy:
-      resources:
-        reservations:
-          memory: 512M
-    cpu_shares: 2048
-    mem_swappiness: 10
-    mem_limit: 1G
-    memswap_limit: 2G
-    oom_score_adj: -500
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f \"http://monitoring/healthcheck/$${HX_ROOM_CONFIG_SELECTOR}_$${HX_ROOM_CONFIG_SUBSELECTOR}\" || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    command: ["futsal_tennis_2"]
-#
-######
   # freestyle:
   #   image: hx-puppeteer:1.0
   #   container_name: haxball-server-freestyle

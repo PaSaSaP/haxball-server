@@ -18,7 +18,7 @@ HOUR=$(date +"%H")
 BACKUP_DIR="${DAY_DIR}/${TIMESTAMP}"
 mkdir -p "$BACKUP_DIR"
 
-for sselector in "4vs4_1" "3vs3_1" "1vs1_1"; do
+for sselector in "3vs3_1" "1vs1_1"; do
   "$SCRIPT_DIR/send_god_message.sh" "$sselector" '!anno Za 5 sekund Lagi, trzymajcie się!'
 done
 sleep 5

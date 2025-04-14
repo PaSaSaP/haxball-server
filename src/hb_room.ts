@@ -44,6 +44,7 @@ import { Recording } from './recording';
 import { Handball } from './handball';
 import { CurrentMatchState } from './match_state';
 import { Fouls } from './fouls';
+import { StepMove } from './step_move';
 
 
 declare global {
@@ -146,6 +147,7 @@ export class HaxballRoom {
   force_recording_enabled: boolean;
   tourney_mode: boolean;
   fouls: Fouls;
+  step_move: StepMove;
 
   constructor(room: RoomObject, roomConfig: config.RoomServerConfig, gameState: GameState) {
     this.room = room;
@@ -234,6 +236,7 @@ export class HaxballRoom {
     this.force_recording_enabled = false;
     this.tourney_mode = false;
     this.fouls = new Fouls(this);
+    this.step_move = new StepMove(this);
 
     this.ratings.isEnabledPenaltyFor = (playerId: number) => {
       let playerExt = this.Pid(playerId);
@@ -546,6 +549,7 @@ export class HaxballRoom {
     this.last_match_time = currentMatchTime;
     const ball_position = this.room.getDiscProperties(0);
     this.pl_logger.handleGameTick(currentTime, ball_position, players);
+    this.step_move.handleGameTick(currentTime, players);
 
     if (this.feature_pressure) {
       if (deltaTime > 0 && ball_position) {
@@ -894,6 +898,10 @@ export class HaxballRoom {
     this.ghost_players.handleGameStop();
     const recorded = this.recording.handleGameStop(this.auto_bot.isRanked() || this.tennis.isEnabled() || this.force_recording_enabled);
     const recFilename = recorded ? this.recording.getFilename() : '';
+    if (recFilename.length && this.tourney_mode) {
+        //TODO XX
+        hb_log(`Tourney match: ${recFilename}`);
+    }
     for (let p of this.getPlayersExt()) {
       p.activity.game = now;
     }

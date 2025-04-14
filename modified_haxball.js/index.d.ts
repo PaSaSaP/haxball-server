@@ -74,6 +74,10 @@ declare class RoomObject {
 
     getPlayerInput(playerId: number): number;
 
+    getPlayerInputDiff(playerId: number): number;
+
+    setStepMove(newState: boolean): void;
+
     setGhostPlayer(playerId: number, ghostedPlayerId: number | null): void;
 
     clearGhostPlayers(): void;

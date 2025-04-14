@@ -2451,6 +2451,9 @@ class HostCommander extends BaseCommander {
     commander.commands["cm_del"] = this.commandCMaskDelete.bind(this);
     commander.commands["cg_add"] = this.commandCGroupAdd.bind(this);
     commander.commands["cg_del"] = this.commandCGroupDelete.bind(this);
+
+    commander.commands["auto_temp_trust"] = this.commandAutoTempTrust.bind(this);
+    commander.commands["step_move"] = this.commandStepMove.bind(this);
   }
 
   private getMaskBit(cmd: string) {
@@ -2535,6 +2538,14 @@ class HostCommander extends BaseCommander {
       return;
     }
     this.sendMsgToPlayer(playerExt, `scores: red: ${scores.red} blue: ${scores.blue} tlimit: ${scores.timeLimit} slimit: ${scores.scoreLimit}`);
+  }
+
+  commandStepMove(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'step_move')) return;
+    if (cmds.length === 0) return;
+    const newState = toBoolean(cmds[0]);
+    this.hb_room.step_move.setEnabled(newState);
+    this.sendMsgToPlayer(playerExt, `ustawiam step move na: ${newState}`);
   }
 }
 
