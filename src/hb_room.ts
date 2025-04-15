@@ -282,7 +282,7 @@ export class HaxballRoom {
       this.map_name_classic = 'handball';
       this.map_name_big = 'handball_big';
       this.map_name_huge = 'handball_huge';
-      this.default_selected_ball = 'hand_power';
+      this.default_selected_ball = 'hand';
     } else {
       this.map_name_classic = 'futsal';
       this.map_name_big = 'futsal_big';

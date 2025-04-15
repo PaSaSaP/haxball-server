@@ -269,7 +269,7 @@ const futsal_tennis: RoomServerConfig = {
   },
   vipDbFile: vipDbFile,
   chatLogDbFile: "./haxball_player_chat_tennis.mpk",
-  roomName: "🍓 TENNIS 1vs1 XxX StrawBeRRy League 🍓",
+  roomName: "🍏 FUTSAL 1vs1 XxX Apple Arena! 🍏",
   isPublic: true,
   geo: { code: "it", lat: 40.0, lon: 14.0 },
   limits: roomLimits,

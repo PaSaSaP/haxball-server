@@ -124,6 +124,9 @@ services:
       - MONITORING=monitoring
       - HTTP_PROXY=http://proxy-futsal-1vs1:8080
       - HTTPS_PROXY=http://proxy-futsal-1vs1:8080
+        # - HTTP_PROXY=http://proxy-freestyle:8080
+        # - HTTPS_PROXY=http://proxy-freestyle:8080
+        # - HTTP_PROXY_IPV6=true
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - HX_ROOM_CONFIG_SELECTOR=1vs1
       - HX_ROOM_CONFIG_SUBSELECTOR=1
@@ -166,8 +169,9 @@ services:
       - "[::]:57000-57100:57000-57100/udp"
     environment:
       - MONITORING=monitoring
-      - HTTP_PROXY=http://proxy-futsal-1vs1:8080
-      - HTTPS_PROXY=http://proxy-futsal-1vs1:8080
+      - HTTP_PROXY=http://proxy-tennis:8080
+      - HTTPS_PROXY=http://proxy-tennis:8080
+      - HTTP_PROXY_IPV6=true
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - HX_ROOM_CONFIG_SELECTOR=tennis
       - HX_ROOM_CONFIG_SUBSELECTOR=1

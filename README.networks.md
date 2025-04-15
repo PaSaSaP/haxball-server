@@ -39,8 +39,10 @@ docker exec test_container ip -6 addr show
 
 
 
-#### probably to fix ping ipv6
+#### probably to fix ping ipv6; below NEED TO BE DONE to enable ipv6 connections to haxball servers!!!!!
 sudo ip6tables -t nat -A POSTROUTING -o ens3 -j MASQUERADE
+# Also to fix communication between containers:
+sudo ip6tables -P FORWARD ACCEPT
 # and to access that port
 sudo ufw route allow proto udp from any to any port 19302
 # nothing configured at 8080 externally, only locally, so maybe it won't break
@@ -63,4 +65,6 @@ sudo ufw allow out proto udp from any to any port 54000:54100
 ## testing, remove if not needed
 sudo ufw route allow proto tcp from any to any port 8080
 sudo ufw route allow proto tcp from any to any port 3138
+
+sudo ufw route allow proto tcp from any to any port 443
 ```

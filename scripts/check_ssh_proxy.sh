@@ -2,16 +2,7 @@
 # add it to cron
 # when container is recreated, start below script by hand once to setup authorized_keys on remote
 
-# TODO just for text
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-S="I czy będą teraz lagi..."
-T='!anno'
-T="$T $S"
-
-for selector in "3vs3_1"; do
-    "$SCRIPT_DIR/send_god_message.sh" "$selector" "$T"
-done
-sleep 2;
 
 C="puppeteer_ssh-proxy_1"
 STATE=$(docker inspect -f '{{.State.Running}}' "$C")

@@ -517,7 +517,7 @@ export class MatchStats {
     for (let playerId of redTeam) {
       let player = players.get(playerId)!;
       if (redGK === null) {
-        redGK = player;
+        if (player.position) redGK = player;
       } else if (player.position && player.position.x < redGK.position.x) {
         redGK = player;
       }
@@ -525,7 +525,7 @@ export class MatchStats {
     for (let playerId of blueTeam) {
       let player = players.get(playerId)!;
       if (blueGK === null) {
-        blueGK = player;
+        if (player.position) blueGK = player;
       } else if (player.position && player.position.x > blueGK.position.x) {
         blueGK = player;
       }

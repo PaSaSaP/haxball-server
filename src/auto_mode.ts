@@ -41,6 +41,7 @@ export class AutoBot {
   private redTeam: PlayerData[];
   private blueTeam: PlayerData[];
   private specTeam: PlayerData[];
+  private savedSpecTeam: PlayerData[];
   private shuffled: boolean;
   private matchState: CurrentMatchState;
   private ranked: boolean;
@@ -83,6 +84,7 @@ export class AutoBot {
     this.redTeam = [];
     this.blueTeam = [];
     this.specTeam = [];
+    this.savedSpecTeam = [];
     this.shuffled = false;
     this.matchState = hb_room.current_match_state;
     this.ranked = false;
@@ -131,6 +133,7 @@ export class AutoBot {
     this.redTeam = [];
     this.blueTeam = [];
     this.specTeam = [];
+    this.savedSpecTeam = [];
     this.ranked = false;
     this.fullTimeMatchPlayed = false;
     this.lastWinner = 0;
@@ -149,6 +152,7 @@ export class AutoBot {
   }
 
   addSpec(playerExt: PlayerData) {
+    // only while tourney mode!
     if (this.specTeam.find(e => e.id === playerExt.id)) return;
     let r = this.redTeam.find(e => e.id === playerExt.id);
     if (r) {
@@ -861,6 +865,8 @@ export class AutoBot {
         this.clearMatchStartedTimer();
         this.stopLobbyMonitoringTimer();
         this.room.reorderPlayers(this.specTeam.map(e => e.id), true);
+        this.savedSpecTeam.length = 0;
+        this.specTeam.forEach(p => this.savedSpecTeam.push(p));
         // AMLog(`REORDERED: s:${this.specTeam.map(e=>e.name).join(",")}`);
         if (rl === limit && bl === limit) {
           if (!this.tourneyMode) {
@@ -1075,6 +1081,9 @@ export class AutoBot {
   private addPlayerToSpec(playerExt: PlayerData) {
     playerExt.team = 0;
     this.specTeam.push(playerExt);
+    const idx = this.savedSpecTeam.findIndex(e => e.id === playerExt.id);
+    if (idx !== -1) this.savedSpecTeam.splice(idx, 1);
+    this.savedSpecTeam.push(playerExt);
     this.room.setPlayerTeam(playerExt.id, playerExt.team);
   }
   private isPlayerInRed(playerExt: PlayerData) {
@@ -1123,16 +1132,18 @@ export class AutoBot {
   }
   private moveLoserRedToSpec() {
     // AMLog("Red przegrało, idą do spec");
-    this.shiftChoserToBottom(this.currentMatch.getLoserTeamIds(), this.redTeam);
+    let loserTeamIds = this.currentMatch.getLoserTeamIds();
+    this.shiftChoserToBottom(loserTeamIds, this.redTeam);
     // red has at least one win, no in favor
-    this.moveAllRedToSpec([]);
+    this.moveAllRedToSpec([], loserTeamIds.slice(3));
   }
   private moveWinnerRedToSpec() {
     // AMLog("Red wygrało, ale! idą do spec");
-    this.shiftChoserToBottom(this.currentMatch.getWinnerTeamIds(), this.redTeam);
-    this.moveAllRedToSpec([]);
+    let winnerTeamIds = this.currentMatch.getWinnerTeamIds();
+    this.shiftChoserToBottom(winnerTeamIds, this.redTeam);
+    this.moveAllRedToSpec([], winnerTeamIds.slice(3));
   }
-  private moveAllRedToSpec(inFavor: number[]) {
+  private moveAllRedToSpec(inFavor: number[], addedWhileMatch: number[]) {
     this.moveAllTeamToSpec(this.redTeam, inFavor);
     this.redTeam = [];
   }
@@ -1147,10 +1158,11 @@ export class AutoBot {
   }
   private moveWinnerBlueToSpec() {
     // AMLog("Blue wygrało, ale! idą do spec");
-    this.shiftChoserToBottom(this.currentMatch.getWinnerTeamIds(), this.blueTeam);
-    this.moveAllBlueToSpec([]);
+    let winnerTeamIds = this.currentMatch.getWinnerTeamIds();
+    this.shiftChoserToBottom(winnerTeamIds, this.blueTeam);
+    this.moveAllBlueToSpec([], winnerTeamIds.slice(3));
   }
-  private moveAllBlueToSpec(inFavor: number[], addedWhileMatch: number[] = []) {
+  private moveAllBlueToSpec(inFavor: number[], addedWhileMatch: number[]) {
     this.moveAllTeamToSpec(this.blueTeam, inFavor, addedWhileMatch);
     this.blueTeam = [];
   }
@@ -1160,6 +1172,8 @@ export class AutoBot {
     const afkFilter = (e: PlayerData) => { return !e.vip_data.afk_mode && (e.afk || e.afk_maybe) };
     let specAfk = this.specTeam.filter(e => afkFilter(e));
     let specNonAfk = this.specTeam.filter(e => !afkFilter(e));
+    let specNonAfkSet = new Set(specNonAfk.map(p => p.id));
+    let addedWhileMatchSet = new Set(addedWhileMatch);
 
     // anyway make that check to get insert idx
     let insertIdx = 0;
@@ -1169,17 +1183,47 @@ export class AutoBot {
         break;
       }
     }
+
+    const uniquePlayers = new Map();
+    this.savedSpecTeam.forEach(player => {
+      uniquePlayers.set(player.id, player);
+    });
+    this.savedSpecTeam = Array.from(uniquePlayers.values());
+
+    let sortedSpec: PlayerData[] = [];
+    for (const player of this.savedSpecTeam) {
+      if (specNonAfkSet.has(player.id) || addedWhileMatchSet.has(player.id)) sortedSpec.push(player);
+    }
+    for (const player of specNonAfk) {
+      if (!sortedSpec.some(p => p.id === player.id)) { // IS IT OK?
+        sortedSpec.push(player);
+      }
+    }
+
+    inTeam.sort((a, b) => {
+      const aInAdded = addedWhileMatchSet.has(a.id);
+      const bInAdded = addedWhileMatchSet.has(b.id);
+      if (aInAdded && !bInAdded) {
+        return -1; // A comes first
+      } else if (!aInAdded && bInAdded) {
+        return 1; // B comes first
+      }
+      return 0; // Keep original order for others
+    });
+
     for (let p of inTeam) {
       if (inFavor.includes(p.id)) {
-        specNonAfk.splice(insertIdx, 0, p); // insert after first or other in favor
+        sortedSpec.splice(insertIdx, 0, p); // insert after first or other in favor
         insertIdx++;
+      } else if (addedWhileMatch.includes(p.id)) {
+        // do nothing, currently in list
       } else {
-        specNonAfk.push(p);
+        sortedSpec.push(p);
       }
       p.team = 0;
       this.room.setPlayerTeam(p.id, p.team);
     }
-    this.specTeam = [...specNonAfk, ...specAfk];
+    this.specTeam = [...sortedSpec, ...specAfk];
   }
 
   private moveWinnerBlueToRed() {
