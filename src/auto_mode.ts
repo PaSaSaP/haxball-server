@@ -123,6 +123,20 @@ export class AutoBot {
   M() { return this.currentMatch; }
   isRanked() { return this.ranked; }
 
+  logTeams() {
+      AMLog(`Red Team: `);
+      this.logTeam(this.redTeam);
+      AMLog(`Blue Team: `);
+      this.logTeam(this.blueTeam);
+      AMLog(`Spec Team: `);
+      this.logTeam(this.specTeam);
+  }
+  private logTeam(team: PlayerData[]) {
+      team.forEach(p => {
+          AMLog(`  - ${p.name} [${p.id}]`);
+      });
+  }
+
   private resetLobbyAction() {
     this.lobbyAction = () => { return false; };
   }
@@ -1150,11 +1164,9 @@ export class AutoBot {
   private moveLoserBlueToSpec() {
     // AMLog("Blue przegrało, idą do spec");
     let loserTeamIds = this.currentMatch.getLoserTeamIds();
-    let [choserIdx, inFavor] = this.shiftChoserToBottom(loserTeamIds, this.blueTeam);
-    // blue plays always first match so keep them in favor
-    if (!this.ranked || this.hb_room.volleyball.isEnabled() || this.hb_room.tennis.isEnabled()) inFavor = [];
-    if (inFavor.length) this.lastOneMatchLoserTeamIds = loserTeamIds.slice(0, 3);
-    this.moveAllBlueToSpec(inFavor, loserTeamIds.slice(3));
+    this.shiftChoserToBottom(loserTeamIds, this.blueTeam);
+    this.lastOneMatchLoserTeamIds = loserTeamIds.slice(0, 3);
+    this.moveAllBlueToSpec([], loserTeamIds.slice(3));
   }
   private moveWinnerBlueToSpec() {
     // AMLog("Blue wygrało, ale! idą do spec");
@@ -1174,6 +1186,12 @@ export class AutoBot {
     let specNonAfk = this.specTeam.filter(e => !afkFilter(e));
     let specNonAfkSet = new Set(specNonAfk.map(p => p.id));
     let addedWhileMatchSet = new Set(addedWhileMatch);
+    if (specAfk.length) AMLog(`specAfk: ${specAfk.map(e => e.id)}`);
+    if (specNonAfk.length) AMLog(`specNonAfk: ${specNonAfk.map(e => e.id)}`);
+    if (inTeam.length) AMLog(`inTeam: ${inTeam.map(e => e.id)}`);
+    if (inFavor.length) AMLog(`inFavor: ${inFavor}`);
+    if (addedWhileMatch.length) AMLog(`addedWhileMatch: ${addedWhileMatch}`);
+    if (this.specTeam.length) AMLog(`specTeam before: ${this.specTeam.map(e => e.id)}`);
 
     // anyway make that check to get insert idx
     let insertIdx = 0;
@@ -1185,6 +1203,7 @@ export class AutoBot {
     }
 
     const uniquePlayers = new Map();
+    this.savedSpecTeam = this.savedSpecTeam.filter(p => p.connected);
     this.savedSpecTeam.forEach(player => {
       uniquePlayers.set(player.id, player);
     });
@@ -1224,6 +1243,8 @@ export class AutoBot {
       this.room.setPlayerTeam(p.id, p.team);
     }
     this.specTeam = [...sortedSpec, ...specAfk];
+    if (sortedSpec.length) AMLog(`sortedSpec: ${sortedSpec.map(e => e.id)}`);
+    if (this.specTeam.length) AMLog(`specTeam after: ${this.specTeam.map(e => e.id)}`);
   }
 
   private moveWinnerBlueToRed() {

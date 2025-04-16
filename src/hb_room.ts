@@ -651,7 +651,10 @@ export class HaxballRoom {
               let idx = afkTime - HaxballRoom.MaxAllowedAfkNoMoveTimeEmojiCooldown;
               idx = idx < 0 ? 0 : idx > 8 ? 8 : idx;
               this.setPlayerAvatarTo(playerExt, Emoji.CountdownEmojis[idx]);
-              if (this.auto_mode && currentMatchTime < 20) this.sendMsgToPlayer(playerExt, getStillAfkMessage(), Colors.BrightBlue, undefined, soundType);
+              if (this.auto_mode && currentMatchTime < 20
+                  && this.room.getPlayerInput(playerExt.id) === 0
+                  && !this.room.isPlayerTypingMsg(playerExt.id))
+                this.sendMsgToPlayer(playerExt, getStillAfkMessage(), Colors.BrightBlue, undefined, soundType);
             }
             if (playerExt.afk) afkPlayersNum++;
           }

@@ -51,6 +51,7 @@ const onHBLoaded = function(cb) {
   global.MonitorPlayerInput = new Map();
   global.StepMove = false;
   global.MapSegments = null;
+  global.PrintLogPings = false;
   function ActionLog(txt) {
     console.log(`#ACTION# ${txt}`);
   }
@@ -752,6 +753,7 @@ const onHBLoaded = function(cb) {
       this.keys = 0;
       this.prev_keys = 0;
       this.diff_keys = 0;
+      this.typing = 1;
     }
   }
 
@@ -3116,6 +3118,16 @@ const onHBLoaded = function(cb) {
             global.StepMove = newState;
             ActionLog(`stepMove = ${newState}`);
           },
+          setPingLogs(newState) {
+            global.PrintLogPings = newState;
+            ActionLog(`PrintLogPings = ${newState}`);
+          },
+          isPlayerTypingMsg(h) {
+            if (h) {
+              return global.PlayerInput.get(h).typing === 0;
+            }
+            return false;
+          },
           startMonitorInput: function (h) {
             global.MonitorPlayerInput.set(h, []);
           },
@@ -4810,6 +4822,7 @@ const onHBLoaded = function(cb) {
     apply(a) {
       let b = a.R(this.B);
       // ActionLog(`PlayerStateNotifier apply id:${this.B} gg: ${this.gg}`); // TODO
+      global.PlayerInput.get(this.B).typing = this.gg;
       null != b && CallbackInvoker.sa(a.Li, b, this.gg)
     }
     P(a) {
@@ -5075,9 +5088,12 @@ const onHBLoaded = function(cb) {
       super()
     }
     apply(a) {
-      if (0 ==
-        this.B) {
-          // ActionLog(`CollectionSynchronizer ${this.Xb}`); // TODO
+      if (0 === this.B) {
+        if (global.PrintLogPings) {
+          ActionLog(`CollectionSynchronizer ${this.Xb}`); // TODO
+            // logObjectFields('a.ea', a.ea);
+            // logObjectFields('a.D', a.D);
+        }
         a = a.ba;
         for (var b = 0, c = a.length; b < c;) {
           let d = b++;

@@ -76,7 +76,11 @@ declare class RoomObject {
 
     getPlayerInputDiff(playerId: number): number;
 
+    isPlayerTypingMsg(playerId: number): boolean;
+
     setStepMove(newState: boolean): void;
+
+    setPingLogs(newState: boolean): void;
 
     setGhostPlayer(playerId: number, ghostedPlayerId: number | null): void;
 

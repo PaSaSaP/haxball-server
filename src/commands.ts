@@ -150,7 +150,6 @@ class Commander extends BaseCommander {
       bye_bye: this.commandByeBye,
       bye: this.commandByeBye,
 
-      auto_mode: this.commandAutoMode,
       limit: this.commandLimit,
       emoji: this.commandEmoji,
 
@@ -214,6 +213,7 @@ class Commander extends BaseCommander {
       trust: this.commandTrust,
       verify: this.commandVerify,
       t: this.commandTrust,
+      "t-": this.commandTrustToZero,
       tt: this.commandAutoTrust,
       ttt: this.commandShowTrust,
       xt: this.commandTrustUntilDisconnected,
@@ -249,7 +249,6 @@ class Commander extends BaseCommander {
       only_trusted_join: this.commandOnlyTrustedJoin,
       only_trusted_chat: this.commandOnlyTrustedChat,
       trust_nick: this.commandWhitelistNonTrustedNick,
-      auto_debug: this.commandAutoDebug,
       set_welcome: this.commandSetWelcomeMsg,
       anno: this.commandSendAnnoToAllPlayers,
 
@@ -687,26 +686,6 @@ class Commander extends BaseCommander {
 
   commandByeBye(playerExt: PlayerData) {
     this.hb_room.kickPlayer(playerExt, playerExt, "Bye bye!", false);
-  }
-
-  commandAutoMode(playerExt: PlayerData, values: string[]) {
-    if (this.warnIfPlayerIsNotHost(playerExt, "auto_mode")) return;
-    if (values.length == 0) return;
-    const arg = values[0].toLowerCase();
-    if (arg == "on") {
-      for (let p of this.getPlayersExt()) {
-        if (p.admin && !p.admin_level) this.hb_room.takeAdminFrom(p);
-      }
-      this.hb_room.auto_mode = true;
-      this.hb_room.auto_bot.resetAndStart();
-      this.sendMsgToAll("Włączono tryb automatyczny!")
-    } else if (arg == "off") {
-      this.hb_room.auto_mode = false;
-      this.hb_room.auto_bot.reset();
-      this.sendMsgToAll("Wyłączono tryb automatyczny!")
-    } else {
-      this.sendMsgToPlayer(playerExt, "Poprawne wartosci: [on, off]");
-    }
   }
 
   commandLimit(playerExt: PlayerData, values: string[]) {
@@ -1285,6 +1264,14 @@ class Commander extends BaseCommander {
     this.sendMsgToPlayer(playerExt, `Twój link: ${link}`);
   }
 
+  commandTrustToZero(playerExt: PlayerData, cmds: string[]) {
+    if (cmds.length == 0) {
+      this.sendMsgToPlayer(playerExt, "Uzycie: !t- <@nick>");
+      return;
+    }
+    this.commandTrust(playerExt, [cmds[0], "0"]);
+  }
+
   commandTrust(playerExt: PlayerData, cmds: string[]) {
     // if (this.warnIfPlayerIsNotAdminNorHost(player)) return;
     if (cmds.length == 0) {
@@ -1306,8 +1293,12 @@ class Commander extends BaseCommander {
     const amIhost = this.hb_room.isPlayerIdHost(playerExt.id);
     let trust_level = parseInt(cmds[1] ?? 1, 10);
     trust_level = isNaN(trust_level) ? 0 : trust_level;
+
     const temporary_trusted = this.hb_room.temporarily_trusted.has(cmd_player_ext.id);
-    if (!amIhost && trust_level <= 0) {
+    if ((trust_level === 0 && cmdPlayer.trust_level > 0 && cmdPlayer.trusted_by && cmdPlayer.trusted_by.auth_id === playerExt.auth_id) || amIhost) {
+      hb_log(`${playerExt.name} removed trust for ${cmd_player_ext.name}`);
+      // accept to zero trust level by the same player
+    } else if (!amIhost && trust_level <= 0) {
       this.sendMsgToPlayer(playerExt, `Wartość nie moze być mniejsza ani równa zero: ${trust_level}`);
       return;
     } else if (trust_level >= callerExt.trust_level) {
@@ -1321,6 +1312,7 @@ class Commander extends BaseCommander {
       return;
     }
     cmd_player_ext.trust_level = trust_level;
+    cmd_player_ext.trusted_by = playerExt;
     if (temporary_trusted) this.hb_room.temporarily_trusted.delete(cmd_player_ext.id);
     this.hb_room.game_state.setTrustLevel(cmd_player_ext, trust_level, callerExt);
     this.sendMsgToPlayer(playerExt, `Ustawiłeś trust level ${cmd_player_ext.name} na ${trust_level}`);
@@ -1608,26 +1600,6 @@ class Commander extends BaseCommander {
     cmds.forEach(player_name => {
       this.hb_room.whitelisted_nontrusted_player_names.add(player_name);
     });
-  }
-
-  commandAutoDebug(playerExt: PlayerData, cmds: string[]) {
-    if (this.warnIfPlayerIsNotHost(playerExt, 'auto_debug')) return;
-    if (!this.hb_room.ratings_for_all_games) {
-      this.hb_room.player_duplicate_allowed = true;
-      this.hb_room.limit = Number.parseInt(cmds[0]) || 3;
-      this.hb_room.auto_afk = false;
-      AutoBot.MaxMatchTime = Number.parseInt(cmds[1]) || 150;
-      this.hb_room.auto_bot.autoVoter.setRequiredVotes(2);
-      this.commandAutoMode(playerExt, ["on"]);
-    } else {
-      this.hb_room.player_duplicate_allowed = false;
-      this.hb_room.auto_afk = true;
-      AutoBot.MaxMatchTime = 6*60;
-      this.hb_room.auto_bot.autoVoter.setRequiredVotes(3);
-      this.commandAutoMode(playerExt, ["off"]);
-    }
-    this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
-    this.sendMsgToPlayer(playerExt, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
   }
 
   commandSetWelcomeMsg(playerExt: PlayerData, cmds: string[]) {
@@ -2454,6 +2426,10 @@ class HostCommander extends BaseCommander {
 
     commander.commands["auto_temp_trust"] = this.commandAutoTempTrust.bind(this);
     commander.commands["step_move"] = this.commandStepMove.bind(this);
+    commander.commands["log_ping"] = this.commandSetPingLogs.bind(this);
+    commander.commands["log_teams"] = this.commandLogTeams.bind(this);
+    commander.commands["auto_mode"] = this.commandAutoMode.bind(this);
+    commander.commands["auto_debug"] = this.commandAutoDebug.bind(this);
   }
 
   private getMaskBit(cmd: string) {
@@ -2547,6 +2523,58 @@ class HostCommander extends BaseCommander {
     this.hb_room.step_move.setEnabled(newState);
     this.sendMsgToPlayer(playerExt, `ustawiam step move na: ${newState}`);
   }
+
+  commandLogTeams(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'log_teams')) return;
+    this.hb_room.auto_bot.logTeams();
+  }
+
+  commandSetPingLogs(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'log_ping')) return;
+    if (cmds.length === 0) return;
+    const newState = toBoolean(cmds[0]);
+    this.hb_room.room.setPingLogs(newState);
+    this.sendMsgToPlayer(playerExt, `ustawiam ping logs na: ${newState}`);
+  }
+
+  commandAutoMode(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, "auto_mode")) return;
+    if (!cmds.length) return;
+    const newState = toBoolean(cmds[0]);
+    if (newState) {
+      for (let p of this.getPlayersExt()) {
+        if (p.admin && !p.admin_level) this.hb_room.takeAdminFrom(p);
+      }
+      this.hb_room.auto_mode = true;
+      this.hb_room.auto_bot.resetAndStart();
+      this.sendMsgToAll("Włączono tryb automatyczny!")
+    } else {
+      this.hb_room.auto_mode = false;
+      this.hb_room.auto_bot.reset();
+      this.sendMsgToAll("Wyłączono tryb automatyczny!")
+    }
+  }
+
+  commandAutoDebug(playerExt: PlayerData, cmds: string[]) {
+    if (this.warnIfPlayerIsNotHost(playerExt, 'auto_debug')) return;
+    if (!this.hb_room.ratings_for_all_games) {
+      this.hb_room.player_duplicate_allowed = true;
+      this.hb_room.limit = Number.parseInt(cmds[0]) || 3;
+      this.hb_room.auto_afk = false;
+      AutoBot.MaxMatchTime = Number.parseInt(cmds[1]) || 150;
+      this.hb_room.auto_bot.autoVoter.setRequiredVotes(2);
+      this.commandAutoMode(playerExt, ["on"]);
+    } else {
+      this.hb_room.player_duplicate_allowed = false;
+      this.hb_room.auto_afk = true;
+      AutoBot.MaxMatchTime = 6*60;
+      this.hb_room.auto_bot.autoVoter.setRequiredVotes(3);
+      this.commandAutoMode(playerExt, ["off"]);
+    }
+    this.hb_room.ratings_for_all_games = !this.hb_room.ratings_for_all_games;
+    this.sendMsgToPlayer(playerExt, `Rating dla wszystkich: ${this.hb_room.ratings_for_all_games}`);
+  }
+
 }
 
 class TourneyCommander extends BaseCommander {

@@ -120,6 +120,7 @@ export class PlayerData {
   conn_id: string;
   connected: boolean;
   trust_level: number;
+  trusted_by: PlayerData|null;
   admin_level: number;
   penalty_counter: number;
   join_time: number;
@@ -166,6 +167,7 @@ export class PlayerData {
     this.conn_id = player.conn; /// @type string
     this.connected = true;
     this.trust_level = 0; // based on player auth from DB
+    this.trusted_by = null; // set only for new trusted
     this.admin_level = 0; // based on player auth from DB
     this.penalty_counter = 0;
     this.join_time = Date.now();
