@@ -100,7 +100,7 @@ export class AutoBot {
     this.afterPositionsResetTimer = null;
     this.currentLimit = hb_room.limit;
     this.matchHistory = new MatchHistory();
-    this.currentMatch = new Match('none');
+    this.currentMatch = new Match('none', this.currentLimit);
     this.currentMatch.setEnd(1, false);
     this.pauseUsedByRed = false;
     this.pauseUsedByBlue = false;
@@ -124,6 +124,8 @@ export class AutoBot {
   isRanked() { return this.ranked; }
 
   logTeams() {
+      let players = [...this.hb_room.players_ext.values()];
+      AMLog(`All players(${players.length}): ${players.map(e => e.name)}`);
       AMLog(`Red Team: `);
       this.logTeam(this.redTeam);
       AMLog(`Blue Team: `);
@@ -133,7 +135,8 @@ export class AutoBot {
   }
   private logTeam(team: PlayerData[]) {
       team.forEach(p => {
-          AMLog(`  - ${p.name} [${p.id}]`);
+          const afk = p.isAfk()? `, AFK`: '';
+          AMLog(`  - ${p.name} [${p.id}${afk}]`);
       });
   }
 
@@ -479,8 +482,8 @@ export class AutoBot {
     this.adNextReminder = 30 + randomInt(90);
     this.autoVoter.resetOnMatchStarted();
     let matchType: MatchType = 'none';
+    const limit = this.limit();
     if (this.ranked) {
-      const limit = this.limit();
       if (this.hb_room.volleyball.isEnabled()) matchType = 'volleyball';
       else if (this.hb_room.tennis.isEnabled()) matchType = 'tennis';
       else if (limit === 1) matchType = '1vs1';
@@ -488,7 +491,7 @@ export class AutoBot {
       else if (limit === 3) matchType = '3vs3';
       else if (limit === 4) matchType = '4vs4';
     }
-    this.currentMatch = new Match(matchType);
+    this.currentMatch = new Match(matchType, limit);
     this.currentMatch.redTeam = [...this.redTeam.map(e=>e.id)];
     this.currentMatch.blueTeam = [...this.blueTeam.map(e=>e.id)];
     for (let id of this.currentMatch.redTeam) this.currentMatch.statInMatch(id);
@@ -639,6 +642,7 @@ export class AutoBot {
   handlePauseRequest(byPlayer: PlayerData) {
     if (this.isLobbyTime()) return;
     if (!this.pauseUsedByRed) {
+      if (this.hb_room.ball_possesion_tracker.getCurrentTeamId() === 2) return; // can be used only by team with ball or when just after goal/start
       let p = this.redTeam.filter(e => e.id === byPlayer.id);
       if (p) {
         this.room.pauseGame(true);
@@ -648,6 +652,7 @@ export class AutoBot {
       }
     }
     if (!this.pauseUsedByBlue) {
+      if (this.hb_room.ball_possesion_tracker.getCurrentTeamId() === 1) return;
       let p = this.blueTeam.filter(e => e.id === byPlayer.id);
       if (p) {
         this.room.pauseGame(true);
@@ -694,7 +699,7 @@ export class AutoBot {
     if (this.winStreak >= AutoBot.WinStreakLimit) {
       if (this.lastWinner == 1) this.moveWinnerRedToSpec();
       else this.moveWinnerBlueToSpec();
-      this.hb_room.sendMsgToAll(`Zwycięzcy (${this.lastWinner==1? '🔴Red': '🔵Blue'}) schodzą po ${this.winStreak} meczach by dać pograć teraz innym!`, Colors.GameState, 'italic');
+      this.hb_room.sendMsgToAll(`Zwycięzcy (${this.lastWinner===1? '🔴Red': '🔵Blue'}) schodzą po ${this.winStreak} meczach by dać pograć teraz innym!`, Colors.GameState, 'italic');
       this.winStreak = 0;
     } else if (this.lastWinner == 1) this.moveLoserBlueToSpec();
     else this.moveLoserRedToSpec();
@@ -1144,52 +1149,72 @@ export class AutoBot {
     }
     return [-1, []];
   }
+  private currentMatchLimit() {
+    return this.currentMatch.getLimit();
+  }
   private moveLoserRedToSpec() {
     // AMLog("Red przegrało, idą do spec");
     let loserTeamIds = this.currentMatch.getLoserTeamIds();
     this.shiftChoserToBottom(loserTeamIds, this.redTeam);
     // red has at least one win, no in favor
-    this.moveAllRedToSpec([], loserTeamIds.slice(3));
+    this.moveAllRedToSpec([], loserTeamIds.slice(this.currentMatchLimit()));
   }
   private moveWinnerRedToSpec() {
     // AMLog("Red wygrało, ale! idą do spec");
     let winnerTeamIds = this.currentMatch.getWinnerTeamIds();
     this.shiftChoserToBottom(winnerTeamIds, this.redTeam);
-    this.moveAllRedToSpec([], winnerTeamIds.slice(3));
+    this.moveAllRedToSpec([], winnerTeamIds.slice(this.currentMatchLimit()));
   }
   private moveAllRedToSpec(inFavor: number[], addedWhileMatch: number[]) {
-    this.moveAllTeamToSpec(this.redTeam, inFavor);
+    this.moveAllFromTeamToSpec(this.redTeam, inFavor, addedWhileMatch);
     this.redTeam = [];
   }
   private moveLoserBlueToSpec() {
     // AMLog("Blue przegrało, idą do spec");
     let loserTeamIds = this.currentMatch.getLoserTeamIds();
     this.shiftChoserToBottom(loserTeamIds, this.blueTeam);
-    this.lastOneMatchLoserTeamIds = loserTeamIds.slice(0, 3);
-    this.moveAllBlueToSpec([], loserTeamIds.slice(3));
+    const matchLimit = this.currentMatchLimit();
+    this.lastOneMatchLoserTeamIds = loserTeamIds.slice(0, matchLimit);
+    this.moveAllBlueToSpec([], loserTeamIds.slice(matchLimit));
   }
   private moveWinnerBlueToSpec() {
     // AMLog("Blue wygrało, ale! idą do spec");
     let winnerTeamIds = this.currentMatch.getWinnerTeamIds();
     this.shiftChoserToBottom(winnerTeamIds, this.blueTeam);
-    this.moveAllBlueToSpec([], winnerTeamIds.slice(3));
+    this.moveAllBlueToSpec([], winnerTeamIds.slice(this.currentMatchLimit()));
   }
   private moveAllBlueToSpec(inFavor: number[], addedWhileMatch: number[]) {
-    this.moveAllTeamToSpec(this.blueTeam, inFavor, addedWhileMatch);
+    this.moveAllFromTeamToSpec(this.blueTeam, inFavor, addedWhileMatch);
     this.blueTeam = [];
   }
 
-  private moveAllTeamToSpec(inTeam: PlayerData[], inFavor: number[], addedWhileMatch: number[] = []) {
+  /**
+   * #AM# [15:00:14] stopAndGoToLobby-A: r:topinambur,caba,Wankej,Jep[ b:BesaBoss,4 Piwka na śniadanie,rysiek,bnura s:Mati.
+   * #AM# [15:00:14] specAfk: 15
+   * #AM# [15:00:14] inTeam: 50,81,79,69
+   * #AM# [15:00:14] addedWhileMatch: 79
+   * #AM# [15:00:14] specTeam before: 15
+   * #AM# [15:00:14] sortedSpec: 50,81,69
+   * #AM# [15:00:14] specTeam after: 50,81,69,15
+   * #AM# [15:00:14] stopAndGoToLobby+A: r:topinambur,caba,Wankej,Jep[ b: s:4 Piwka na śniadanie,rysiek,BesaBoss,Mati.
+   */
+
+  private moveAllFromTeamToSpec(inTeam: PlayerData[], inFavor: number[], addedWhileMatch: number[] = []) {
+    // TODO quick fix here but should be done in a better way
+    this.redTeam = this.redTeam.filter(e => e.connected);
+    this.blueTeam = this.blueTeam.filter(e => e.connected);
+    this.specTeam = this.specTeam.filter(e => e.connected);
     // move AFK to the end of spec list!
     const afkFilter = (e: PlayerData) => { return !e.vip_data.afk_mode && (e.afk || e.afk_maybe) };
     let specAfk = this.specTeam.filter(e => afkFilter(e));
     let specNonAfk = this.specTeam.filter(e => !afkFilter(e));
     let specNonAfkSet = new Set(specNonAfk.map(p => p.id));
     let addedWhileMatchSet = new Set(addedWhileMatch);
+    if (this.savedSpecTeam.length) AMLog(`savedSpecTeam: ${this.savedSpecTeam.map(e => e.id)}`);
     if (specAfk.length) AMLog(`specAfk: ${specAfk.map(e => e.id)}`);
     if (specNonAfk.length) AMLog(`specNonAfk: ${specNonAfk.map(e => e.id)}`);
     if (inTeam.length) AMLog(`inTeam: ${inTeam.map(e => e.id)}`);
-    if (inFavor.length) AMLog(`inFavor: ${inFavor}`);
+    // if (inFavor.length) AMLog(`inFavor: ${inFavor}`);
     if (addedWhileMatch.length) AMLog(`addedWhileMatch: ${addedWhileMatch}`);
     if (this.specTeam.length) AMLog(`specTeam before: ${this.specTeam.map(e => e.id)}`);
 
@@ -1203,9 +1228,10 @@ export class AutoBot {
     }
 
     const uniquePlayers = new Map();
-    this.savedSpecTeam = this.savedSpecTeam.filter(p => p.connected);
     this.savedSpecTeam.forEach(player => {
-      uniquePlayers.set(player.id, player);
+      if (player.connected) {
+        uniquePlayers.set(player.id, player);
+      }
     });
     this.savedSpecTeam = Array.from(uniquePlayers.values());
 
@@ -1214,7 +1240,7 @@ export class AutoBot {
       if (specNonAfkSet.has(player.id) || addedWhileMatchSet.has(player.id)) sortedSpec.push(player);
     }
     for (const player of specNonAfk) {
-      if (!sortedSpec.some(p => p.id === player.id)) { // IS IT OK?
+      if (!sortedSpec.some(p => p.id === player.id)) {
         sortedSpec.push(player);
       }
     }
@@ -1234,7 +1260,10 @@ export class AutoBot {
       if (inFavor.includes(p.id)) {
         sortedSpec.splice(insertIdx, 0, p); // insert after first or other in favor
         insertIdx++;
-      } else if (addedWhileMatch.includes(p.id)) {
+      } else if (addedWhileMatchSet.has(p.id)) {
+        if (-1 === sortedSpec.findIndex(s => p.id === s.id))
+          sortedSpec.push(p);
+      // else
         // do nothing, currently in list
       } else {
         sortedSpec.push(p);

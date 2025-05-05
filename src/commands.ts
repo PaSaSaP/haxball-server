@@ -483,11 +483,13 @@ class Commander extends BaseCommander {
   commandHelp(playerExt: PlayerData) {
     this.sendMsgToPlayer(playerExt, ": !wyb !p !w !ignore !bb !ping !afk !back !afks !stat !top !ttop !wtop !pasek !discord !kebab !cieszynka !sklep", Colors.Help, "small-italic");
     if (playerExt.admin_level) {
-      this.sendMsgToPlayer(playerExt, "Dla Admina: !mute !unmute !r !s !swap !sr !rr !ws !a !map/m", Colors.Help, "small-italic");
-      this.sendMsgToPlayer(playerExt, "Dla Admina: !kick !tkick_5m/1h/1d !tmute_5m/1h/1d !nkick_5m/1h/1d !nmute_5m/1h/1d", Colors.Help, "small-italic");
+      if (this.hb_room.room_config.selector === 'freestyle') {
+        this.sendMsgToPlayer(playerExt, "Admin: !mute !unmute !r !s !swap !sr !rr !ws !a !map/m", Colors.Help, "small-italic");
+      }
+      this.sendMsgToPlayer(playerExt, "Admin: !mute/unmute !kick !tkick_5m/1h/1d !tmute_5m/1h/1d !nkick/nmute_* !gtkick/gtmute/gnkick/gnmute_* !tk !tn !gtk !gtn", Colors.Help, "small-italic");
     }
     if (playerExt.trust_level > 0) {
-      this.sendMsgToPlayer(playerExt, ": !thumb !thumb_up/down/remove !report !verify", Colors.Help, "small-italic");
+      this.sendMsgToPlayer(playerExt, ": !ball !report !verify", Colors.Help, "small-italic");
     }
     this.sendMsgToPlayer(playerExt, "By wywołać ostatnią komendę, uzyj !!", Colors.Help, "small-italic");
   }

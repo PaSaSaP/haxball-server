@@ -39,6 +39,8 @@ function moveAllTeamToSpecV1(
       sortedSpec.splice(insertIdx, 0, id);
       insertIdx++;
     } else if (addedWhileMatch.includes(id)) {
+      if (-1 === sortedSpec.findIndex(s => id === s))
+          sortedSpec.push(id);
       // do nothing, currently in list
     } else {
       sortedSpec.push(id);
@@ -136,4 +138,14 @@ run_test(
   [],  // in favor
   [100],  // added while match
   [100, 101, 102, 99, 103, 104]  // expected result
+);
+
+run_test(
+  "lost player",
+  [15],  // current spec
+  [15],  // saved spec
+  [50,81,79,69],  // moved team to spec
+  [],  // in favor
+  [79],  // added while match
+  [50,81,69,15]  // expected result
 );

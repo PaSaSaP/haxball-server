@@ -106,7 +106,7 @@ export class PlayerData {
   id: number;
   user_id: number; // should be unique in system
   claimed: number;
-  team: number;
+  team: 0|1|2;
   admin: boolean;
   admin_stats: AdminStats | null;
   position: { "x": number, "y": number };
@@ -388,6 +388,7 @@ export class Match {
   endedAt: number;  // Date time, not for statistics
   redTeam: number[]; // player ids
   blueTeam: number[]; // player ids
+  private limit: number; // limit of players in match
   private playerStats: Map<number, PlayerStatInMatch>; // player id -> stat
   goals: [number, 1|2][]; // list of tuples (time, team) where time is in seconds, team 1 is red, 2 is blue
   ratingState: RatingProcessingState;
@@ -399,7 +400,7 @@ export class Match {
   pressureBlue: number; // pressure by blue, 0-100 [%], (it is of course: 100 - pressureRed)
   possessionRed: number;
 
-  constructor(matchType: MatchType) {
+  constructor(matchType: MatchType, limit: number) {
     this.matchId = -1;
     this.matchType = matchType;
     this.redScore = 0;
@@ -410,6 +411,7 @@ export class Match {
     this.endedAt = 0;
     this.redTeam = [];
     this.blueTeam = [];
+    this.limit = limit;
     this.playerStats = new Map<number, PlayerStatInMatch>();
     this.goals = [];
     this.ratingState = RatingProcessingState.none;
@@ -458,6 +460,10 @@ export class Match {
     if (this.winnerTeam == 2) return this.redTeam;
     if (this.winnerTeam == 1) return this.blueTeam;
     return [];
+  }
+
+  getLimit() {
+    return this.limit;
   }
 
   getPlayerInMatchStats() {

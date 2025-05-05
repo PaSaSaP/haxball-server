@@ -3,7 +3,6 @@ import { AutoBot } from "./auto_mode";
 import { PlayerData, PlayerLeavedDueTo } from "./structs";
 import { getTimestampHMS } from "./utils";
 import { HaxballRoom } from "./hb_room";
-import { text } from "stream/consumers";
 
 export interface AutoVoter {
   active(): boolean;
@@ -15,21 +14,29 @@ export interface AutoVoter {
   reset(): void;
 }
 
-export class VoteKicker implements AutoVoter {
+export class TeamVoter implements AutoVoter {
   RequiredVotes = 3;
-  autobot: AutoBot;
+  name: string;
+  textName: string;
+  callback: (voted: PlayerData) => void;
+  shouldBeVoted: (voted: PlayerData, votedBy: PlayerData) => boolean;
+  hb_room: HaxballRoom;
   team: 0 | 1 | 2;
   voted: PlayerData|null;
-  agreedBy: Set<number>;
-  disagreedBy: Set<number>;
+  agreedBy: Set<string>;
+  disagreedBy: Set<string>;
   at: number;
 
-  constructor(autobot: AutoBot) {
-    this.autobot = autobot;
+  constructor(hb_room: HaxballRoom, name: string, textName: string, callback: (voted: PlayerData) => void) {
+    this.hb_room = hb_room;
+    this.name = name;
+    this.textName = textName;
+    this.callback = callback;
+    this.shouldBeVoted = (voted: PlayerData, votedBy: PlayerData) => true;
     this.team = 0;
     this.voted = null;
-    this.agreedBy = new Set<number>();
-    this.disagreedBy = new Set<number>();
+    this.agreedBy = new Set();
+    this.disagreedBy = new Set();
     this.at = 0;
   }
 
@@ -38,21 +45,23 @@ export class VoteKicker implements AutoVoter {
   }
 
   active(): boolean {
-    return this.team != 0 && this.voted != null && !this.expired();
+    return this.team !== 0 && this.voted !== null && !this.expired();
   }
 
   handle(votedPlayer: PlayerData|null, byPlayer: PlayerData) {
-    const limit = this.autobot.getCurrentLimit();
-    if (limit > 1 && this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
-    if (this.team == 0) {
+    const limit = this.hb_room.auto_bot.getCurrentLimit();
+    if (limit > 1 && this.hb_room.auto_bot.isLobbyTime() || !this.hb_room.auto_bot.isRanked()) return;
+    if (this.team === 0) {
       if (!votedPlayer || !votedPlayer.team) return;
-      if (limit === 1 || (byPlayer.team && votedPlayer.team == byPlayer.team)) {
+      if (limit === 1 || (byPlayer.team && votedPlayer.team === byPlayer.team)) {
+        if (!this.shouldBeVoted(votedPlayer, byPlayer)) return;
         this.at = Date.now();
         this.team = byPlayer.team as 0|1|2;
         this.voted = votedPlayer;
-        this.agreedBy.add(byPlayer.id);
-        this.autobot.hb_room.sendMsgToAll(`(!votekick) Rozpoczęto szkalowanie gracza ${votedPlayer.name} (!votekick !tak !yes !nie !no)`, Colors.BrightBlue, 'italic');
-        AMLog(`votekick ${votedPlayer.name} by ${byPlayer.name}`);
+        this.agreedBy.add(byPlayer.auth_id);
+        this.hb_room.sendMsgToAll(`(!${this.name}) Rozpoczęto ${this.textName} gracza ${votedPlayer.name} (!tak !yes !nie !no)`,
+          Colors.BrightBlue, 'italic');
+        AMLog(`${this.name} ${votedPlayer.name} by ${byPlayer.name}`);
       }
       return; // added new votekick so no more here
     }
@@ -60,23 +69,23 @@ export class VoteKicker implements AutoVoter {
   }
 
   handleYes(byPlayer: PlayerData) {
-    if (this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
-    if (!this.voted || this.voted.id == byPlayer.id) return;
-    this.agreedBy.add(byPlayer.id);
+    if (this.hb_room.auto_bot.isLobbyTime() || !this.hb_room.auto_bot.isRanked()) return;
+    if (!this.voted || this.voted.id === byPlayer.id) return;
+    this.agreedBy.add(byPlayer.auth_id);
     this.check();
-    AMLog(`votekick BY: ${byPlayer.name} YES`);
+    AMLog(`${this.name} BY: ${byPlayer.name} YES`);
   }
 
   handleNo(byPlayer: PlayerData) {
-    if (this.autobot.isLobbyTime() || !this.autobot.isRanked()) return;
-    if (!this.voted || this.voted.id == byPlayer.id) return;
-    this.disagreedBy.add(byPlayer.id);
+    if (this.hb_room.auto_bot.isLobbyTime() || !this.hb_room.auto_bot.isRanked()) return;
+    if (!this.voted || this.voted.id === byPlayer.id) return;
+    this.disagreedBy.add(byPlayer.auth_id);
     this.check();
-    AMLog(`votekick BY: ${byPlayer.name} NO`);
+    AMLog(`${this.name} BY: ${byPlayer.name} NO`);
   }
 
   handleChangeAssignment(player: PlayerData) {
-    if (this.team != 0 && this.voted && player.id == this.voted.id && !player.team) this.reset();
+    if (this.team !== 0 && this.voted && player.id === this.voted.id && !player.team) this.reset();
   }
 
   handleGameStop(): void {
@@ -86,23 +95,20 @@ export class VoteKicker implements AutoVoter {
   private check() {
     if (!this.team || !this.voted) return;
     if (Date.now() - this.at > 60_000) {
-      this.autobot.hb_room.sendMsgToAll(`(!votekick) Upłynął limit czasu na szkalowanie gracza ${this.voted.name}`, Colors.BrightBlue, 'italic');
+      this.hb_room.sendMsgToAll(`(!${this.name}) Upłynął limit czasu na ${this.textName} gracza ${this.voted.name}`, Colors.BrightBlue, 'italic');
       this.reset();
       return;
     }
     const y = this.agreedBy.size;
     const n = this.disagreedBy.size;
     if (n >= y + this.RequiredVotes) {
-      this.autobot.hb_room.sendMsgToAll(`(!votekick) Wniosek o szkalowanie gracza ${this.voted.name} odrzucony (${y}/${n})`, Colors.BrightBlue, 'italic');
+      this.hb_room.sendMsgToAll(`(!${this.name}) Wniosek o ${this.textName} gracza ${this.voted.name} odrzucony (${y}/${n})`, Colors.BrightBlue, 'italic');
       this.reset();
       return;
     }
     if (y >= n + this.RequiredVotes) {
-      this.autobot.hb_room.sendMsgToAll(`(!votekick) Wniosek o szkalowanie gracza ${this.voted.name} przyjęty (${y}/${n})`, Colors.BrightBlue, 'italic');
-      this.autobot.setPlayerLeftStatusTo(this.voted, PlayerLeavedDueTo.voteKicked);
-      this.autobot.hb_room.room.kickPlayer(this.voted.id, "VoteKicked!", false);
-      // this.autobot.movePlayerToSpec(this.voted, this.team == 1 ? this.autobot.R() : this.autobot.B());
-      // this.autobot.fillByPreparedSelection();
+      this.hb_room.sendMsgToAll(`(!${this.name}) Wniosek o ${this.textName} gracza ${this.voted.name} przyjęty (${y}/${n})`, Colors.BrightBlue, 'italic');
+      this.callback(this.voted);
       this.reset();
       return;
     }
@@ -121,11 +127,11 @@ export class VoteByAllPlayers implements AutoVoter {
   name: string;
   textName: string;
   callback: (voted: PlayerData) => void;
-  shouldBeVoted: (voted: PlayerData) => boolean;
+  shouldBeVoted: (voted: PlayerData, votedBy: PlayerData) => boolean;
   hb_room: HaxballRoom;
   voted: PlayerData|null;
-  agreedBy: Set<number>;
-  disagreedBy: Set<number>;
+  agreedBy: Set<string>;
+  disagreedBy: Set<string>;
   at: number;
 
 
@@ -134,10 +140,10 @@ export class VoteByAllPlayers implements AutoVoter {
     this.name = name;
     this.textName = textName;
     this.callback = callback;
-    this.shouldBeVoted = (voted: PlayerData) => true;
+    this.shouldBeVoted = (voted: PlayerData, votedBy: PlayerData) => true;
     this.voted = null;
-    this.agreedBy = new Set<number>();
-    this.disagreedBy = new Set<number>();
+    this.agreedBy = new Set();
+    this.disagreedBy = new Set();
     this.at = 0;
   }
 
@@ -146,33 +152,33 @@ export class VoteByAllPlayers implements AutoVoter {
   }
 
   active(): boolean {
-    return this.voted != null && !this.expired();
+    return this.voted !== null && !this.expired();
   }
 
   handle(votedPlayer: PlayerData|null, byPlayer: PlayerData) {
-    if (votedPlayer != null && !this.active()) {
-      if (votedPlayer.id == byPlayer.id) return;
-      if (!this.shouldBeVoted(votedPlayer)) return;
+    if (votedPlayer !== null && !this.active()) {
+      if (votedPlayer.id === byPlayer.id) return;
+      if (!this.shouldBeVoted(votedPlayer, byPlayer)) return;
       this.at = Date.now();
       this.voted = votedPlayer;
-      this.agreedBy.add(byPlayer.id);
+      this.agreedBy.add(byPlayer.auth_id);
       this.hb_room.sendMsgToAll(`(!${this.name}) Rozpoczęto ${this.textName} gracza ${votedPlayer.name} (!${this.name} !tak !yes !nie !no)`, Colors.BrightBlue, 'italic');
       AMLog(`${this.name} ${votedPlayer.name} by ${byPlayer.name}`);
       return; // added new votekick so no more here
     }
-    if (votedPlayer == null && this.active()) this.handleYes(byPlayer);
+    if (votedPlayer === null && this.active()) this.handleYes(byPlayer);
   }
 
   handleYes(byPlayer: PlayerData) {
-    if (!this.voted || this.voted.id == byPlayer.id) return;
-    this.agreedBy.add(byPlayer.id);
+    if (!this.voted || this.voted.id === byPlayer.id) return;
+    this.agreedBy.add(byPlayer.auth_id);
     this.check();
     AMLog(`${this.name} BY: ${byPlayer.name} YES`);
   }
 
   handleNo(byPlayer: PlayerData) {
-    if (!this.voted || this.voted.id == byPlayer.id) return;
-    this.disagreedBy.add(byPlayer.id);
+    if (!this.voted || this.voted.id === byPlayer.id) return;
+    this.disagreedBy.add(byPlayer.auth_id);
     this.check();
     AMLog(`${this.name} BY: ${byPlayer.name} NO`);
   }
@@ -212,12 +218,25 @@ export class VoteByAllPlayers implements AutoVoter {
   }
 }
 
+export class VoteKicker extends TeamVoter {
+  constructor(auto_bot: AutoBot) {
+    let callback = (voted: PlayerData) => {
+      auto_bot.setPlayerLeftStatusTo(voted, PlayerLeavedDueTo.voteKicked);
+      auto_bot.room.kickPlayer(voted.id, "VoteKicked!", false);
+    };
+    super(auto_bot.hb_room, "votekick", "szkalowanie", callback);
+  }
+}
+
 export class VoteMuter extends VoteByAllPlayers {
   constructor(hb_room: HaxballRoom) {
     let callback = (voted: PlayerData) => {
       this.hb_room.players_game_state_manager.setPlayerTimeMuted(voted, this.hb_room.God(), 60 * 60);
     };
     super(hb_room, "votemute", "wyciszenie", callback);
+    this.shouldBeVoted = (voted: PlayerData, byPlayer: PlayerData) => {
+      return !this.hb_room.temporarily_trusted.has(byPlayer.id) && voted.trust_level <= byPlayer.trust_level;
+    }
   }
 }
 
@@ -227,7 +246,7 @@ export class VoteBotKicker extends VoteByAllPlayers {
       this.hb_room.players_game_state_manager.setNetworkTimeKicked(voted, this.hb_room.God(), 24 * 60 * 60, true);
     };
     super(hb_room, "votebot", "rozBOTowanie", callback);
-    this.shouldBeVoted = (voted: PlayerData) => {
+    this.shouldBeVoted = (voted: PlayerData, byPlayer: PlayerData) => {
       return voted.trust_level === 0;
     }
   }
@@ -236,14 +255,14 @@ export class VoteBotKicker extends VoteByAllPlayers {
 export class VoteV4 implements AutoVoter {
   RequiredVotes = 3;
   hbRoom: HaxballRoom;
-  agreedBy: Set<number>;
-  disagreedBy: Set<number>;
+  agreedBy: Set<string>;
+  disagreedBy: Set<string>;
   at: number;
 
   constructor(hbRoom: HaxballRoom) {
     this.hbRoom = hbRoom;
-    this.agreedBy = new Set<number>();
-    this.disagreedBy = new Set<number>();
+    this.agreedBy = new Set();
+    this.disagreedBy = new Set();
     this.at = 0;
   }
 
@@ -259,7 +278,7 @@ export class VoteV4 implements AutoVoter {
     let autoBot = this.hbRoom.auto_bot;
     if (!this.active() && autoBot.getCurrentLimit() === 3 && !autoBot.isLobbyTime() && autoBot.getNonAfkAllCount() >= 8) {
       this.at = Date.now();
-      this.agreedBy.add(byPlayer.id);
+      this.agreedBy.add(byPlayer.auth_id);
       this.hbRoom.sendMsgToAll(`(!4) Rozpoczęto głosowanie za przełączeniem na rozgrywkę 4vs4 (!tak !yes !nie !no)`, Colors.BrightBlue, 'italic');
       AMLog(`!4 by ${byPlayer.name}`);
       return;
@@ -269,14 +288,14 @@ export class VoteV4 implements AutoVoter {
 
   handleYes(byPlayer: PlayerData) {
     if (!this.active()) return;
-    this.agreedBy.add(byPlayer.id);
+    this.agreedBy.add(byPlayer.auth_id);
     this.check();
     AMLog(`!4 BY: ${byPlayer.name} YES`);
   }
 
   handleNo(byPlayer: PlayerData) {
     if (!this.active()) return;
-    this.disagreedBy.add(byPlayer.id);
+    this.disagreedBy.add(byPlayer.auth_id);
     this.check();
     AMLog(`!4 BY: ${byPlayer.name} NO`);
   }
@@ -334,7 +353,7 @@ export class AutoVoteHandler implements AutoVoter {
     this.voteBotKicker = new VoteBotKicker(this.hbRoom);
     this.voteV4 = new VoteV4(autoBot.hb_room);
     this.activeVoter = null;
-    if (autoBot.getCurrentLimit() === 1) {
+    if (autoBot.getCurrentLimit() < 3) {
       this.voteKicker.RequiredVotes = 2;
       this.voteMuter.RequiredVotes = 2;
       this.voteBotKicker.RequiredVotes = 2;

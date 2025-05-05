@@ -9,16 +9,14 @@ export interface Distances {
 }
 
 export class BallPossessionTracker {
-  private lastPossession: number | null;
+  private lastPossession: 0|1|2;
   private possessionStartTime: number;
   private possessionTime: Record<number, number>;
-  private lastTouchTeam: number | null;
   private distances: Distances;
   constructor() {
-    this.lastPossession = null; // 1 dla czerwonych, 2 dla niebieskich, null jeśli brak
+    this.lastPossession = 0; // 1 dla czerwonych, 2 dla niebieskich, 0 jeśli brak
     this.possessionStartTime = 0; // Czas, od którego liczymy posiadanie
     this.possessionTime = { 1: 0, 2: 0 }; // Czas posiadania dla każdej drużyny
-    this.lastTouchTeam = null; // Ostatnia drużyna, która kopnęła piłkę
 
     this.distances = {
       ballRadius: 6.5,
@@ -74,13 +72,13 @@ export class BallPossessionTracker {
     this.distances.distances.sort((a, b) => a[1] - b[1]); // Sortujemy odległości rosnąco
 
     // Jeżeli posiadanie jeszcze nie zostało przypisane, a mecz się dopiero zaczyna
-    if (this.lastPossession === null && closestPlayer) {
+    if (this.lastPossession === 0 && closestPlayer) {
       this.lastPossession = closestPlayer.team;
       this.possessionStartTime = currentMatchTime;
     }
 
     // Jeżeli posiadanie zostało przypisane
-    if (this.lastPossession !== null) {
+    if (this.lastPossession !== 0) {
       // Zawsze aktualizujemy czas posiadania, jeżeli drużyna nadal posiada piłkę
       this.possessionTime[this.lastPossession] += currentMatchTime - this.possessionStartTime;
     }
@@ -95,9 +93,8 @@ export class BallPossessionTracker {
   // Resetowanie posiadania przed rozpoczęciem meczu
   resetPossession() {
     this.possessionTime = { 1: 0, 2: 0 }; // Resetujemy czas posiadania
-    this.lastPossession = null;
+    this.lastPossession = 0;
     this.possessionStartTime = 0; // Resetujemy czas początkowy
-    this.lastTouchTeam = null; // Resetujemy ostatnią drużynę, która kopnęła piłkę
     this.distances.distances = []; // Resetujemy odległości
   }
 
@@ -111,9 +108,8 @@ export class BallPossessionTracker {
     return this.possessionTime[1] + this.possessionTime[2];
   }
 
-  // Funkcja do zarejestrowania kopnięcia piłki przez gracza
-  registerBallKick(player: PlayerObject) {
-    this.lastTouchTeam = player.team;
+  getCurrentTeamId(): 0|1|2 {
+    return this.lastPossession;
   }
 
   onTeamGoal(team: number) {

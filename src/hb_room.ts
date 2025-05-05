@@ -1616,7 +1616,6 @@ export class HaxballRoom {
 
   async handlePlayerBallKick(player: PlayerObject) {
     const ballPosition = this.getBallPosition();
-    this.ball_possesion_tracker.registerBallKick(player);
     this.match_stats.handlePlayerBallKick(this.P(player), ballPosition);
     if (this.volleyball.isEnabled()) {
       let [redTeam, blueTeam] = this.getRedBluePlayerIdsInTeams(this.getPlayersExtList(true));
